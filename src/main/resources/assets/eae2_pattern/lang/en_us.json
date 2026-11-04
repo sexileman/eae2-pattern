@@ -1,0 +1,50 @@
+{
+  "eae2_pattern.report.completed": "Generated %s pattern(s), using %s blank pattern(s).",
+  "eae2_pattern.report.skipped_suffix": " Skipped %s recipe(s) that could not be encoded.",
+  "eae2_pattern.report.no_blanks": "Not enough blank patterns in the network: %s pattern(s) requested, %s consumed. Nothing was generated.",
+  "eae2_pattern.report.storage_full": "Network storage is full after %s of %s pattern(s). Stopped early and returned the unused blank pattern.",
+  "eae2_pattern.report.encode_failed": "Nothing was generated: %s of %s recipe(s) could not be encoded.",
+  "eae2_pattern.report.too_many": "Request too large: %s pattern(s) in one go. Raise max_patterns_per_request in the server config and try again.",
+  "eae2_pattern.report.nothing": "Nothing to generate.",
+  "eae2_pattern.report.no_network": "No AE2 network in reach: open a terminal or carry a linked wireless terminal.",
+
+  "eae2_pattern.preview.title": "Generate patterns: %s",
+  "eae2_pattern.preview.selected": "%s / %s selected",
+  "eae2_pattern.preview.blanks": "Blank patterns in network: %s",
+  "eae2_pattern.preview.blanks_unknown": "Blank patterns in network: querying...",
+  "eae2_pattern.preview.not_enough": "Not enough blank patterns: %s needed, %s available.",
+  "eae2_pattern.preview.no_network": "No AE2 network found. Place a wireless terminal in your inventory or open a terminal.",
+  "eae2_pattern.preview.generate": "Generate",
+  "eae2_pattern.preview.select_all": "All",
+  "eae2_pattern.preview.select_none": "None",
+  "eae2_pattern.preview.empty": "This machine has no encodable recipes.",
+  "eae2_pattern.preview.page": "%s / %s",
+
+  "eae2_pattern.collecting.title": "Reading recipes: %s",
+  "eae2_pattern.collecting.progress": "Read %s / %s recipes",
+  "eae2_pattern.collecting.cancel": "Cancel",
+
+  "eae2_pattern.kind.crafting": "Crafting",
+  "eae2_pattern.kind.processing": "Processing",
+  "eae2_pattern.kind.stonecutting": "Stonecutting",
+  "eae2_pattern.kind.smithing": "Smithing",
+
+  "eae2_pattern.button.tooltip": "Quickly Pattern: preview and encode every recipe of this machine",
+  "eae2_pattern.button.title": "Patterns",
+
+  "eae2_pattern.jei.button": "Quickly Pattern: preview this category",
+  "eae2_pattern.jei.button.desc": "Encode every recipe of this machine into AE2 patterns",
+
+  "eae2_pattern.msg.no_jei": "JEI is not available, so recipes cannot be read.",
+  "eae2_pattern.msg.hover_machine": "Hover a machine item in JEI first, then press the key again.",
+  "eae2_pattern.msg.no_recipes": "%s has no recipes that could be turned into patterns.",
+  "eae2_pattern.msg.no_patterns": "%s has no encodable recipes.",
+  "eae2_pattern.msg.no_categories": "JEI has no recipe categories to offer.",
+
+  "eae2_pattern.picker.title": "Choose a recipe category: %s",
+  "eae2_pattern.picker.choose": "Choose a recipe category",
+  "eae2_pattern.picker.hint": "This machine appears in several JEI categories.",
+
+  "key.eae2_pattern.open_preview": "Preview patterns for the hovered machine",
+  "key.categories.eae2_pattern": "Quickly Pattern"
+}
