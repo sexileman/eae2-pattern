@@ -32,7 +32,7 @@
 
 | 文件 | 用途 |
 | --- | --- |
-| `eae2-pattern-<版本>.jar` | 本模组（版本形如 `1.0.0+mc1.20.1.20261104.1`，以 `build/libs/` 里实际产出的为准） |
+| `eae2-pattern-<版本>.jar` | 本模组（版本形如 `1.0.0`，以 `build/libs/` 里实际产出的为准） |
 | `appliedenergistics2-forge-15.2.16.jar` | AE2（必须，版本 `[15.2.0,16.0.0)`） |
 | `jei-1.20.1-forge-15.20.0.106.jar` | JEI（必须，版本 `[15.20.0,16.0.0)`） |
 | `forge-1.20.1-47.4.16-installer.jar` | Forge 安装器 |

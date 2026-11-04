@@ -6,25 +6,20 @@ plugins {
 }
 
 /*
- * Version scheme: <mod_base_version>+mc<minecraft_version>.<yyyyMMdd>.<build>
+ * Version scheme: plain semantic versioning, MAJOR.MINOR.PATCH.
  *
- *   mod_base_version  bumped by hand for feature releases (1.0.0 -> 1.1.0 ...)
- *   yyyyMMdd          the day the artifact was built (local time)
- *   build             a counter that goes up once per `build` invocation
+ *   MAJOR  breaks something players depend on (config keys renamed, network
+ *          protocol changed, generated patterns stop working)
+ *   MINOR  new features, backwards compatible (1.0.0 -> 1.1.0)
+ *   PATCH  bug fixes only (1.1.0 -> 1.1.1)
  *
- * Only `build`/`assemble`/`publish*` consume a build number, so running
- * `compileJava` or `runClient` a hundred times does not inflate the version.
- * The counter lives in `.build-number` and is not committed: release tags are
- * the source of truth in git.
+ * The Minecraft version is deliberately not part of it: it lives in the branch
+ * name (`1.20.1`, `1.21`, ...) and in the dependency ranges in mods.toml, so the
+ * same mod version can be rebuilt for another Minecraft release without
+ * inventing a new numbering scheme. Bump mod_version in gradle.properties by
+ * hand and tag the release (v1.1.0) in git.
  */
-def buildCounterFile = file('.build-number')
-def previousBuild = buildCounterFile.isFile() ? buildCounterFile.text.trim().toInteger() : 0
-def releaseBuild = gradle.startParameter.taskNames.any { taskName ->
-    def task = taskName.split(':').last()
-    task == 'build' || task == 'assemble' || task.startsWith('publish')
-}
-def currentBuild = releaseBuild ? previousBuild + 1 : previousBuild
-def modVersion = "${mod_base_version}+mc${minecraft_version}.${new Date().format('yyyyMMdd')}.${currentBuild}"
+def modVersion = mod_version
 
 version = modVersion
 group = mod_group_id
@@ -139,14 +134,10 @@ tasks.withType(JavaCompile).configureEach {
     options.encoding = 'UTF-8'
 }
 
-// Consume a build number only after a successful `build`, so a failed build
-// does not burn a version.
+// Print the version that just got built, so a release log is self explanatory.
 tasks.named('build').configure {
     doLast {
-        if (releaseBuild) {
-            buildCounterFile.text = currentBuild.toString()
-            logger.lifecycle("EAE2 Pattern ${modVersion} (build #${currentBuild})")
-        }
+        logger.lifecycle("EAE2 Pattern ${modVersion}")
     }
 }
 

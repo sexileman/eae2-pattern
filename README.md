@@ -161,19 +161,18 @@ Windows：
 
 ## 版本号与分支
 
-版本号形如：
+版本号就是朴素的语义化版本 `MAJOR.MINOR.PATCH`：
 
 ```text
-1.0.0+mc1.20.1.20261104.7
- │      │        │       └── 第 7 次构建（只有 build / assemble / publish 会 +1）
- │      │        └────────── 构建日期
- │      └─────────────────── 目标 Minecraft 版本
- └────────────────────────── 手改的功能版本
+1.2.3
+ │ │ └── PATCH：只修 bug
+ │ └──── MINOR：加功能，向后兼容
+ └────── MAJOR：破坏性改动（配置键改名、网络协议不兼容、旧样板失效）
 ```
 
-- `mod_base_version` 在 `gradle.properties` 里手工维护，功能更新时改它。
-- 日期与构建计数由 `build.gradle` 自动生成；`compileJava`、`runClient` 不消耗编号。
-- 构建计数存在 `.build-number`（不入库）；git 的 release tag 才是真正的发布锚点。
+- 唯一来源是 `gradle.properties` 里的 `mod_version`，手工改，构建过程不自动递增。
+- Minecraft 版本**不进版本号**：靠分支（`1.20.1`、`1.21`）和 `mods.toml` 里的依赖范围表达，同一个模组版本换 MC 重打包不用另起编号。
+- 每次发布打 tag（`v1.2.3`），tag 就是发布锚点；`./gradlew printVersion` 可以确认当前 checkout 会打出什么版本。
 
 分支：
 
@@ -187,7 +186,7 @@ Windows：
 ## 项目结构
 
 ```text
-src/main/java/io/github/sexileman/eae2-pattern/
+src/main/java/io/github/sexileman/eae2pattern/
 ├── EAE2Pattern.java              入口，注册配置与网络通道
 ├── config/EAE2PatternConfig.java 服务端配置
 ├── pattern/                         配方 → 样板的纯逻辑

@@ -4,9 +4,6 @@
 /out/
 !gradle/wrapper/gradle-wrapper.jar
 
-# Generated build counter (release tags in git are the source of truth)
-/.build-number
-
 # IDE
 /.idea/
 *.iml
