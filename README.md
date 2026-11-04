@@ -72,8 +72,21 @@ JEI 配方页 → 点左侧竖条里的九宫格按钮 → 预览勾选 → 生�
 - 每行一条样板：勾选框 + 产物图标 + 产物名 + 样板类别（合成 / 处理 / 切石 / 锻造）。
 - 顶部显示「已选 x / y」和网络里的空白样板数；不够时变红警告（需求 #3）。
 - **翻页**：右上角 `<` `>`、鼠标滚轮、方向键、<kbd>PageUp</kbd> / <kbd>PageDown</kbd>。
-- 勾选状态跨页保留，「全选 / 全不选」作用于全部条目；点任意一行即可剔除（需求 #6）。
+- 勾选状态跨页保留，「全选 / 全不选」作用于**当前筛选出来的**条目（需求 #6）。
+- **搜索**：预览页顶部有搜索框，语法跟 JEI 对齐 —— 见下节。
 - 预览和翻页全是纯客户端行为，不发包、不消耗任何物品。
+
+### 预览页搜索语法
+
+| 输入 | 含义 |
+|---|---|
+| `齿轮` | 名称包含「齿轮」 |
+| `@gregtech` | 只看某个模组的产物 |
+| `#forge:plates` | 只看带某个物品标签的产物 |
+| `*circuit*` | 通配符，`?` 匹配单个字符 |
+| `-青铜` | 排除包含「青铜」的条目 |
+
+多个词是「与」关系（都满足才显示）。搜索本身不改勾选状态，配合「全不选 → 搜索 → 全选」就能只挑出一台机器里你不想要的那一类，比如先 `-gtceu:*` 再全不选，然后单独把 GT 那些点上。
 
 ### 生成时会发生什么
 
@@ -113,6 +126,18 @@ AE2 1.20.1 实际有四种编码器，全部支持：
 
 类别按配方对象的真实类型判定，不靠名字猜；判不出来的统一按处理样板编。
 
+### NBT 与 GregTech（配置电路）
+
+配方里的物品不只是一个 id，它可能带 NBT —— GregTech 的「配置电路」就是典型：同一个 `programmed_circuit`，`Configuration=24` 和 `Configuration=0` 是两种不同的材料。样板如果把 NBT 丢了，AE2 会认为「任意电路都行」，编出来的是一条**能跑但做错东西**的样板，等到合成完才发现。
+
+所以整条链路都带着 NBT：
+
+- JEI 槽位 → `StackSpec` 时连 `ItemStack.getTag()` 一起记下，并发包到服务端；
+- 服务端建 `AEItemKey.of(ItemStack)`（不是 `AEItemKey.of(item)`），键里含 NBT；
+- 合成网格重建时同样按带 NBT 的栈填格。
+
+同理，两个「同名不同 NBT」的产物在预览页是两行，搜索也把它们当两条不同结果。
+
 ## 配置
 
 服务端配置：`world/serverconfig/eae2_pattern-server.toml`（单机在 `saves/<世界>/serverconfig/`）。
@@ -128,6 +153,26 @@ AE2 1.20.1 实际有四种编码器，全部支持：
 | `limits.max_request_bytes` | `1000000` | 单包字节上限 |
 
 > 改默认值**不会**覆盖已经生成过的 toml。旧版本留下的 `maxPatternsPerRequest = 512` 会让几百条配方的大机器整批被拒 —— 装新版本后请手动改成 `8192`，或直接删掉那个 toml 让它重新生成。
+
+### 游戏内改配置（热生效，不用重启）
+
+单机世界里改 `saves/<世界>/serverconfig/…toml` 要退世界才有用，很别扭。所以有一套命令：
+
+```
+/eae2_pattern config list
+/eae2_pattern config get limits.max_patterns_per_request
+/eae2_pattern config set limits.max_patterns_per_request 16384
+/eae2_pattern config add filters.ignored_stacks gtceu:programmed_circuit
+/eae2_pattern config remove filters.ignored_stacks gtceu:programmed_circuit
+/eae2_pattern config reset filters.strip_container_items
+/eae2_pattern config reload
+```
+
+- **改完立刻生效**：值直接写进内存里的 `ConfigValue`，下一次点「生成」就用新值；同时落盘到 toml，重启也不丢。
+- 写操作需要 OP（权限等级 2）；`list` / `get` 谁都能用。
+- 键名可以省略组名，`max_patterns_per_request` 等价于 `limits.max_patterns_per_request`（按 filters → encoding → limits 的顺序找）。
+- 列表型（`ignored_stacks`）用逗号分隔一次给多个：`... add filters.ignored_stacks minecraft:bucket,gtceu:*_circuit`。
+- `reload` 只是让 Forge 丢掉读缓存 —— Forge 本身把配置留在内存里，不会自动重读盘上的文件。
 
 ## 构建
 
@@ -183,6 +228,19 @@ Windows：
 
 新的 Minecraft 版本对应新开分支（如 `1.21.1`），互不干扰。
 
+## 更新日志
+
+### 1.1.0
+
+- **GT / NBT 兼容**：配方材料带 NBT 时不再丢信息。GregTech 的「配置电路」过去会被记成「任意电路」，现在 `StackSpec` / 网络包 / `AEItemKey.of(ItemStack)` 全程携带 NBT。
+- **预览页搜索**：顶部搜索框，支持名称、`@模组`、`#标签`、`*` `?` 通配、`-` 排除，语法对齐 JEI；「全选 / 全不选」作用于当前筛选结果（需求 #6）。
+- **配置命令**：新增 `/eae2_pattern config …`，改完立即生效并落盘，不用退世界重启。
+- 单类别配方上限 2048 → 8192（GT(O) 一台机器常有上千条配方），并在日志里给出 `Collected X of Y …, skipped Z` 与每条跳过原因（debug 级）。
+
+### 1.0.0
+
+- 首个版本：JEI 类别 → 预览勾选 → 分块发包 → 服务端编码 → AE2 事务写入，四类样板（合成 / 处理 / 切石 / 锻造）全支持。
+
 ## 项目结构
 
 ```text
@@ -204,7 +262,11 @@ src/main/java/io/github/sexileman/eae2pattern/
 │   ├── EAE2PatternJeiPlugin.java
 │   ├── JeiRecipeCollector.java      把某一类别读成 RecipePlan
 │   └── MachineCategories.java       物品 → 配方类别
-└── client/                          预览、翻页、类别选择、JEI 内嵌按钮
+├── command/EAE2PatternCommands.java /eae2_pattern config 命令（热生效）
+└── client/                          预览、搜索、翻页、类别选择、JEI 内嵌按钮
+    ├── PreviewScreen.java           带搜索框的分页勾选列表
+    ├── ItemSearchQuery.java         预览页的搜索语法（名称 / @mod / #tag / 通配 / 排除）
+    └── JeiRecipesScreenHook.java    JEI 左侧工作方块竖条里的按钮
 ```
 
 文档：
@@ -220,7 +282,7 @@ src/main/java/io/github/sexileman/eae2pattern/
 `logs/latest.log` 里一次完整生成大概长这样：
 
 ```text
-Collected 799 of 799 recipes from category '卷板机' (gtceu:bender)
+Collected 799 of 799 recipes from category '卷板机' (gtceu:bender), skipped 0
 Assembled pattern request from Steve: 799 specs (config maxPatternsPerRequest=8192)
 Generation for Steve: 799 patterns requested, 64 blank patterns available
 Generation for Steve finished: requested=799 encoded=799 inserted=64 skipped=0 blanksUsed=64 reason=NOT_ENOUGH_BLANK_PATTERNS

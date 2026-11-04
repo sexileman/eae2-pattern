@@ -10,6 +10,10 @@
 
   "eae2_pattern.preview.title": "生成样板：%s",
   "eae2_pattern.preview.selected": "已选 %s / %s",
+  "eae2_pattern.preview.selected_filtered": "已选 %s / %s（筛选后 %s 条）",
+  "eae2_pattern.preview.search": "搜索",
+  "eae2_pattern.preview.search_hint": "名称、@模组、#标签，支持 * ? 通配符",
+  "eae2_pattern.preview.no_match": "没有匹配搜索条件的样板。",
   "eae2_pattern.preview.blanks": "网络中空白样板：%s",
   "eae2_pattern.preview.blanks_unknown": "网络中空白样板：查询中…",
   "eae2_pattern.preview.not_enough": "空白样板不足：需要 %s 个，现有 %s 个。",
@@ -29,10 +33,10 @@
   "eae2_pattern.kind.stonecutting": "切石",
   "eae2_pattern.kind.smithing": "锻造",
 
-  "eae2_pattern.button.tooltip": "快速样板：预览并编码这台机器的全部配方",
+  "eae2_pattern.button.tooltip": "EAE2 Pattern：预览并编码这台机器的全部配方",
   "eae2_pattern.button.title": "样板",
 
-  "eae2_pattern.jei.button": "快速样板：预览当前配方类别",
+  "eae2_pattern.jei.button": "EAE2 Pattern：预览当前配方类别",
   "eae2_pattern.jei.button.desc": "把这台机器的全部配方编码成 AE2 样板",
 
   "eae2_pattern.msg.no_jei": "JEI 不可用，无法读取配方。",
@@ -45,6 +49,18 @@
   "eae2_pattern.picker.choose": "选择配方类别",
   "eae2_pattern.picker.hint": "这台机器出现在多个 JEI 类别里。",
 
+  "eae2_pattern.cmd.entry": "%s = %s",
+  "eae2_pattern.cmd.current": "当前值：%s = %s",
+  "eae2_pattern.cmd.hint": "用 /eae2_pattern config set <键> <值> 修改；列表还可以用 add / remove。",
+  "eae2_pattern.cmd.set": "已设置 %s = %s",
+  "eae2_pattern.cmd.reset": "已把 %s 重置为默认值（%s）",
+  "eae2_pattern.cmd.reloaded": "配置值已重新读取。",
+  "eae2_pattern.cmd.err.unknown_key": "未知配置键：%s",
+  "eae2_pattern.cmd.err.boolean": "%s 只接受 true 或 false。",
+  "eae2_pattern.cmd.err.integer": "%s 只接受整数。",
+  "eae2_pattern.cmd.err.range": "%s 超出允许范围，请参考配置文件里的注释。",
+  "eae2_pattern.cmd.err.not_list": "%s 不是列表，请改用 set。",
+
   "key.eae2_pattern.open_preview": "预览悬停机器的样板",
-  "key.categories.eae2_pattern": "快速样板"
+  "key.categories.eae2_pattern": "EAE2 Pattern"
 }

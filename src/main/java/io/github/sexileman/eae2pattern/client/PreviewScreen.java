@@ -7,6 +7,7 @@ import io.github.sexileman.eae2pattern.pattern.PatternKind;
 import io.github.sexileman.eae2pattern.pattern.PatternSpec;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.Button;
+import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
 import net.minecraft.util.Mth;
@@ -14,6 +15,7 @@ import net.minecraft.world.item.ItemStack;
 import org.jetbrains.annotations.Nullable;
 import org.lwjgl.glfw.GLFW;
 
+import java.util.ArrayList;
 import java.util.List;
 
 /**
@@ -23,14 +25,18 @@ import java.util.List;
  * recipe rows (icon + checkbox + label + kind tag) without fighting a generic list's assumptions, and so it can
  * page instead of scroll: a broad category easily holds hundreds of entries and a scrollbar makes the selection
  * state hard to see at a glance.</p>
+ *
+ * <p>The search box filters that list with a small subset of JEI's query syntax, so a GregTech machine with 800
+ * recipes can be narrowed down before anything is selected.</p>
  */
 public final class PreviewScreen extends Screen implements GenerationListener {
 
     private static final int ROW_HEIGHT = 20;
-    private static final int HEADER_HEIGHT = 58;
+    private static final int HEADER_HEIGHT = 66;
     private static final int FOOTER_HEIGHT = 34;
     private static final int PAGE_BUTTON_WIDTH = 18;
     private static final int PAGE_BUTTON_HEIGHT = 14;
+    private static final int SEARCH_HEIGHT = 14;
 
     private static final int COLOR_TEXT = 0xE0E0E0;
     private static final int COLOR_DIM = 0x909090;
@@ -39,6 +45,7 @@ public final class PreviewScreen extends Screen implements GenerationListener {
     private static final int COLOR_ROW_ALT = 0x30FFFFFF;
 
     private final RecipePlan plan;
+    private final List<RecipePlan.Entry> visible = new ArrayList<>();
 
     @Nullable
     private Button generateButton;
@@ -46,6 +53,10 @@ public final class PreviewScreen extends Screen implements GenerationListener {
     private Button previousPageButton;
     @Nullable
     private Button nextPageButton;
+    @Nullable
+    private EditBox searchBox;
+
+    private ItemSearchQuery query = ItemSearchQuery.empty();
 
     private int panelLeft;
     private int panelTop;
@@ -77,13 +88,11 @@ public final class PreviewScreen extends Screen implements GenerationListener {
         int buttonX = this.panelLeft + 8;
 
         this.addRenderableWidget(Button.builder(Component.translatable("eae2_pattern.preview.select_all"), b -> {
-            this.plan.selectAll(true);
-            this.refreshButtons();
+            this.selectVisible(true);
         }).bounds(buttonX, buttonY, 52, 18).build());
 
         this.addRenderableWidget(Button.builder(Component.translatable("eae2_pattern.preview.select_none"), b -> {
-            this.plan.selectAll(false);
-            this.refreshButtons();
+            this.selectVisible(false);
         }).bounds(buttonX + 56, buttonY, 52, 18).build());
 
         Button generate = Button.builder(Component.translatable("eae2_pattern.preview.generate"), b -> this.generate())
@@ -108,9 +117,41 @@ public final class PreviewScreen extends Screen implements GenerationListener {
         this.addRenderableWidget(next);
         this.nextPageButton = next;
 
+        EditBox search = new EditBox(this.font, this.panelLeft + 8, this.panelTop + 18,
+                this.panelWidth - 16, SEARCH_HEIGHT, Component.translatable("eae2_pattern.preview.search"));
+        search.setMaxLength(96);
+        search.setHint(Component.translatable("eae2_pattern.preview.search_hint"));
+        search.setValue(this.query.raw());
+        search.setResponder(text -> {
+            this.query = ItemSearchQuery.parse(text);
+            this.rebuildVisible();
+            this.page = 0;
+            this.refreshButtons();
+        });
+        this.addRenderableWidget(search);
+        this.searchBox = search;
+
+        this.rebuildVisible();
         this.refreshButtons();
         ClientGenerationFeedback.setListener(this);
         PacketHandler.sendToServer(new C2SQueryNetworkStatusPacket(0));
+    }
+
+    private void rebuildVisible() {
+        this.visible.clear();
+        for (RecipePlan.Entry entry : this.plan.entries()) {
+            if (this.query.matches(entry)) {
+                this.visible.add(entry);
+            }
+        }
+        this.page = Mth.clamp(this.page, 0, this.pageCount() - 1);
+    }
+
+    private void selectVisible(boolean selected) {
+        for (RecipePlan.Entry entry : this.visible) {
+            entry.setSelected(selected);
+        }
+        this.refreshButtons();
     }
 
     private int rowsPerPage() {
@@ -119,7 +160,7 @@ public final class PreviewScreen extends Screen implements GenerationListener {
 
     private int pageCount() {
         int rows = this.rowsPerPage();
-        return Math.max(1, (this.plan.entries().size() + rows - 1) / rows);
+        return Math.max(1, (this.visible.size() + rows - 1) / rows);
     }
 
     private void turnPage(int delta) {
@@ -170,16 +211,22 @@ public final class PreviewScreen extends Screen implements GenerationListener {
         graphics.drawString(this.font, pageText, right - 8 - 2 * PAGE_BUTTON_WIDTH - 6 - this.font.width(pageText),
                 top + 7, COLOR_DIM, false);
 
-        Component status = Component.translatable("eae2_pattern.preview.selected",
-                this.plan.selectedCount(), this.plan.entries().size());
-        graphics.drawString(this.font, status, left + 8, top + 18, COLOR_DIM, false);
+        Component status = this.query.isEmpty()
+                ? Component.translatable("eae2_pattern.preview.selected",
+                        this.plan.selectedCount(), this.plan.entries().size())
+                : Component.translatable("eae2_pattern.preview.selected_filtered",
+                        this.plan.selectedCount(), this.plan.entries().size(), this.visible.size());
+        graphics.drawString(this.font, status, left + 8, top + 36, COLOR_DIM, false);
 
         Component networkLine = this.networkLine();
         int networkColor = this.networkLineColor();
-        graphics.drawString(this.font, networkLine, left + 8, top + 30, networkColor, false);
+        graphics.drawString(this.font, networkLine, left + 8, top + 48, networkColor, false);
 
         if (this.plan.isEmpty()) {
             graphics.drawString(this.font, Component.translatable("eae2_pattern.preview.empty"),
+                    left + 8, this.listTop + 4, COLOR_DIM, false);
+        } else if (this.visible.isEmpty()) {
+            graphics.drawString(this.font, Component.translatable("eae2_pattern.preview.no_match"),
                     left + 8, this.listTop + 4, COLOR_DIM, false);
         } else {
             this.renderRows(graphics);
@@ -195,15 +242,14 @@ public final class PreviewScreen extends Screen implements GenerationListener {
     private void renderRows(GuiGraphics graphics) {
         int left = this.panelLeft;
         int right = this.panelLeft + this.panelWidth;
-        List<RecipePlan.Entry> entries = this.plan.entries();
 
         graphics.enableScissor(left + 1, this.listTop, right - 1, this.listBottom);
         int rows = this.rowsPerPage();
         int first = this.page * rows;
-        int last = Math.min(entries.size(), first + rows);
+        int last = Math.min(this.visible.size(), first + rows);
 
         for (int i = first; i < last; i++) {
-            RecipePlan.Entry entry = entries.get(i);
+            RecipePlan.Entry entry = this.visible.get(i);
             int rowY = this.listTop + (i - first) * ROW_HEIGHT;
             if (i % 2 == 1) {
                 graphics.fill(left + 1, rowY, right - 1, rowY + ROW_HEIGHT, COLOR_ROW_ALT);
@@ -265,8 +311,8 @@ public final class PreviewScreen extends Screen implements GenerationListener {
                 && mouseY >= this.listTop && mouseY < this.listBottom) {
             int row = (int) ((mouseY - this.listTop) / ROW_HEIGHT);
             int index = this.page * this.rowsPerPage() + row;
-            if (index >= 0 && index < this.plan.entries().size()) {
-                this.plan.entries().get(index).toggle();
+            if (index >= 0 && index < this.visible.size()) {
+                this.visible.get(index).toggle();
                 this.refreshButtons();
                 return true;
             }
@@ -286,6 +332,10 @@ public final class PreviewScreen extends Screen implements GenerationListener {
 
     @Override
     public boolean keyPressed(int keyCode, int scanCode, int modifiers) {
+        // While the search box has focus the arrow keys belong to text editing, not to paging.
+        if (this.searchBox != null && this.searchBox.isFocused()) {
+            return super.keyPressed(keyCode, scanCode, modifiers);
+        }
         if (keyCode == GLFW.GLFW_KEY_LEFT || keyCode == GLFW.GLFW_KEY_PAGE_UP) {
             this.turnPage(-1);
             return true;

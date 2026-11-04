@@ -2,7 +2,42 @@
 
 前置：这个 jar 只能在**真实客户端**里验证。本工作区的开发环境跑不起来（AE2 的 mixin refmap 是生产 SRG 名，ForgeGradle 的 `fg.deobf()` 不重映射 jar 内 refmap，AE2 在 mixin 阶段就崩），和本模组无关，详见 `README.md` 的「关于开发环境跑起来」。
 
-## 〇、第三版改了什么（最新，先看这里再测）
+## 〇、1.1.0 改了什么（最新，先看这里再测）
+
+1. **GT / NBT 兼容：带 NBT 的配方材料不再被抹平**。GregTech(O) 的「配置电路」（`gtceu:programmed_circuit` + `Configuration=N`）以前在 JEI → `StackSpec` 这一步就被压成「任意电路」，编出来的样板能跑但做错东西。现在 NBT 全程带着：JEI 槽位 → 网络包 → `AEItemKey.of(ItemStack)` → 合成网格。
+2. **预览页有搜索框了**，语法学 JEI：
+
+   | 输入 | 含义 |
+   | --- | --- |
+   | `钢` | 名称包含「钢」 |
+   | `@gtceu` | 只看 gtceu 的产物 |
+   | `#forge:plates` | 只看带这个标签的产物 |
+   | `*plate*` / `c?rcuit` | 通配符 |
+   | `-青铜` | 排除 |
+
+   多个词是「与」关系。「全选 / 全不选」现在只作用于**筛选出来的**条目，所以「先搜 `-gtceu`，再全不选，再清空搜索全选」能一步剔掉某个模组的全部配方。
+3. **游戏内改配置，立刻生效不用重启**：
+
+   ```
+   /eae2_pattern config list
+   /eae2_pattern config get limits.max_patterns_per_request
+   /eae2_pattern config set limits.max_patterns_per_request 16384
+   /eae2_pattern config add filters.ignored_stacks gtceu:programmed_circuit
+   /eae2_pattern config reset filters.strip_container_items
+   /eae2_pattern config reload
+   ```
+
+   写操作要 OP；值立刻进内存并落盘到 toml。
+4. **单类别配方上限 2048 → 8192**（GT(O) 一台机器常常上千条），并且日志改成 `Collected X of Y …, skipped Z`，每条跳过在 debug 级写明原因。
+
+重测四件事：
+
+- **GT 电路**：在 GTO 里找一条要求特定配置电路的配方（组装机/装配线带电路那条），生成样板后拿去用 AE2 自动合成，看是否**强制**要对应配置的电路。也可以先生成两条只差电路配置的配方，比对两条样板是否不同（相同就是 NBT 还是丢了）。
+- **搜索**：预览页输入 `钢`、`@gtceu`、`#forge:plates`、`-青铜`，确认结果条数变化合理；在搜索状态下点「全不选」再清空搜索，确认只有筛选过的那批被取消。
+- **命令**：`/eae2_pattern config set limits.max_patterns_per_request 16384` → 立刻再点一次生成 → `logs/latest.log` 里 `config maxPatternsPerRequest=16384`；重启游戏后 `get` 仍是 16384（说明落盘成功）。
+- **大机器**：卷板机 799 条照旧应该走通；若出现 `skipped N`，把 `Skipping recipe …` 那几行发我。
+
+## 〇一、第三版改了什么（历史）
 
 1. **修掉「生成失败」的真凶：单次请求上限原来是 512 条**。你那台卷板机 `gtceu:bender` 有 799 条配方，所以整个请求在服务端被直接拒了，一条都没写——不是样板不够。现在默认上限提到 **8192**，并且这种拒绝会走独立的结果类型，聊天栏直接告诉你「请求过大 + 该改哪个配置」。
    > 注意：旧版本已经在 `serverconfig/eae2_pattern-server.toml` 里写死了 `maxPatternsPerRequest = 512`。**改默认值不会覆盖已有文件**，请把那一行改成 `8192`，或者直接删掉这个 toml 让模组重新生成。
@@ -16,7 +51,7 @@
 - 按钮位置：打开任意 JEI 配方页，按钮应在**左侧工作方块图标那一列的最下面**，是一个灰色小方块里嵌九宫格。
 - 若出现「另有 N 个配方无法编码」：说明这 N 条被跳过了，把那几条细节发我，我判断是适配问题还是应当过滤掉。
 
-## 〇一、第二版改了什么（历史）
+## 〇二、第二版改了什么（历史）
 
 1. **采集范围收紧到「当前这个 JEI 类别」**。之前会把 JEI 隐藏的配方、以及类别自己 `isHandled` 拒绝的配方一起收进来，多个类别共用同一个 `RecipeType` 时就会串味。现在只收 JEI 在**这个工作方块页面上真正会画出来**的配方。另外如果 JEI 正停在「全部类别」索引页（例如按 U 后弹出类别列表），点按钮会先弹**类别选择页**，不会盲取某一个类别。
 2. **预览改成翻页**：标题栏右侧有 `<` `>` 按钮和页码，鼠标滚轮、方向键左右、PageUp / PageDown 也能翻页；勾选状态**跨页保留**。
@@ -32,7 +67,7 @@
 
 | 文件 | 用途 |
 | --- | --- |
-| `eae2-pattern-<版本>.jar` | 本模组（版本形如 `1.0.0`，以 `build/libs/` 里实际产出的为准） |
+| `eae2-pattern-<版本>.jar` | 本模组（版本形如 `1.1.0`，以 `build/libs/` 里实际产出的为准） |
 | `appliedenergistics2-forge-15.2.16.jar` | AE2（必须，版本 `[15.2.0,16.0.0)`） |
 | `jei-1.20.1-forge-15.20.0.106.jar` | JEI（必须，版本 `[15.20.0,16.0.0)`） |
 | `forge-1.20.1-47.4.16-installer.jar` | Forge 安装器 |

@@ -233,11 +233,13 @@ public final class PatternEncoder {
         if (!spec.isItem()) {
             throw new EncodingException(role + " must be an item, got " + spec.type());
         }
-        Item item = ForgeRegistries.ITEMS.getValue(spec.id());
-        if (item == null) {
+        // Build the key from the full stack, not from the bare item: a GregTech circuit is an item plus NBT,
+        // and AEItemKey.of(Item) would produce a key that matches every circuit configuration.
+        ItemStack stack = spec.toItemStack();
+        if (stack.isEmpty()) {
             throw new EncodingException(role + " references unknown item " + spec.id());
         }
-        AEItemKey key = AEItemKey.of(item);
+        AEItemKey key = AEItemKey.of(stack);
         if (key == null) {
             throw new EncodingException(role + " cannot be represented as an AE2 item key: " + spec.id());
         }
@@ -299,8 +301,8 @@ public final class PatternEncoder {
 
     private static AEKey toKey(StackSpec spec) {
         if (spec.isItem()) {
-            Item item = ForgeRegistries.ITEMS.getValue(spec.id());
-            return item == null ? null : AEItemKey.of(item);
+            ItemStack stack = spec.toItemStack();
+            return stack.isEmpty() ? null : AEItemKey.of(stack);
         }
         Fluid fluid = ForgeRegistries.FLUIDS.getValue(spec.id());
         return fluid == null ? null : AEFluidKey.of(fluid);

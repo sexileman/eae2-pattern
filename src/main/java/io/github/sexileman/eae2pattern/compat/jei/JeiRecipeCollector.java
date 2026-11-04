@@ -39,7 +39,7 @@ import java.util.Set;
  */
 public final class JeiRecipeCollector {
 
-    private static final int MAX_RECIPES_PER_CATEGORY = 2048;
+    private static final int MAX_RECIPES_PER_CATEGORY = 8192;
 
     private JeiRecipeCollector() {
     }
@@ -74,6 +74,7 @@ public final class JeiRecipeCollector {
         private final int[] kindCounts = new int[PatternKind.values().length];
         private int fallbackCounter;
         private int cursor;
+        private int skipped;
         private boolean truncated;
 
         private Collector(IRecipeCategory<Object> category) {
@@ -124,16 +125,19 @@ public final class JeiRecipeCollector {
             Optional<IRecipeLayoutDrawable<Object>> layout = runtime.getRecipeManager()
                     .createRecipeLayoutDrawable(category, recipe, emptyFocus());
             if (layout.isEmpty()) {
+                skip(recipe, "JEI could not build a layout");
                 return;
             }
             IRecipeSlotsView slots = layout.get().getRecipeSlotsView();
             List<StackSpec> inputs = toSpecs(slots.getSlotViews(RecipeIngredientRole.INPUT));
             List<StackSpec> outputs = toSpecs(slots.getSlotViews(RecipeIngredientRole.OUTPUT));
             if (outputs.isEmpty()) {
+                skip(recipe, "no item or fluid output slot");
                 return;
             }
             ResourceLocation recipeId = uniqueId(category.getRegistryName(recipe), type, usedIds, fallbackCounter++);
             if (recipeId == null) {
+                skip(recipe, "duplicate recipe id");
                 return;
             }
             PatternKind kind = kindOf(recipe);
@@ -141,10 +145,11 @@ public final class JeiRecipeCollector {
             try {
                 spec = new PatternSpec(kind, recipeId, inputs, outputs);
             } catch (IllegalArgumentException e) {
-                EAE2Pattern.LOGGER.debug("Skipping recipe {} of {}: {}", recipeId, type.getUid(), e.getMessage());
+                skip(recipe, e.getMessage());
                 return;
             }
             if (!spec.fits()) {
+                skip(recipe, "too many inputs or outputs for one pattern");
                 return;
             }
             ItemStack icon = outputs.get(0).toItemStack();
@@ -157,9 +162,15 @@ public final class JeiRecipeCollector {
             return runtime.getJeiHelpers().getFocusFactory().getEmptyFocusGroup();
         }
 
+        private void skip(Object recipe, String reason) {
+            this.skipped++;
+            EAE2Pattern.LOGGER.debug("Skipping recipe {} of {}: {}", category.getRegistryName(recipe),
+                    type.getUid(), reason);
+        }
+
         public RecipePlan finish() {
-            EAE2Pattern.LOGGER.info("Collected {} of {} recipes from category '{}' ({})",
-                    entries.size(), recipes.size(), category.getTitle().getString(), type.getUid());
+            EAE2Pattern.LOGGER.info("Collected {} of {} recipes from category '{}' ({}), skipped {}",
+                    entries.size(), recipes.size(), category.getTitle().getString(), type.getUid(), skipped);
             return new RecipePlan(type.getUid(), category.getTitle(), dominantKind(kindCounts), entries);
         }
     }

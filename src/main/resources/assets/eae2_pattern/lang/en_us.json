@@ -10,6 +10,10 @@
 
   "eae2_pattern.preview.title": "Generate patterns: %s",
   "eae2_pattern.preview.selected": "%s / %s selected",
+  "eae2_pattern.preview.selected_filtered": "%s / %s selected (%s matching the search)",
+  "eae2_pattern.preview.search": "Search",
+  "eae2_pattern.preview.search_hint": "name, @mod, #tag, wildcards * ?",
+  "eae2_pattern.preview.no_match": "No pattern matches the search.",
   "eae2_pattern.preview.blanks": "Blank patterns in network: %s",
   "eae2_pattern.preview.blanks_unknown": "Blank patterns in network: querying...",
   "eae2_pattern.preview.not_enough": "Not enough blank patterns: %s needed, %s available.",
@@ -29,10 +33,10 @@
   "eae2_pattern.kind.stonecutting": "Stonecutting",
   "eae2_pattern.kind.smithing": "Smithing",
 
-  "eae2_pattern.button.tooltip": "Quickly Pattern: preview and encode every recipe of this machine",
+  "eae2_pattern.button.tooltip": "EAE2 Pattern: preview and encode every recipe of this machine",
   "eae2_pattern.button.title": "Patterns",
 
-  "eae2_pattern.jei.button": "Quickly Pattern: preview this category",
+  "eae2_pattern.jei.button": "EAE2 Pattern: preview this category",
   "eae2_pattern.jei.button.desc": "Encode every recipe of this machine into AE2 patterns",
 
   "eae2_pattern.msg.no_jei": "JEI is not available, so recipes cannot be read.",
@@ -45,6 +49,18 @@
   "eae2_pattern.picker.choose": "Choose a recipe category",
   "eae2_pattern.picker.hint": "This machine appears in several JEI categories.",
 
+  "eae2_pattern.cmd.entry": "%s = %s",
+  "eae2_pattern.cmd.current": "Current value: %s = %s",
+  "eae2_pattern.cmd.hint": "Change one with /eae2_pattern config set <key> <value>; lists also accept add / remove.",
+  "eae2_pattern.cmd.set": "Set %s = %s",
+  "eae2_pattern.cmd.reset": "Reset %s to its default (%s)",
+  "eae2_pattern.cmd.reloaded": "Configuration values re-read.",
+  "eae2_pattern.cmd.err.unknown_key": "Unknown config key: %s",
+  "eae2_pattern.cmd.err.boolean": "%s expects true or false.",
+  "eae2_pattern.cmd.err.integer": "%s expects a whole number.",
+  "eae2_pattern.cmd.err.range": "%s is outside the allowed range; see the comments in the config file.",
+  "eae2_pattern.cmd.err.not_list": "%s is not a list, use set instead.",
+
   "key.eae2_pattern.open_preview": "Preview patterns for the hovered machine",
-  "key.categories.eae2_pattern": "Quickly Pattern"
+  "key.categories.eae2_pattern": "EAE2 Pattern"
 }
