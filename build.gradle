@@ -1,0 +1,160 @@
+plugins {
+    id 'eclipse'
+    id 'idea'
+    id 'maven-publish'
+    id 'net.minecraftforge.gradle' version '[6.0,6.2)'
+}
+
+/*
+ * Version scheme: <mod_base_version>+mc<minecraft_version>.<yyyyMMdd>.<build>
+ *
+ *   mod_base_version  bumped by hand for feature releases (1.0.0 -> 1.1.0 ...)
+ *   yyyyMMdd          the day the artifact was built (local time)
+ *   build             a counter that goes up once per `build` invocation
+ *
+ * Only `build`/`assemble`/`publish*` consume a build number, so running
+ * `compileJava` or `runClient` a hundred times does not inflate the version.
+ * The counter lives in `.build-number` and is not committed: release tags are
+ * the source of truth in git.
+ */
+def buildCounterFile = file('.build-number')
+def previousBuild = buildCounterFile.isFile() ? buildCounterFile.text.trim().toInteger() : 0
+def releaseBuild = gradle.startParameter.taskNames.any { taskName ->
+    def task = taskName.split(':').last()
+    task == 'build' || task == 'assemble' || task.startsWith('publish')
+}
+def currentBuild = releaseBuild ? previousBuild + 1 : previousBuild
+def modVersion = "${mod_base_version}+mc${minecraft_version}.${new Date().format('yyyyMMdd')}.${currentBuild}"
+
+version = modVersion
+group = mod_group_id
+
+base {
+    archivesName = mod_artifact
+}
+
+java.toolchain.languageVersion = JavaLanguageVersion.of(17)
+
+minecraft {
+    mappings channel: mapping_channel, version: mapping_version
+
+    copyIdeResources = true
+
+    runs {
+        configureEach {
+            workingDirectory project.file('run')
+            property 'forge.logging.markers', 'REGISTRIES'
+            property 'forge.logging.console.level', 'debug'
+
+            mods {
+                "${mod_id}" {
+                    source sourceSets.main
+                }
+            }
+        }
+
+        client {
+            property 'forge.enabledGameTestNamespaces', mod_id
+        }
+
+        server {
+            property 'forge.enabledGameTestNamespaces', mod_id
+            args '--nogui'
+        }
+
+        data {
+            workingDirectory project.file('run-data')
+            args '--mod', mod_id, '--all', '--output', file('src/generated/resources/'), '--existing', file('src/main/resources/')
+        }
+    }
+}
+
+repositories {
+    maven {
+        name = 'MinecraftForge'
+        url = 'https://maven.minecraftforge.net/'
+    }
+    maven {
+        name = 'BlameJared'
+        url = 'https://maven.blamejared.com'
+    }
+    maven {
+        name = 'ModMaven'
+        url = 'https://modmaven.dev/'
+    }
+    mavenCentral()
+}
+
+dependencies {
+    minecraft "net.minecraftforge:forge:${minecraft_version}-${forge_version}"
+
+    // Applied Energistics 2 (compile against the full jar: we also use menu/logic classes that are not in the -api jar)
+    compileOnly fg.deobf("appeng:appliedenergistics2-forge:${ae2_version}")
+    runtimeOnly fg.deobf("appeng:appliedenergistics2-forge:${ae2_version}")
+
+    // JEI (optional at runtime, but needed to compile the client plugin)
+    compileOnly fg.deobf("mezz.jei:jei-${minecraft_version}-forge:${jei_version}")
+    runtimeOnly fg.deobf("mezz.jei:jei-${minecraft_version}-forge:${jei_version}")
+}
+
+tasks.named('processResources', ProcessResources).configure {
+    var replaceProperties = [
+            minecraft_version      : minecraft_version,
+            minecraft_version_range: minecraft_version_range,
+            forge_version          : forge_version,
+            forge_version_range    : forge_version_range,
+            loader_version_range   : loader_version_range,
+            ae2_version_range      : ae2_version_range,
+            jei_version_range      : jei_version_range,
+            mod_id                 : mod_id,
+            mod_name               : mod_name,
+            mod_license            : mod_license,
+            mod_version            : modVersion,
+            mod_authors            : mod_authors,
+            mod_description        : mod_description,
+            mod_issues             : mod_issues
+    ]
+    inputs.properties replaceProperties
+
+    filesMatching(['META-INF/mods.toml', 'pack.mcmeta']) {
+        expand replaceProperties + [project: project]
+    }
+}
+
+tasks.named('jar', Jar).configure {
+    manifest {
+        attributes([
+                'Specification-Title'    : mod_id,
+                'Specification-Vendor'   : mod_authors,
+                'Specification-Version'  : '1',
+                'Implementation-Title'   : project.name,
+                'Implementation-Version' : project.jar.archiveVersion,
+                'Implementation-Vendor'  : mod_authors
+        ])
+    }
+    finalizedBy 'reobfJar'
+}
+
+tasks.withType(JavaCompile).configureEach {
+    options.encoding = 'UTF-8'
+}
+
+// Consume a build number only after a successful `build`, so a failed build
+// does not burn a version.
+tasks.named('build').configure {
+    doLast {
+        if (releaseBuild) {
+            buildCounterFile.text = currentBuild.toString()
+            logger.lifecycle("EAE2 Pattern ${modVersion} (build #${currentBuild})")
+        }
+    }
+}
+
+tasks.register('printVersion') {
+    group = 'help'
+    description = 'Prints the version this checkout would build.'
+    def preview = modVersion
+    doLast {
+        println preview
+    }
+}
