@@ -22,6 +22,12 @@
   "eae2_pattern.preview.select_all": "All",
   "eae2_pattern.preview.select_none": "None",
   "eae2_pattern.preview.empty": "This machine has no encodable recipes.",
+  "eae2_pattern.preview.invert": "Invert",
+  "eae2_pattern.preview.dedupe": "1 per output",
+  "eae2_pattern.preview.only_selected": "Selected only",
+  "eae2_pattern.preview.only_selected_on": "Show all",
+  "eae2_pattern.preview.deduped": "Dropped %s other way(s) of making the same item.",
+  "eae2_pattern.preview.tooltip.kind": "Pattern kind: %s",
   "eae2_pattern.preview.page": "%s / %s",
 
   "eae2_pattern.collecting.title": "Reading recipes: %s",

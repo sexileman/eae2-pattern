@@ -58,8 +58,6 @@ public final class JeiRecipesScreenHook {
     private static final int COLOR_SLOT_BORDER = 0xFF373737;
     private static final int COLOR_SLOT_FACE = 0xFF8B8B8B;
     private static final int COLOR_SLOT_FACE_HOVER = 0xFFC6C6C6;
-    private static final int COLOR_ICON_DIM = 0xFF3D3D3D;
-    private static final int COLOR_ICON_ACCENT = 0xFF2F5F8F;
 
     @Nullable
     private static Field logicField;
@@ -151,16 +149,8 @@ public final class JeiRecipesScreenHook {
         graphics.fill(x, y, right, bottom, COLOR_SLOT_BORDER);
         graphics.fill(x + 1, y + 1, right - 1, bottom - 1, hovered ? COLOR_SLOT_FACE_HOVER : COLOR_SLOT_FACE);
 
-        // 3x3 recipe grid: 4px cells with a 1px gap, which is exactly the 14px inner area.
-        for (int row = 0; row < 3; row++) {
-            for (int column = 0; column < 3; column++) {
-                int cellLeft = x + 1 + column * 5;
-                int cellTop = y + 1 + row * 5;
-                boolean centre = row == 1 && column == 1;
-                graphics.fill(cellLeft, cellTop, cellLeft + 4, cellTop + 4,
-                        centre ? COLOR_ICON_ACCENT : COLOR_ICON_DIM);
-            }
-        }
+        // A stack of pattern cards: slightly dimmed when idle, full contrast under the cursor.
+        RecipeIcons.drawPatternStack(graphics, x, y, hovered ? 1.0F : 0.82F);
     }
 
     /**

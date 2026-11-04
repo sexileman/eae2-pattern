@@ -1,29 +1,29 @@
 package io.github.sexileman.eae2pattern.client;
 
-import net.minecraft.core.registries.BuiltInRegistries;
-import net.minecraft.resources.ResourceLocation;
-import net.minecraft.tags.TagKey;
-import net.minecraft.world.item.Item;
-import net.minecraft.world.item.ItemStack;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
-import java.util.Map;
 import java.util.regex.Pattern;
 
 /**
- * Requirement: "the preview should support searching and filtering with JEI's syntax".
+ * The search box of the preview list, following JEI's query syntax closely enough to feel familiar.
  *
- * <p>The pieces of JEI's search syntax that actually matter when you are staring at a list of recipe outputs
- * are reproduced here: free text matching the display name, {@code @modid} to narrow by mod, {@code #tag} to
- * narrow by item tag, {@code *} / {@code ?} wildcards, and a {@code -} prefix to exclude a term. All terms must
- * match, exactly like JEI's own filter.</p>
+ * <p>Supported, all terms ANDed together:</p>
+ * <ul>
+ *   <li>{@code iron} - free text, matched against the names, ids and namespaces of every ingredient of the
+ *       recipe, so {@code iron} finds both "2 iron ingots to double iron plate" and "2 iron plates to double iron
+ *       plate";</li>
+ *   <li>{@code @gtceu} - only recipes that involve a given mod;</li>
+ *   <li>{@code #forge:plates} - only recipes that involve an item tag;</li>
+ *   <li>{@code plate*} / {@code plate?} - wildcards;</li>
+ *   <li>{@code -slab} - exclude a term.</li>
+ * </ul>
  *
- * <p>We intentionally do not delegate to JEI's ingredient filter: that one filters the ingredient list by
- * prefix, cannot say {@code #tag}, and has no notion of "the output of this recipe".</p>
+ * <p>Two extras that JEI has no equivalent for, because here every row is a recipe rather than an ingredient:
+ * {@code >...} restricts a term to what the recipe produces and {@code <...} to what it consumes. That is how you
+ * say "recipes that make double iron plates out of ingots" in one line: {@code >double_plate <ingot}.</p>
  */
 public final class ItemSearchQuery {
 
@@ -62,8 +62,17 @@ public final class ItemSearchQuery {
                 parsed.add(Term.of(TermKind.TAG, token.substring(1), negated));
             } else if (token.startsWith("@")) {
                 parsed.add(Term.of(TermKind.MOD, token.substring(1), negated));
+            } else if (token.startsWith(">")) {
+                parsed.add(Term.of(TermKind.OUTPUT, token.substring(1), negated));
+            } else if (token.startsWith("<")) {
+                parsed.add(Term.of(TermKind.INPUT, token.substring(1), negated));
             } else {
                 parsed.add(Term.of(TermKind.TEXT, token, negated));
+            }
+        }
+        for (int i = parsed.size() - 1; i >= 0; i--) {
+            if (parsed.get(i).literal().isEmpty()) {
+                parsed.remove(i);
             }
         }
         return parsed.isEmpty() ? EMPTY : new ItemSearchQuery(raw, List.copyOf(parsed));
@@ -78,12 +87,8 @@ public final class ItemSearchQuery {
     }
 
     public boolean matches(RecipePlan.Entry entry) {
-        if (this.terms.isEmpty()) {
-            return true;
-        }
-        Candidate candidate = Candidate.of(entry);
         for (Term term : this.terms) {
-            boolean hit = term.test(candidate);
+            boolean hit = term.test(entry);
             if (term.negated() ? hit : !hit) {
                 return false;
             }
@@ -94,7 +99,9 @@ public final class ItemSearchQuery {
     private enum TermKind {
         TEXT,
         MOD,
-        TAG
+        TAG,
+        INPUT,
+        OUTPUT
     }
 
     private record Term(TermKind kind, @Nullable Pattern glob, String literal, boolean negated) {
@@ -126,11 +133,13 @@ public final class ItemSearchQuery {
             return Pattern.compile(regex.toString(), Pattern.CASE_INSENSITIVE);
         }
 
-        boolean test(Candidate candidate) {
+        boolean test(RecipePlan.Entry entry) {
             return switch (this.kind) {
-                case MOD -> matchesOne(candidate.modId());
-                case TAG -> anyOf(candidate.tags());
-                case TEXT -> anyOf(candidate.texts());
+                case MOD -> anyOf(entry.modIds());
+                case TAG -> anyOf(entry.tags());
+                case INPUT -> anyOf(entry.inputTexts());
+                case OUTPUT -> anyOf(entry.outputTexts());
+                case TEXT -> anyOf(entry.inputTexts()) || anyOf(entry.outputTexts());
             };
         }
 
@@ -146,50 +155,6 @@ public final class ItemSearchQuery {
         private boolean matchesOne(String value) {
             String lower = value.toLowerCase(Locale.ROOT);
             return this.glob != null ? this.glob.matcher(lower).matches() : lower.contains(this.literal);
-        }
-    }
-
-    /** The haystack for one entry, built once per entry per keystroke. */
-    private record Candidate(String name, String itemId, String modId, List<String> texts, List<String> tags) {
-
-        private static final Map<Item, List<String>> TAG_CACHE = new HashMap<>();
-        private static final int TAG_CACHE_LIMIT = 4096;
-
-        static Candidate of(RecipePlan.Entry entry) {
-            ItemStack icon = entry.icon();
-            String name = entry.label().getString();
-            String itemId = "";
-            String modId = "";
-            List<String> tags = List.of();
-            if (!icon.isEmpty()) {
-                ResourceLocation key = BuiltInRegistries.ITEM.getKey(icon.getItem());
-                itemId = key.toString();
-                modId = key.getNamespace();
-                tags = tagsOf(icon.getItem());
-            }
-            List<String> texts = List.of(
-                    name,
-                    itemId,
-                    modId,
-                    entry.spec().recipeId().toString(),
-                    entry.spec().kind().name()
-            );
-            return new Candidate(name, itemId, modId, texts, tags);
-        }
-
-        private static List<String> tagsOf(Item item) {
-            List<String> cached = TAG_CACHE.get(item);
-            if (cached != null) {
-                return cached;
-            }
-            List<String> tags = new ArrayList<>();
-            item.builtInRegistryHolder().tags().map(TagKey::location).map(ResourceLocation::toString)
-                    .forEach(tags::add);
-            List<String> result = List.copyOf(tags);
-            if (TAG_CACHE.size() < TAG_CACHE_LIMIT) {
-                TAG_CACHE.put(item, result);
-            }
-            return result;
         }
     }
 }

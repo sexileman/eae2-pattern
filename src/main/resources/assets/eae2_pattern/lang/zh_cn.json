@@ -22,6 +22,12 @@
   "eae2_pattern.preview.select_all": "全选",
   "eae2_pattern.preview.select_none": "全不选",
   "eae2_pattern.preview.empty": "这台机器没有可编码的配方。",
+  "eae2_pattern.preview.invert": "反选",
+  "eae2_pattern.preview.dedupe": "产物去重",
+  "eae2_pattern.preview.only_selected": "只看已选",
+  "eae2_pattern.preview.only_selected_on": "显示全部",
+  "eae2_pattern.preview.deduped": "已去掉 %s 条同一产物的其他做法。",
+  "eae2_pattern.preview.tooltip.kind": "样板类型：%s",
   "eae2_pattern.preview.page": "第 %s / %s 页",
 
   "eae2_pattern.collecting.title": "读取配方：%s",
