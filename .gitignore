@@ -1,0 +1,37 @@
+# Gradle
+/.gradle/
+/build/
+/out/
+!gradle/wrapper/gradle-wrapper.jar
+
+# Generated build counter (release tags in git are the source of truth)
+/.build-number
+
+# IDE
+/.idea/
+*.iml
+*.ipr
+*.iws
+/.vscode/
+/.settings/
+.classpath
+.project
+
+# Minecraft run dirs
+/run/
+/run-data/
+/runs/
+
+# Local toolchain (JDK / Gradle downloaded for this workspace)
+/.tools/
+
+# Local test artifacts: prebuilt dependency jars, never committed
+/dist/
+
+# Extracted dependency sources used while researching APIs (not part of the mod)
+/ae2src/
+/jei/
+
+# OS
+Thumbs.db
+.DS_Store
