@@ -3,6 +3,9 @@ package io.github.sexileman.eae2pattern.client;
 import com.mojang.blaze3d.platform.InputConstants;
 import io.github.sexileman.eae2pattern.EAE2Pattern;
 import net.minecraft.client.KeyMapping;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.components.EditBox;
+import net.minecraft.client.gui.screens.Screen;
 import net.minecraftforge.api.distmarker.Dist;
 import net.minecraftforge.client.event.RegisterKeyMappingsEvent;
 import net.minecraftforge.client.event.ScreenEvent;
@@ -51,16 +54,31 @@ public final class ClientSetup {
             if (event.phase != TickEvent.Phase.END) {
                 return;
             }
+            boolean typing = isTyping();
             while (OPEN_PREVIEW.consumeClick()) {
-                EAE2PatternClient.openPreviewForHovered();
+                if (!typing) {
+                    EAE2PatternClient.openPreviewForHovered();
+                }
             }
         }
 
         @SubscribeEvent
         public static void onScreenKeyPressed(ScreenEvent.KeyPressed.Post event) {
+            if (isTyping()) {
+                return;
+            }
             if (OPEN_PREVIEW.matches(event.getKeyCode(), event.getScanCode())) {
                 EAE2PatternClient.openPreviewForHovered();
             }
+        }
+
+        /**
+         * True while a text field has focus. Without this, typing "gtceu" into the preview search box would fire the
+         * key binding on the "g".
+         */
+        private static boolean isTyping() {
+            Screen screen = Minecraft.getInstance().screen;
+            return screen != null && screen.getFocused() instanceof EditBox box && box.isFocused();
         }
     }
 }
