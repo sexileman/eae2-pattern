@@ -69,6 +69,10 @@
   </div>
   <div class="grp"><label>圆角 <b id="radv">4</b></label><input id="radius" type="range" min="0" max="8" step="1" value="4"></div>
   <div class="grp"><label>面板不透明度 <b id="alphav">72%</b></label><input id="alpha" type="range" min="35" max="100" step="1" value="72"></div>
+  <div class="grp"><label>毛玻璃模糊 <b id="blurv">9</b></label><input id="blur" type="range" min="0" max="16" step="1" value="9"></div>
+  <div class="grp"><label>背景</label>
+    <select id="glass"><option value="1">毛玻璃（模糊背景）</option><option value="0">纯色（不做模糊）</option></select>
+  </div>
   <div class="grp"><button id="export">导出参数</button><button id="reset">重置交互</button></div>
 </div>
 <textarea id="out" readonly placeholder="点“导出参数”后，这里会显示当前这套样式的数值。"></textarea>
@@ -109,6 +113,7 @@
     products: "", ingredients: "",
     cond: { unconsumed:false, chanceIn:false, dropUnconsumed:false,
             chanceOut:false, chanceByproduct:false, dropChance:false },
+    blur: 9, glass: true,
     page: 0, multiplier: 1, onlySelected: false,
     hover: -1, selecting: new Set(), toast: null, toastUntil: 0
   };
@@ -131,6 +136,8 @@
         if (k in state.cond) state.cond[k] = true;
       }
     }
+    if (q.get("blur")) state.blur = Math.max(0, Math.min(16, parseInt(q.get("blur"), 10) || 0));
+    if (q.get("glass") === "0") state.glass = false;
     if (q.get("sel")) { for (let i = 0; i < 5; i++) state.selecting.add(i); state.hover = 1; }
     document.getElementById("skin").value = state.skin;
     document.getElementById("density").value = state.density;
@@ -185,6 +192,17 @@
   }
   function rgba(h, a) { const [r,g,b] = hexToRgb(h); return `rgba(${r},${g},${b},${a})`; }
 
+  function roundRectPath(x, y, w, h, r) {
+    r = Math.max(0, Math.min(r, Math.floor(Math.min(w, h) / 2)));
+    ctx.beginPath();
+    if (r === 0) { ctx.rect(x, y, w, h); return; }
+    ctx.moveTo(x + r, y);
+    ctx.arcTo(x + w, y, x + w, y + h, r);
+    ctx.arcTo(x + w, y + h, x, y + h, r);
+    ctx.arcTo(x, y + h, x, y, r);
+    ctx.arcTo(x, y, x + w, y, r);
+    ctx.closePath();
+  }
   function roundRect(x, y, w, h, r, fill, stroke) {
     r = Math.max(0, Math.min(r, Math.floor(Math.min(w, h) / 2)));
     ctx.beginPath();
@@ -246,6 +264,45 @@
       textMid(x + size - w / 2, y + size - 2.6, s, "#ffffff", 5);
     }
   }
+  // A stand-in for the world behind the screen: sky, sun, ground rows, a couple
+  // of blocks. It only exists so the frosted panel has something to blur.
+  const backdrop = document.createElement("canvas");
+  backdrop.width = W * HIDPI; backdrop.height = H * HIDPI;
+  (() => {
+    const b = backdrop.getContext("2d");
+    b.setTransform(HIDPI, 0, 0, HIDPI, 0, 0);
+    const sky = b.createLinearGradient(0, 0, 0, 200);
+    sky.addColorStop(0, "#5d9bd0"); sky.addColorStop(.55, "#8fc0e2"); sky.addColorStop(1, "#cfe3ef");
+    b.fillStyle = sky; b.fillRect(0, 0, W, H);
+    const sun = b.createRadialGradient(392, 44, 2, 392, 44, 64);
+    sun.addColorStop(0, "rgba(255,250,225,.95)"); sun.addColorStop(.35, "rgba(255,245,205,.35)");
+    sun.addColorStop(1, "rgba(255,245,205,0)");
+    b.fillStyle = sun; b.fillRect(320, -20, 150, 150);
+    let seed = 7;
+    const rnd = () => (seed = (seed * 1103515245 + 12345) & 0x7fffffff) / 0x7fffffff;
+    for (let row = 0; row < 6; row++) {
+      const y = 196 + row * 13;
+      for (let x = -14; x < W + 14; x += 14) {
+        const dark = 0.72 + rnd() * 0.3;
+        const base = row === 0 ? [104, 168, 78] : (row < 3 ? [126, 96, 66] : [112, 112, 112]);
+        b.fillStyle = `rgb(${base.map(c => Math.round(c * dark)).join(",")})`;
+        b.fillRect(x + (row % 2) * 7, y, 13, 12);
+        b.fillStyle = "rgba(0,0,0,.16)";
+        b.fillRect(x + (row % 2) * 7 + 12, y, 1, 12);
+        b.fillRect(x + (row % 2) * 7, y + 11, 13, 1);
+      }
+    }
+    // a couple of standing blocks on the left, like a wall of machines
+    const cols = ["#7a8a94", "#5e6f7a", "#8a7f6f", "#6a7f5f"];
+    for (let i = 0; i < 8; i++) {
+      const bx = 6 + i * 15, bh = 16 + (i % 3) * 14;
+      b.fillStyle = cols[i % cols.length];
+      b.fillRect(bx, 196 - bh, 14, bh);
+      b.fillStyle = "rgba(0,0,0,.22)"; b.fillRect(bx + 13, 196 - bh, 1, bh);
+      b.fillStyle = "rgba(255,255,255,.12)"; b.fillRect(bx, 196 - bh, 14, 1);
+    }
+  })();
+
   function nowMs() { return performance.now(); }
   function toast(msg, ok) { state.toast = msg; state.toastOk = ok; state.toastUntil = nowMs() + 2600; }
 
@@ -343,12 +400,31 @@
     const dark = state.skin !== "vanilla";
 
     ctx.clearRect(0, 0, W, H);
-    // dim
-    rect(0, 0, W, H, rgba("#000000", dark ? .55 : .35));
 
-    // panel
-    roundRect(L.panel.x, L.panel.y, L.panel.w, L.panel.h, Math.max(4, state.radius + 2),
-              rgba(S.panel, panelAlpha), rgba(S.border, 1));
+    // the world behind, dimmed
+    ctx.drawImage(backdrop, 0, 0, W, H);
+    rect(0, 0, W, H, rgba("#000000", dark ? .45 : .28));
+
+    // frosted plate: clip to the panel, blur the backdrop inside it, then tint
+    const pr = Math.max(4, state.radius + 2);
+    if (state.glass && state.blur > 0) {
+      ctx.save();
+      roundRectPath(L.panel.x, L.panel.y, L.panel.w, L.panel.h, pr);
+      ctx.clip();
+      ctx.filter = `blur(${(state.blur / 3).toFixed(2)}px)`;
+      ctx.drawImage(backdrop, 0, 0, W, H);
+      ctx.filter = "none";
+      ctx.restore();
+      // dark frosted glass: the blur alone is far too bright to carry light text
+      rect(L.panel.x, L.panel.y, L.panel.w, L.panel.h, rgba("#000000", dark ? .52 : .18));
+    } else if (!state.glass) {
+      rect(L.panel.x, L.panel.y, L.panel.w, L.panel.h, rgba("#000000", dark ? .55 : .3));
+    }
+
+    // panel tint on top of the blur (keeps the same palette as the flat mode)
+    roundRect(L.panel.x, L.panel.y, L.panel.w, L.panel.h, pr,
+              rgba(S.panel, panelAlpha * (state.glass ? .34 : 1)),
+              state.glass ? rgba("#ffffff", .26) : rgba(S.border, 1));
 
     // header
     text(L.panel.x + 7, L.panel.y + 5, "生成样板：卷板机", S.text, 9, "left", true);
@@ -534,7 +610,9 @@
   }
 
   function card(box, title, trailing, S, dark) {
-    roundRect(box.x, box.y, box.w, box.h, Math.max(3, state.radius), rgba(S.card, dark ? .85 : .55), rgba(S.border, .8));
+    const fill = state.glass ? rgba("#000000", .22) : rgba(S.card, dark ? .85 : .55);
+    const bord = state.glass ? rgba("#ffffff", .14) : rgba(S.border, .8);
+    roundRect(box.x, box.y, box.w, box.h, Math.max(3, state.radius), fill, bord);
     text(box.x + 6, box.y + 4, title, S.dim, 8, "left", true);
     if (trailing) text(box.x + box.w - 6, box.y + 5, trailing, S.muted, 7, "right");
     rect(box.x + 6, box.y + D.titleH - 1, box.w - 12, 1, rgba(S.divider, 1));
@@ -543,8 +621,9 @@
   function field(x, y, w, value, placeholder, S, dark, acc, which) {
     const focused = document.activeElement && document.activeElement.dataset
       && document.activeElement.dataset.field === which;
-    roundRect(x, y, w, 13, Math.min(3, state.radius), rgba(S.field, dark ? .9 : .95),
-              focused ? acc : rgba(S.border, .9));
+    roundRect(x, y, w, 13, Math.min(3, state.radius),
+              state.glass ? rgba("#000000", .46) : rgba(S.field, dark ? .9 : .95),
+              focused ? acc : (state.glass ? rgba("#ffffff", .18) : rgba(S.border, .9)));
     const shown = value || placeholder;
     text(x + 4, y + 3, fit(shown, w - 18), value ? S.text : S.muted, 7);
     roundRect(x + w - 12, y + 3, 8, 8, 2, rgba("#ffffff", .07), rgba(S.border, .8));
@@ -687,11 +766,18 @@
   };
   document.getElementById("radius").oninput = e => { state.radius = +e.target.value; document.getElementById("radv").textContent = state.radius; paint(); };
   document.getElementById("alpha").oninput = e => { state.alpha = +e.target.value; document.getElementById("alphav").textContent = state.alpha + "%"; paint(); };
+  document.getElementById("blur").oninput = e => {
+    state.blur = +e.target.value;
+    document.getElementById("blurv").textContent = state.blur;
+    paint();
+  };
+  document.getElementById("glass").onchange = e => { state.glass = e.target.value === "1"; paint(); };
   document.getElementById("reset").onclick = () => { state.selecting.clear(); state.page = 0; state.hover = -1; state.onlySelected = false; paint(); };
   document.getElementById("export").onclick = () => {
     const out = {
       skin: state.skin, accent: state.accent, density: state.density,
       radius: state.radius, panelAlpha: state.alpha / 100,
+      glass: state.glass, blur: state.blur,
       rowH: D.rowH, step: D.step, icon: D.icon, checkbox: D.check,
       font: D.font, titleH: D.titleH,
       grid: layout()
