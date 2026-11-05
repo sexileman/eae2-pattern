@@ -42,19 +42,19 @@ public final class PreviewScreen extends Screen implements GenerationListener {
 
     // ------------------------------------------------------------------ layout constants
 
-    private static final int PAD = 8;
-    private static final int HEADER_H = 30;
+    private static final int PAD = 6;
+    private static final int HEADER_H = 26;
     private static final int CARD_TITLE_H = 15;
-    private static final int COLUMN_H = 11;
-    private static final int ROW_H = 14;
-    private static final int STEP = 15;
-    private static final int ICON = 12;
-    private static final int ICON_STEP = 13;
-    private static final int CHECKBOX = 9;
-    private static final int FIELD_H = 13;
-    private static final int COND_H = 11;
-    private static final int COND_STEP = 13;
-    private static final int FOOTER_H = 13;
+    private static final int COLUMN_H = 12;
+    private static final int ROW_H = 10;
+    private static final int STEP = 11;
+    private static final int ICON = 10;
+    private static final int ICON_STEP = 11;
+    private static final int CHECKBOX = 7;
+    private static final int FIELD_H = 12;
+    private static final int COND_H = 10;
+    private static final int COND_STEP = 12;
+    private static final int FOOTER_H = 10;
     private static final int MULTIPLIER_W = 14;
 
     // ------------------------------------------------------------------ palette
@@ -193,18 +193,20 @@ public final class PreviewScreen extends Screen implements GenerationListener {
     // ------------------------------------------------------------------ layout
 
     private void layout() {
-        this.panelWidth = Math.min(this.width - 2 * PAD, 620);
-        this.panelHeight = Math.min(this.height - 2 * PAD, 380);
+        // Every number here is the same one the approved mock (docs/images/ui-e2-modules.png) was drawn
+        // with, so the screenshot and the running screen cannot drift apart again.
+        this.panelWidth = Math.min(this.width - 2 * PAD, 468);
+        this.panelHeight = Math.min(this.height - 2 * PAD, 258);
         this.panelLeft = (this.width - this.panelWidth) / 2;
         this.panelTop = (this.height - this.panelHeight) / 2;
 
-        int left = this.panelLeft + PAD;
-        int right = this.panelLeft + this.panelWidth - PAD;
+        int left = this.panelLeft + 4;
+        int right = this.panelLeft + this.panelWidth - 10;
         int top = this.panelTop + HEADER_H;
-        int bottom = this.panelTop + this.panelHeight - PAD;
+        int bottom = this.panelTop + this.panelHeight - 6;
 
-        int detailWidth = Mth.clamp(Math.round(this.panelWidth * 0.28F), 104, 128);
-        int filterWidth = Mth.clamp(Math.round(this.panelWidth * 0.29F), 116, 146);
+        int filterWidth = Mth.clamp(Math.round(this.panelWidth * 0.28F), 116, 130);
+        int detailWidth = Mth.clamp(Math.round(this.panelWidth * 0.274F), 104, 128);
         int gap = 6;
 
         this.filterCard = new Box(left, top, filterWidth, bottom - top);
@@ -212,100 +214,91 @@ public final class PreviewScreen extends Screen implements GenerationListener {
 
         int listLeft = this.filterCard.right() + gap;
         int listRight = this.detailCard.left() - gap;
-        this.listCard = new Box(listLeft, top, Math.max(60, listRight - listLeft), bottom - top);
+        this.listCard = new Box(listLeft, top, Math.max(80, listRight - listLeft), bottom - top);
 
-        // The action card takes the lower third of the right column.
-        int actionHeight = Math.min(72, Math.max(56, this.detailCard.height() / 3));
-        this.detailCard = new Box(this.detailCard.x(), this.detailCard.y(), this.detailCard.width(),
-                this.detailCard.height() - actionHeight - gap);
-        this.actionCard = new Box(this.detailCard.x(), this.detailCard.bottom() + gap,
-                this.detailCard.width(), actionHeight);
+        // The detail card keeps 164px and the action card takes whatever is left below it.
+        int detailHeight = Math.min(164, this.listCard.height() - 62);
+        this.detailCard = new Box(this.detailCard.x(), top, detailWidth, detailHeight);
+        this.actionCard = new Box(this.detailCard.x(), this.detailCard.bottom() + gap, detailWidth,
+                bottom - this.detailCard.bottom() - gap);
 
-        this.closeButton = new Box(right - 12, this.panelTop + 8, 11, 11);
+        this.closeButton = new Box(this.panelLeft + this.panelWidth - 22, this.panelTop + 3, 14, 13);
 
-        // Filter card contents.
+        // Filter card: two fields at +19 and +34, then the condition list at +60.
         int fx = this.filterCard.x() + 6;
         int fw = this.filterCard.width() - 12;
-        int fy = this.filterCard.y() + CARD_TITLE_H;
-        this.ingredientsField = new Box(fx, fy, fw, FIELD_H);
-        this.productsField = new Box(fx, fy + FIELD_H + 5, fw, FIELD_H);
-        this.productsHelp = new Box(this.productsField.right() - 11, fy + 2, 8, 8);
-        this.ingredientsHelp = new Box(this.ingredientsField.right() - 11, this.ingredientsField.y() + 2, 8, 8);
+        this.ingredientsField = new Box(fx, this.filterCard.y() + 19, fw, FIELD_H);
+        this.productsField = new Box(fx, this.filterCard.y() + 34, fw, FIELD_H);
+        this.ingredientsHelp = new Box(this.ingredientsField.right() - 10, this.ingredientsField.y() + 2, 7, 7);
+        this.productsHelp = new Box(this.productsField.right() - 10, this.productsField.y() + 2, 7, 7);
 
-        int condTop = this.ingredientsField.bottom() + 5;
         this.toggles.clear();
         for (int i = 0; i < CONDITION_KEYS.length; i++) {
-            int y = condTop + i * COND_STEP;
-            if (y + COND_H > this.filterCard.bottom() - 26) {
+            int y = this.filterCard.y() + 60 + i * COND_STEP;
+            if (y + COND_H > this.filterCard.bottom() - 6) {
                 break;
             }
             this.toggles.add(new Box(fx, y, fw, COND_H));
         }
-        this.legendBox = new Box(fx, this.filterCard.bottom() - 24, fw, 18);
+        int legendTop = this.filterCard.y() + 136;
+        this.legendBox = new Box(fx, legendTop, fw, Math.max(0, this.filterCard.bottom() - 6 - legendTop));
 
-        // List card contents.
-        int listX = this.listCard.x() + 5;
-        int listWidth = this.listCard.width() - 10;
+        // List card: header row at +18, first recipe row at +27, footer 14px above the card bottom.
+        int listX = this.listCard.x() + 4;
+        int listWidth = this.listCard.width() - 8;
         int listTop = this.listCard.y() + CARD_TITLE_H + COLUMN_H;
-        this.listFooter = new Box(listX, this.listCard.bottom() - FOOTER_H - 3, listWidth, FOOTER_H);
+        this.listFooter = new Box(listX, this.listCard.bottom() - 14, listWidth, FOOTER_H);
         this.rowArea = new Box(listX, listTop, listWidth, this.listFooter.y() - 3 - listTop);
 
-        int rows = rowsPerPage();
-        int available = Math.max(1, rows);
-        this.availableInputIcons = listWidth >= 150 ? 2 : 1;
-        this.availableOutputIcons = listWidth >= 150 ? 2 : 1;
-        this.inputIconX = listX + CHECKBOX + 7;
-        this.outputIconX = this.inputIconX + this.availableInputIcons * ICON_STEP + 10;
+        // The mock shows three inputs and two outputs per row; that only fits once the list is wide enough
+        // for the recipe name to keep a readable slice of the row.
+        this.availableInputIcons = listWidth >= 170 ? 3 : (listWidth >= 140 ? 2 : 1);
+        this.availableOutputIcons = listWidth >= 170 ? 2 : 1;
+        this.inputIconX = listX + 12;
+        this.outputIconX = this.inputIconX + this.availableInputIcons * ICON_STEP + 8;
         this.labelX = this.outputIconX + this.availableOutputIcons * ICON_STEP + 3;
-        if (this.labelX > this.rowArea.right() - 30) {
-            this.availableOutputIcons = 1;
-            this.outputIconX = this.inputIconX + this.availableInputIcons * ICON_STEP + 10;
-            this.labelX = this.outputIconX + this.availableOutputIcons * ICON_STEP + 3;
-        }
 
-        // List footer: tools on the left, pager on the right.
         this.tools.clear();
-        int tx = this.listFooter.x();
+        int tx = this.listFooter.x() + 3;
         for (int i = 0; i < TOOL_KEYS.length; i++) {
-            int width = this.font.width(Component.translatable("eae2_pattern.preview.tool." + TOOL_KEYS[i])) + 2;
-            if (tx + width > this.listFooter.right() - 40) {
+            int width = this.font.width(Component.translatable("eae2_pattern.preview.tool." + TOOL_KEYS[i]));
+            if (tx + width > this.listFooter.right() - 46) {
                 break;
             }
             this.tools.add(new Box(tx, this.listFooter.y(), width, FOOTER_H));
-            tx += width + 5;
+            tx += width + 10;
         }
-        this.nextPage = new Box(this.listFooter.right() - 12, this.listFooter.y() + 1, 12, FOOTER_H - 1);
-        this.previousPage = new Box(this.nextPage.x() - 14, this.listFooter.y() + 1, 12, FOOTER_H - 1);
+        this.nextPage = new Box(this.listFooter.right() - 12, this.listFooter.y(), 12, FOOTER_H);
+        this.previousPage = new Box(this.nextPage.x() - 14, this.listFooter.y(), 12, FOOTER_H);
 
-        // Detail card contents.
-        int dx = this.detailCard.x() + 6;
-        int dw = this.detailCard.width() - 12;
-        int cell = Math.min(20, Math.max(14, (dw - 2 * 2) / 3));
-        this.detailGrid = new Box(dx, this.detailCard.y() + CARD_TITLE_H, dw, cell * 3 + 4);
+        // Detail card: a 19px 3x3 grid centred in the card, then the label/value rows.
+        int dx = this.detailCard.x() + 8;
+        int dw = this.detailCard.width() - 16;
+        int cell = Mth.clamp((dw - 4) / 3, 14, 19);
+        this.detailGrid = new Box(dx, this.detailCard.y() + 20, dw, cell * 3 + 4);
 
-        // Action card contents: multiplier row, generate, cancel.
+        // Action card: multiplier strip at +13, generate at +27, cancel at +43.
         int ax = this.actionCard.x() + 6;
         int aw = this.actionCard.width() - 12;
         this.multiplierCells.clear();
-        int cellW = Math.min(MULTIPLIER_W, (aw - 6 * 2) / MULTIPLIERS.length);
+        int cellW = Math.min(14, Math.max(9, (aw - 12) / MULTIPLIERS.length));
         for (int i = 0; i < MULTIPLIERS.length; i++) {
-            this.multiplierCells.add(new Box(ax + i * (cellW + 2), this.actionCard.y() + CARD_TITLE_H, cellW, 10));
+            this.multiplierCells.add(new Box(ax + i * (cellW + 2), this.actionCard.y() + 13, cellW, 10));
         }
-        int buttonsTop = this.actionCard.y() + CARD_TITLE_H + 14;
-        int buttonHeight = Math.min(13, this.actionCard.bottom() - buttonsTop - 14);
-        this.generateButton = new Box(ax, buttonsTop, aw, Math.max(11, buttonHeight));
+        this.generateButton = new Box(ax, this.actionCard.y() + 27, aw,
+                Math.max(11, Math.min(13, this.actionCard.bottom() - this.actionCard.y() - 33)));
         this.cancelButton = new Box(ax, this.generateButton.bottom() + 3, aw,
-                Math.max(11, Math.min(13, this.actionCard.bottom() - this.generateButton.bottom() - 6)));
+                Math.max(10, this.actionCard.bottom() - 5 - this.generateButton.bottom() - 3));
 
         if (this.productsBox != null) {
             this.productsBox.setX(this.productsField.x() + 4);
             this.productsBox.setY(this.productsField.y() + 2);
-            this.productsBox.setWidth(this.productsField.width() - 18);
+            this.productsBox.setWidth(this.productsField.width() - 17);
         }
         if (this.ingredientsBox != null) {
             this.ingredientsBox.setX(this.ingredientsField.x() + 4);
             this.ingredientsBox.setY(this.ingredientsField.y() + 2);
-            this.ingredientsBox.setWidth(this.ingredientsField.width() - 18);
+            this.ingredientsBox.setWidth(this.ingredientsField.width() - 17);
         }
         this.page = Mth.clamp(this.page, 0, Math.max(0, pageCount() - 1));
     }
@@ -463,8 +456,8 @@ public final class PreviewScreen extends Screen implements GenerationListener {
             width = 60;
         }
         // Right aligned inside the header so it can never overlap the title or the subtitle.
-        int x = this.panelLeft + this.panelWidth - PAD - 16 - width;
-        int y = this.panelTop + 9;
+        int x = this.panelLeft + this.panelWidth - 24 - width;
+        int y = this.panelTop + 14;
         int border = this.noticeFailure ? BAD : OK;
         UiKit.roundedRect(graphics, x, y, width, 12, 3, this.noticeFailure ? 0xE03A2024 : 0xE01F3A28);
         UiKit.roundedFrame(graphics, x, y, width, 12, 3, 0x00000000, border);
@@ -472,17 +465,17 @@ public final class PreviewScreen extends Screen implements GenerationListener {
     }
 
     private void renderHeader(GuiGraphics graphics, int mouseX, int mouseY) {
-        graphics.drawString(this.font, this.title, this.panelLeft + PAD + 3, this.panelTop + 8, TEXT, false);
+        graphics.drawString(this.font, this.title, this.panelLeft + 6, this.panelTop + 3, TEXT, false);
         String subtitle = Component.translatable("eae2_pattern.preview.subtitle",
                 this.plan.selectedCount(), this.visible.size(), this.plan.entries().size()).getString();
         graphics.drawString(this.font,
                 UiKit.fit(this.font, subtitle, Math.max(60, this.panelWidth - 250)),
-                this.panelLeft + PAD + 3, this.panelTop + 19, TEXT_DIM, false);
+                this.panelLeft + 6, this.panelTop + 15, TEXT_DIM, false);
 
         boolean hovered = over(mouseX, mouseY, this.closeButton);
         UiKit.roundedRect(graphics, this.closeButton.x(), this.closeButton.y(),
                 this.closeButton.width(), this.closeButton.height(), 3, hovered ? BUTTON_HOVER : BUTTON);
-        graphics.drawString(this.font, "x", this.closeButton.x() + 3, this.closeButton.y() + 1,
+        graphics.drawString(this.font, "x", this.closeButton.x() + 4, this.closeButton.y() + 3,
                 hovered ? TEXT : TEXT_DIM, false);
     }
 
@@ -507,6 +500,10 @@ public final class PreviewScreen extends Screen implements GenerationListener {
         drawField(graphics, this.productsField, this.productsHelp, this.productsBox,
                 Component.translatable("eae2_pattern.preview.filter.products_hint"), mouseX, mouseY);
 
+        if (!this.toggles.isEmpty()) {
+            graphics.drawString(this.font, Component.translatable("eae2_pattern.preview.section.conditions"),
+                    this.filterCard.x() + 6, this.filterCard.y() + 50, TEXT_MUTED, false);
+        }
         boolean[] values = conditionValues();
         for (int i = 0; i < this.toggles.size(); i++) {
             Box box = this.toggles.get(i);
@@ -525,7 +522,7 @@ public final class PreviewScreen extends Screen implements GenerationListener {
                 legendTop, TEXT_MUTED, false);
         String[] names = {"NC", "IN%", "OUT%", "BY%"};
         for (int i = 0; i < names.length; i++) {
-            int y = legendTop + 10 + i * 9;
+            int y = legendTop + 11 + i * 11;
             if (y + 8 > this.legendBox.bottom()) {
                 break;
             }
@@ -557,7 +554,7 @@ public final class PreviewScreen extends Screen implements GenerationListener {
         String trailing = this.visible.size() + " / " + this.plan.entries().size();
         renderCards(graphics, this.listCard, Component.translatable("eae2_pattern.preview.module.list"), trailing);
 
-        int headerY = this.listCard.y() + CARD_TITLE_H;
+        int headerY = this.listCard.y() + 18;
         graphics.drawString(this.font, Component.translatable("eae2_pattern.preview.column.input"), this.inputIconX,
                 headerY, TEXT_MUTED, false);
         graphics.drawString(this.font, Component.translatable("eae2_pattern.preview.column.output"), this.outputIconX,
@@ -629,15 +626,15 @@ public final class PreviewScreen extends Screen implements GenerationListener {
             UiKit.roundedRect(graphics, left, y - 1, right - left, ROW_H, 3, ROW_HOVER);
         }
         graphics.fill(left, y - 1 + ROW_H, right, y + ROW_H, 0x10FFFFFF);
-        UiKit.checkbox(graphics, left + 4, y + 2, CHECKBOX, selected, ACCENT, 0x33FFFFFF, 0x14000000);
+        UiKit.checkbox(graphics, left + 3, y + 1, CHECKBOX, selected, ACCENT, 0x33FFFFFF, 0x14000000);
 
         List<Ingredient> inputs = entry.inputs();
         int shownInputs = Math.min(inputs.size(), this.availableInputIcons);
         for (int i = 0; i < shownInputs; i++) {
             drawIngredient(graphics, inputs.get(i), this.inputIconX + i * ICON_STEP, y);
         }
-        int arrowX = this.inputIconX + shownInputs * ICON_STEP + 1;
-        graphics.drawString(this.font, ">", arrowX, y + 2, TEXT_MUTED, false);
+        int arrowX = this.inputIconX + Math.max(1, shownInputs) * ICON_STEP + 1;
+        graphics.drawString(this.font, ">", arrowX, y + 1, TEXT_MUTED, false);
 
         List<Ingredient> outputs = entry.outputs();
         int shownOutputs = Math.min(outputs.size(), this.availableOutputIcons);
@@ -648,7 +645,7 @@ public final class PreviewScreen extends Screen implements GenerationListener {
         int badgeWidth = badgeWidth(entry);
         int textRoom = right - 4 - badgeWidth - this.labelX;
         String label = UiKit.fit(this.font, entry.label().getString(), Math.max(8, textRoom));
-        graphics.drawString(this.font, label, this.labelX, y + 2, TEXT, false);
+        graphics.drawString(this.font, label, this.labelX, y + 1, TEXT, false);
         drawRowBadges(graphics, entry, right - 4 - badgeWidth, y);
     }
 
@@ -672,19 +669,19 @@ public final class PreviewScreen extends Screen implements GenerationListener {
     private void drawRowBadges(GuiGraphics graphics, RecipePlan.Entry entry, int x, int y) {
         int cursor = x;
         if (entry.hasNeverConsumedInput()) {
-            graphics.drawString(this.font, "NC", cursor, y + 2, badgeColor(0), false);
+            graphics.drawString(this.font, "NC", cursor, y + 1, badgeColor(0), false);
             cursor += this.font.width("NC") + 3;
         }
         if (entry.hasProbabilisticInput()) {
-            graphics.drawString(this.font, "IN%", cursor, y + 2, badgeColor(1), false);
+            graphics.drawString(this.font, "IN%", cursor, y + 1, badgeColor(1), false);
             cursor += this.font.width("IN%") + 3;
         }
         if (entry.hasProbabilisticOutput()) {
-            graphics.drawString(this.font, "OUT%", cursor, y + 2, badgeColor(2), false);
+            graphics.drawString(this.font, "OUT%", cursor, y + 1, badgeColor(2), false);
             cursor += this.font.width("OUT%") + 3;
         }
         if (entry.hasProbabilisticByproduct()) {
-            graphics.drawString(this.font, "BY%", cursor, y + 2, badgeColor(3), false);
+            graphics.drawString(this.font, "BY%", cursor, y + 1, badgeColor(3), false);
         }
     }
 
@@ -712,10 +709,10 @@ public final class PreviewScreen extends Screen implements GenerationListener {
         }
 
         int inner = this.detailCard.width() - 16;
-        int cell = Math.min(20, Math.max(14, (inner - 4) / 3));
+        int cell = Mth.clamp((inner - 4) / 3, 14, 19);
         int gridWidth = cell * 3 + 4;
         int gridLeft = this.detailCard.x() + (this.detailCard.width() - gridWidth) / 2;
-        int gridTop = this.detailCard.y() + CARD_TITLE_H + 2;
+        int gridTop = this.detailCard.y() + 20;
         for (int i = 0; i < 9; i++) {
             int cx = gridLeft + (i % 3) * (cell + 2);
             int cy = gridTop + (i / 3) * (cell + 2);
@@ -738,7 +735,7 @@ public final class PreviewScreen extends Screen implements GenerationListener {
         }
 
         int x = this.detailCard.x() + 8;
-        int ty = gridTop + cell * 3 + 5;
+        int ty = gridTop + cell * 3 + 6;
         // Title, divider and then label/value rows: the labels are muted, the values brighter, so the
         // block reads as a list instead of a wall of same-weight text.
         graphics.drawString(this.font, UiKit.fit(this.font, entry.label().getString(), inner), x, ty, TEXT, false);
@@ -766,13 +763,12 @@ public final class PreviewScreen extends Screen implements GenerationListener {
         }
     }
 
-    /** One label / value pair: muted label on the left, value on the right, both on the same baseline. */
+    /** One label / value pair: muted label on the left, value right aligned on the same baseline. */
     private void detailRow(GuiGraphics graphics, int x, int y, int width, Component label, Component value) {
-        String text = label.getString();
-        graphics.drawString(this.font, text, x, y, TEXT_MUTED, false);
-        int valueX = x + Math.min(this.font.width(text) + 6, Math.max(18, width / 3));
-        graphics.drawString(this.font, UiKit.fit(this.font, value.getString(), x + width - valueX), valueX, y,
-                TEXT_DIM, false);
+        graphics.drawString(this.font, label.getString(), x, y, TEXT_MUTED, false);
+        int room = width - this.font.width(label.getString()) - 8;
+        String fitted = UiKit.fit(this.font, value.getString(), Math.max(8, room));
+        graphics.drawString(this.font, fitted, x + width - this.font.width(fitted), y, TEXT_DIM, false);
     }
 
     private void renderActionCard(GuiGraphics graphics, int mouseX, int mouseY) {
