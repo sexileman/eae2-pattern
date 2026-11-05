@@ -87,6 +87,10 @@ public final class PreviewScreen extends Screen implements GenerationListener {
     /** The specs that the generate button would send right now; rebuilt only when something changes. */
     private List<PatternSpec> pending = List.of();
 
+    /** Where the "?" of each search box sits; hovering it shows the whole prefix table. */
+    private Box productsHelp = Box.EMPTY;
+    private Box ingredientsHelp = Box.EMPTY;
+
     @Nullable
     private EditBox productsBox;
     @Nullable
@@ -211,6 +215,10 @@ public final class PreviewScreen extends Screen implements GenerationListener {
         y += 20;
         this.ingredientsY = y;
         y += 20;
+
+        // The "?" sits inside the right end of each box; the boxes are inset by 5, so the last 12 pixels are free.
+        this.productsHelp = new Box(this.sidebarLeft + this.sidebarWidth - 14, this.productsY + 4, 9, 9);
+        this.ingredientsHelp = new Box(this.sidebarLeft + this.sidebarWidth - 14, this.ingredientsY + 4, 9, 9);
         this.matchY = y;
         if (this.showMatch) {
             y += 11;
@@ -295,7 +303,8 @@ public final class PreviewScreen extends Screen implements GenerationListener {
     // ---------------------------------------------------------------- controls
 
     private EditBox createField(int y, Component hint, java.util.function.Consumer<String> responder) {
-        EditBox box = new EditBox(this.font, this.sidebarLeft + 5, y + 2, this.sidebarWidth - 10, 13,
+        // 12 pixels of the right end are reserved for the "?" that explains the syntax.
+        EditBox box = new EditBox(this.font, this.sidebarLeft + 5, y + 2, this.sidebarWidth - 22, 13,
                 Component.empty());
         box.setBordered(false);
         box.setMaxLength(64);
@@ -448,8 +457,10 @@ public final class PreviewScreen extends Screen implements GenerationListener {
             right = Component.translatable("eae2_pattern.preview.blanks", blanks);
             color = blanks > 0 ? OK : BAD;
         }
+        // Right aligned to the left edge of the page buttons: drawing it to the panel edge put the blank count
+        // underneath them, where it was unreadable and swallowed their clicks.
         String fitted = UiKit.fit(this.font, right.getString(), this.panelWidth - 60);
-        graphics.drawString(this.font, fitted, this.panelLeft + this.panelWidth - PAD - this.font.width(fitted),
+        graphics.drawString(this.font, fitted, this.previousPage.x() - 8 - this.font.width(fitted),
                 this.panelTop + 18, color, false);
 
         graphics.fill(this.panelLeft + PAD, this.panelTop + HEADER_H - 1,
@@ -470,8 +481,8 @@ public final class PreviewScreen extends Screen implements GenerationListener {
                     this.sidebarLeft, this.captionSearchY, TEXT_MUTED);
         }
 
-        drawField(graphics, this.productsBox, this.productsY);
-        drawField(graphics, this.ingredientsBox, this.ingredientsY);
+        drawField(graphics, this.productsBox, this.productsY, mouseX, mouseY);
+        drawField(graphics, this.ingredientsBox, this.ingredientsY, mouseX, mouseY);
 
         int matched = this.visible.size();
         if (this.showMatch) {
@@ -527,10 +538,33 @@ public final class PreviewScreen extends Screen implements GenerationListener {
         refresh();
     }
 
-    private void drawField(GuiGraphics graphics, @Nullable EditBox box, int y) {
+    private void drawField(GuiGraphics graphics, @Nullable EditBox box, int y, int mouseX, int mouseY) {
         boolean focused = box != null && box.isFocused();
         UiKit.roundedFrame(graphics, this.sidebarLeft, y, this.sidebarWidth, 17, 4, FIELD,
                 focused ? ACCENT : FIELD_BORDER);
+        Box help = box == this.productsBox ? this.productsHelp : this.ingredientsHelp;
+        if (!help.equals(Box.EMPTY)) {
+            boolean hovered = over(mouseX, mouseY, help);
+            graphics.fill(help.x(), help.y(), help.x() + help.width(), help.y() + help.height(),
+                    hovered ? ACCENT : FIELD_BORDER);
+            graphics.drawString(this.font, "?", help.x() + 3, help.y() + 1,
+                    hovered ? 0xFF0E1116 : TEXT_MUTED, false);
+        }
+    }
+
+    /**
+     * The full prefix table, shown when the little {@code ?} of a search box is hovered.
+     *
+     * <p>The hints inside the boxes only have room for the three prefixes people actually use, so the rest lives
+     * here rather than being left to be discovered.</p>
+     */
+    private static List<Component> syntaxHelp() {
+        List<Component> lines = new ArrayList<>();
+        lines.add(Component.translatable("eae2_pattern.preview.syntax.title"));
+        for (String key : new String[]{"name", "mod", "tag", "tooltip", "id", "tab", "negate", "or", "quote"}) {
+            lines.add(Component.translatable("eae2_pattern.preview.syntax." + key));
+        }
+        return lines;
     }
 
     private void renderList(GuiGraphics graphics, int mouseX, int mouseY) {
@@ -761,6 +795,10 @@ public final class PreviewScreen extends Screen implements GenerationListener {
     }
 
     private void renderHoveredTooltip(GuiGraphics graphics, int mouseX, int mouseY) {
+        if (over(mouseX, mouseY, this.productsHelp) || over(mouseX, mouseY, this.ingredientsHelp)) {
+            graphics.renderComponentTooltip(this.font, syntaxHelp(), mouseX, mouseY);
+            return;
+        }
         if (over(mouseX, mouseY, this.multiplierButton)) {
             graphics.renderTooltip(this.font,
                     Component.translatable("eae2_pattern.preview.tooltip.multiplier"),

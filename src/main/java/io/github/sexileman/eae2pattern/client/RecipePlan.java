@@ -3,17 +3,26 @@ package io.github.sexileman.eae2pattern.client;
 import io.github.sexileman.eae2pattern.pattern.PatternKind;
 import io.github.sexileman.eae2pattern.pattern.PatternSpec;
 import io.github.sexileman.eae2pattern.pattern.StackSpec;
+import net.minecraft.client.Minecraft;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.tags.TagKey;
+import net.minecraft.world.item.CreativeModeTab;
+import net.minecraft.world.item.CreativeModeTabs;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.TooltipFlag;
+import net.minecraftforge.fml.ModList;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
+import java.util.regex.Pattern;
 
 /**
  * Requirement #6: "let the user preview the patterns that will be generated, and drop the ones they do not want".
@@ -119,17 +128,9 @@ public final class RecipePlan {
 
         /** Search haystacks, built on first use because most sessions never type in a search box. */
         @Nullable
-        private List<String> inputTexts;
+        private Haystack inputHaystack;
         @Nullable
-        private List<String> outputTexts;
-        @Nullable
-        private List<String> inputModIds;
-        @Nullable
-        private List<String> outputModIds;
-        @Nullable
-        private List<String> inputTags;
-        @Nullable
-        private List<String> outputTags;
+        private Haystack outputHaystack;
 
         public Entry(PatternKind kind, ResourceLocation recipeId, Component label, ItemStack icon,
                      List<Ingredient> inputs, List<Ingredient> catalysts, List<Ingredient> outputs, boolean selected) {
@@ -205,51 +206,20 @@ public final class RecipePlan {
             return false;
         }
 
-        /** Names, ids and namespaces of everything the recipe consumes or merely requires. */
-        public List<String> inputTexts() {
-            if (this.inputTexts == null) {
-                List<String> texts = new ArrayList<>(textsOf(inputs));
-                texts.addAll(textsOf(catalysts));
-                this.inputTexts = List.copyOf(texts);
+        /** Everything the recipe consumes or merely requires, as searchable strings. */
+        public Haystack inputHaystack() {
+            if (this.inputHaystack == null) {
+                this.inputHaystack = Haystack.of(this.inputs, this.catalysts);
             }
-            return this.inputTexts;
+            return this.inputHaystack;
         }
 
-        /** Names, ids and namespaces of everything the recipe produces. */
-        public List<String> outputTexts() {
-            if (this.outputTexts == null) {
-                this.outputTexts = textsOf(outputs);
+        /** Everything the recipe produces. */
+        public Haystack outputHaystack() {
+            if (this.outputHaystack == null) {
+                this.outputHaystack = Haystack.of(this.outputs);
             }
-            return this.outputTexts;
-        }
-
-        /** Mod ids of what the recipe consumes, so a products search cannot match a mod that is only consumed. */
-        public List<String> inputModIds() {
-            if (this.inputModIds == null) {
-                this.inputModIds = List.copyOf(modIdsOf(this.inputs, this.catalysts));
-            }
-            return this.inputModIds;
-        }
-
-        public List<String> outputModIds() {
-            if (this.outputModIds == null) {
-                this.outputModIds = List.copyOf(modIdsOf(this.outputs));
-            }
-            return this.outputModIds;
-        }
-
-        public List<String> inputTags() {
-            if (this.inputTags == null) {
-                this.inputTags = List.copyOf(tagsOf(this.inputs, this.catalysts));
-            }
-            return this.inputTags;
-        }
-
-        public List<String> outputTags() {
-            if (this.outputTags == null) {
-                this.outputTags = List.copyOf(tagsOf(this.outputs));
-            }
-            return this.outputTags;
+            return this.outputHaystack;
         }
 
         /**
@@ -329,6 +299,105 @@ public final class RecipePlan {
         }
     }
 
+    /**
+     * The strings one half of a recipe can be searched by, split per JEI prefix.
+     *
+     * <p>The groups are kept apart instead of being concatenated so that {@code @gtceu} only matches when a mod
+     * really is involved, not when a name happens to contain that text.</p>
+     */
+    public static final class Haystack {
+        private final List<ItemStack> stacks;
+        private final List<String> names;
+        private final List<String> ids;
+        private final List<String> mods;
+
+        /** The expensive groups: built only when a query actually asks for them. */
+        @Nullable
+        private List<String> tags;
+        @Nullable
+        private List<String> tooltips;
+        @Nullable
+        private List<String> tabs;
+
+        private Haystack(List<ItemStack> stacks, List<String> names, List<String> ids, List<String> mods) {
+            this.stacks = stacks;
+            this.names = names;
+            this.ids = ids;
+            this.mods = mods;
+        }
+
+        @SafeVarargs
+        static Haystack of(List<Ingredient>... groups) {
+            List<ItemStack> stacks = new ArrayList<>();
+            Set<String> names = new LinkedHashSet<>();
+            Set<String> ids = new LinkedHashSet<>();
+            Set<String> mods = new LinkedHashSet<>();
+
+            for (List<Ingredient> group : groups) {
+                for (Ingredient ingredient : group) {
+                    StackSpec spec = ingredient.spec();
+                    ids.add(spec.id().toString());
+                    ids.add(spec.id().getPath());
+                    mods.add(spec.id().getNamespace());
+                    mods.addAll(modStringsOf(spec.id().getNamespace()));
+
+                    ItemStack stack = spec.toItemStack();
+                    if (!stack.isEmpty()) {
+                        stacks.add(stack);
+                        names.add(stack.getHoverName().getString());
+                    }
+                }
+            }
+
+            return new Haystack(List.copyOf(stacks), List.copyOf(names), List.copyOf(ids), List.copyOf(mods));
+        }
+
+        public List<String> names() {
+            return names;
+        }
+
+        public List<String> ids() {
+            return ids;
+        }
+
+        public List<String> mods() {
+            return mods;
+        }
+
+        public List<String> tags() {
+            if (this.tags == null) {
+                Set<String> set = new LinkedHashSet<>();
+                for (ItemStack stack : this.stacks) {
+                    set.addAll(tagsOf(stack.getItem()));
+                }
+                this.tags = List.copyOf(set);
+            }
+            return this.tags;
+        }
+
+        public List<String> tooltips() {
+            if (this.tooltips == null) {
+                Set<String> set = new LinkedHashSet<>();
+                for (ItemStack stack : this.stacks) {
+                    set.addAll(tooltipsOf(stack));
+                }
+                this.tooltips = List.copyOf(set);
+            }
+            return this.tooltips;
+        }
+
+        public List<String> tabs() {
+            if (this.tabs == null) {
+                Set<String> set = new LinkedHashSet<>();
+                for (ItemStack stack : this.stacks) {
+                    set.addAll(tabsOf(stack.getItem()));
+                }
+                this.tabs = List.copyOf(set);
+            }
+            return this.tabs;
+        }
+    }
+
     /** Best-effort human label for a spec, used when the JEI adapter has nothing better to offer. */
     @Nullable
     public static Component defaultLabel(PatternSpec spec) {
@@ -340,53 +409,40 @@ public final class RecipePlan {
         return stack.isEmpty() ? Component.literal(output.id().toString()) : stack.getHoverName();
     }
 
-    private static List<String> textsOf(List<Ingredient> ingredients) {
-        List<String> texts = new ArrayList<>(ingredients.size() * 4);
-        for (Ingredient ingredient : ingredients) {
-            StackSpec spec = ingredient.spec();
-            ItemStack stack = spec.toItemStack();
-            if (!stack.isEmpty()) {
-                texts.add(stack.getHoverName().getString());
-            }
-            texts.add(spec.id().toString());
-            texts.add(spec.id().getNamespace());
-            texts.add(spec.id().getPath());
+    /**
+     * The mod id plus what JEI also accepts for {@code @}: the mod's display name and its short forms, so
+     * {@code @gt} finds GregTech just like it does in the JEI search box.
+     */
+    private static List<String> modStringsOf(String namespace) {
+        List<String> cached = MOD_CACHE.get(namespace);
+        if (cached != null) {
+            return cached;
         }
-        return List.copyOf(texts);
+        List<String> result = new ArrayList<>(3);
+        ModList.get().getModContainerById(namespace).ifPresent(container -> {
+            String displayName = container.getModInfo().getDisplayName();
+            if (displayName != null && !displayName.isEmpty()) {
+                result.add(displayName);
+                String[] words = MOD_NAME_SEPARATOR.split(displayName);
+                if (words.length > 1) {
+                    result.add(firstLetters(words, 1));
+                    result.add(firstLetters(words, 2));
+                }
+            }
+        });
+        List<String> copy = List.copyOf(result);
+        if (MOD_CACHE.size() < CACHE_LIMIT) {
+            MOD_CACHE.put(namespace, copy);
+        }
+        return copy;
     }
 
-    @SafeVarargs
-    private static List<String> modIdsOf(List<Ingredient>... groups) {
-        List<String> mods = new ArrayList<>(8);
-        for (List<Ingredient> group : groups) {
-            for (Ingredient ingredient : group) {
-                mods.add(ingredient.spec().id().getNamespace());
-            }
+    private static String firstLetters(String[] words, int count) {
+        StringBuilder builder = new StringBuilder();
+        for (String word : words) {
+            builder.append(word, 0, Math.min(count, word.length()));
         }
-        return mods;
-    }
-
-    @SafeVarargs
-    private static List<String> tagsOf(List<Ingredient>... groups) {
-        List<String> tags = new ArrayList<>();
-        for (List<Ingredient> group : groups) {
-            for (Ingredient ingredient : group) {
-                collectTags(ingredient.spec(), tags);
-            }
-        }
-        return tags;
-    }
-
-    private static void collectTags(StackSpec spec, List<String> into) {
-        ItemStack stack = spec.toItemStack();
-        if (stack.isEmpty()) {
-            return;
-        }
-        for (String tag : tagsOf(stack.getItem())) {
-            if (!into.contains(tag)) {
-                into.add(tag);
-            }
-        }
+        return builder.toString().toLowerCase(Locale.ROOT);
     }
 
     /** Item tags are immutable for the lifetime of the client, so one lookup per item is enough. */
@@ -398,12 +454,68 @@ public final class RecipePlan {
         List<String> tags = new ArrayList<>();
         item.builtInRegistryHolder().tags().map(TagKey::location).map(ResourceLocation::toString).forEach(tags::add);
         List<String> result = List.copyOf(tags);
-        if (TAG_CACHE.size() < TAG_CACHE_LIMIT) {
+        if (TAG_CACHE.size() < CACHE_LIMIT) {
             TAG_CACHE.put(item, result);
         }
         return result;
     }
 
+    /**
+     * What {@code #} searches in JEI. Tooltips depend on the item and the player's world, so they are built once
+     * per item and reused by every row that mentions it.
+     */
+    private static List<String> tooltipsOf(ItemStack stack) {
+        Item item = stack.getItem();
+        List<String> cached = TOOLTIP_CACHE.get(item);
+        if (cached != null) {
+            return cached;
+        }
+        List<String> lines = new ArrayList<>();
+        try {
+            for (Component line : stack.getTooltipLines(Minecraft.getInstance().player, TooltipFlag.Default.NORMAL)) {
+                lines.add(line.getString());
+            }
+        } catch (RuntimeException ignored) {
+            // A broken tooltip provider must not take the preview down with it; that item just gets no # text.
+        }
+        List<String> result = List.copyOf(lines);
+        if (TOOLTIP_CACHE.size() < CACHE_LIMIT) {
+            TOOLTIP_CACHE.put(item, result);
+        }
+        return result;
+    }
+
+    /** What {@code %} searches in JEI. Built once, because it takes a walk over every creative tab. */
+    private static List<String> tabsOf(Item item) {
+        Map<Item, List<String>> tabs = CREATIVE_TABS;
+        if (tabs == null) {
+            tabs = buildCreativeTabs();
+            CREATIVE_TABS = tabs;
+        }
+        return tabs.getOrDefault(item, List.of());
+    }
+
+    private static Map<Item, List<String>> buildCreativeTabs() {
+        Map<Item, List<String>> map = new HashMap<>();
+        try {
+            for (CreativeModeTab tab : CreativeModeTabs.allTabs()) {
+                String tabName = tab.getDisplayName().getString();
+                for (ItemStack stack : tab.getDisplayItems()) {
+                    map.computeIfAbsent(stack.getItem(), key -> new ArrayList<>()).add(tabName);
+                }
+            }
+        } catch (RuntimeException ignored) {
+            // Tabs are not registered on a dedicated server; the preview never runs there anyway.
+        }
+        return map;
+    }
+
+    private static final Pattern MOD_NAME_SEPARATOR = Pattern.compile("(?=[A-Z_-])|\\s+");
+    private static final int CACHE_LIMIT = 8192;
+
     private static final Map<Item, List<String>> TAG_CACHE = new HashMap<>();
-    private static final int TAG_CACHE_LIMIT = 4096;
+    private static final Map<Item, List<String>> TOOLTIP_CACHE = new HashMap<>();
+    private static final Map<String, List<String>> MOD_CACHE = new HashMap<>();
+    @Nullable
+    private static Map<Item, List<String>> CREATIVE_TABS;
 }
