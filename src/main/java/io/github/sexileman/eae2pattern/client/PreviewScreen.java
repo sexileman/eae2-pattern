@@ -458,9 +458,13 @@ public final class PreviewScreen extends Screen implements GenerationListener {
             return;
         }
         String text = this.notice.getString();
-        int width = Math.min(this.panelWidth - 2 * PAD - 24, this.font.width(text) + 16);
-        int x = this.panelLeft + (this.panelWidth - width) / 2;
-        int y = this.panelTop + HEADER_H - 11;
+        int width = Math.min(this.panelWidth - 260, this.font.width(text) + 16);
+        if (width < 60) {
+            width = 60;
+        }
+        // Right aligned inside the header so it can never overlap the title or the subtitle.
+        int x = this.panelLeft + this.panelWidth - PAD - 16 - width;
+        int y = this.panelTop + 9;
         int border = this.noticeFailure ? BAD : OK;
         UiKit.roundedRect(graphics, x, y, width, 12, 3, this.noticeFailure ? 0xE03A2024 : 0xE01F3A28);
         UiKit.roundedFrame(graphics, x, y, width, 12, 3, 0x00000000, border);
@@ -471,7 +475,9 @@ public final class PreviewScreen extends Screen implements GenerationListener {
         graphics.drawString(this.font, this.title, this.panelLeft + PAD + 3, this.panelTop + 8, TEXT, false);
         String subtitle = Component.translatable("eae2_pattern.preview.subtitle",
                 this.plan.selectedCount(), this.visible.size(), this.plan.entries().size()).getString();
-        graphics.drawString(this.font, subtitle, this.panelLeft + PAD + 3, this.panelTop + 19, TEXT_DIM, false);
+        graphics.drawString(this.font,
+                UiKit.fit(this.font, subtitle, Math.max(60, this.panelWidth - 250)),
+                this.panelLeft + PAD + 3, this.panelTop + 19, TEXT_DIM, false);
 
         boolean hovered = over(mouseX, mouseY, this.closeButton);
         UiKit.roundedRect(graphics, this.closeButton.x(), this.closeButton.y(),
