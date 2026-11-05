@@ -19,8 +19,8 @@
     box-shadow: 0 10px 30px rgba(0,0,0,.45);
   }
   canvas {
-    display: block; image-rendering: pixelated;
-    width: 1440px; height: 810px;   /* 480x270 * 3 */
+    display: block;
+    width: 1440px; height: 810px;   /* 480x270 * 3 CSS pixels */
   }
   .bar {
     display: flex; flex-wrap: wrap; gap: 14px 22px; align-items: center;
@@ -78,8 +78,15 @@
   "use strict";
 
   const W = 480, H = 270;                       // logical pixels, like GUI scale 4
+  // The canvas keeps 480x270 worth of *layout*, but is rasterised at this many
+  // device pixels per logical pixel. Without it the browser blows up a 480x270
+  // bitmap and every 7px label turns to mush.
+  const HIDPI = Math.min(4, Math.max(3, Math.ceil(window.devicePixelRatio || 1) * 2));
   const cvs = document.getElementById("c");
+  cvs.width = W * HIDPI;
+  cvs.height = H * HIDPI;
   const ctx = cvs.getContext("2d");
+  ctx.setTransform(HIDPI, 0, 0, HIDPI, 0, 0);
   ctx.imageSmoothingEnabled = false;
 
   /* ---------------------------------------------------------------- themes */
@@ -491,15 +498,17 @@
         text(dx + dw - tw(fitted), ty, fitted, S.dim, 7);
         ty += 11;
       }
-      text(dx, ty, "标记", S.muted, 7); ty += 10;
-      let mx = dx;
       const m = mark(sel);
       const marks = [];
       if (m.nc) marks.push(["NC", "#6ea8e8"]);
       if (m.inChance) marks.push(["IN%", "#e8b06e"]);
       if (m.outChance) marks.push(["OUT%", "#e88686"]);
       if (m.byChance) marks.push(["BY%", "#e8a0d0"]);
-      for (const [t, c] of marks) { text(mx, ty, t, c, 7); mx += tw(t) + 5; }
+      if (marks.length) {
+        text(dx, ty, "标记", S.muted, 7); ty += 10;
+        let mx = dx;
+        for (const [t, c] of marks) { text(mx, ty, t, c, 7); mx += tw(t) + 5; }
+      }
     } else {
       text(dx, ty, "未选择配方", S.muted, 7);
     }
