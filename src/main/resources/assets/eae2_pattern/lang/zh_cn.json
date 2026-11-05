@@ -81,5 +81,11 @@
   "eae2_pattern.preview.tooltip.scaled": "所有数量乘以 %s",
   "eae2_pattern.preview.tooltip.not_scaled": "这类样板不支持倍率",
   "eae2_pattern.preview.tooltip.badge.chance": "概率",
-  "eae2_pattern.preview.tooltip.badge.unconsumed": "不消耗"
+  "eae2_pattern.preview.tooltip.badge.unconsumed": "不消耗",
+  "eae2_pattern.preview.section.search": "搜索",
+  "eae2_pattern.preview.section.conditions": "条件",
+  "eae2_pattern.preview.multiplier_caption": "倍率",
+  "eae2_pattern.preview.badge.unconsumed": "不消耗",
+  "eae2_pattern.preview.badge.chance_input": "概率进",
+  "eae2_pattern.preview.badge.chance_output": "概率出"
 }

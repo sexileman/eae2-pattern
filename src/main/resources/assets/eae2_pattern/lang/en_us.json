@@ -81,5 +81,11 @@
   "eae2_pattern.preview.tooltip.scaled": "Every amount is multiplied by %s",
   "eae2_pattern.preview.tooltip.not_scaled": "Scaling does not apply to this pattern kind",
   "eae2_pattern.preview.tooltip.badge.chance": "Chance",
-  "eae2_pattern.preview.tooltip.badge.unconsumed": "Not consumed"
+  "eae2_pattern.preview.tooltip.badge.unconsumed": "Not consumed",
+  "eae2_pattern.preview.section.search": "Search",
+  "eae2_pattern.preview.section.conditions": "Conditions",
+  "eae2_pattern.preview.multiplier_caption": "Scale",
+  "eae2_pattern.preview.badge.unconsumed": "NC",
+  "eae2_pattern.preview.badge.chance_input": "IN%",
+  "eae2_pattern.preview.badge.chance_output": "OUT%"
 }
