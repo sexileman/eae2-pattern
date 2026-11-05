@@ -30,6 +30,8 @@ base {
 
 java.toolchain.languageVersion = JavaLanguageVersion.of(17)
 
+jarJar.enable()
+
 minecraft {
     mappings channel: mapping_channel, version: mapping_version
 
@@ -77,6 +79,11 @@ repositories {
         name = 'ModMaven'
         url = 'https://modmaven.dev/'
     }
+    // Home of ModularUI, the GUI library GTCEu itself uses for its machines.
+    maven {
+        name = 'GTCEu'
+        url = 'https://maven.gtceu.com'
+    }
     mavenCentral()
 }
 
@@ -90,6 +97,11 @@ dependencies {
     // JEI (optional at runtime, but needed to compile the client plugin)
     compileOnly fg.deobf("mezz.jei:jei-${minecraft_version}-forge:${jei_version}")
     runtimeOnly fg.deobf("mezz.jei:jei-${minecraft_version}-forge:${jei_version}")
+
+    // ModularUI draws the preview screen. It is embedded in our jar, so players never install it by hand.
+    compileOnly "brachy.modularui:modularui-mc1.20.1:${modularui_version}"
+    // jarJar wants the version range that the nested mod declares, not a single version.
+    jarJar("brachy.modularui:modularui-mc1.20.1:[${modularui_version},3.3.0)")
 }
 
 tasks.named('processResources', ProcessResources).configure {
@@ -101,6 +113,7 @@ tasks.named('processResources', ProcessResources).configure {
             loader_version_range   : loader_version_range,
             ae2_version_range      : ae2_version_range,
             jei_version_range      : jei_version_range,
+            modularui_version_range: modularui_version_range,
             mod_id                 : mod_id,
             mod_name               : mod_name,
             mod_license            : mod_license,
@@ -114,6 +127,11 @@ tasks.named('processResources', ProcessResources).configure {
     filesMatching(['META-INF/mods.toml', 'pack.mcmeta']) {
         expand replaceProperties + [project: project]
     }
+}
+
+tasks.named('jarJar').configure {
+    // Nested libraries must be reobfuscated before they are packed into the release jar.
+    finalizedBy 'reobfJarJar'
 }
 
 tasks.named('jar', Jar).configure {
@@ -136,6 +154,8 @@ tasks.withType(JavaCompile).configureEach {
 
 // Print the version that just got built, so a release log is self explanatory.
 tasks.named('build').configure {
+    // The released jar is the jarJar output: it carries ModularUI inside it.
+    dependsOn 'jarJar'
     doLast {
         logger.lifecycle("EAE2 Pattern ${modVersion}")
     }

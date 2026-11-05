@@ -86,7 +86,9 @@ public final class CollectingScreen extends Screen {
             this.minecraft.setScreen(this.returnTo);
             return;
         }
-        this.minecraft.setScreen(new PreviewScreen(plan));
+        // The preview is built on ModularUI now. The old hand drawn screen stays in the tree until the
+        // new one has been confirmed in game.
+        PreviewGui.open(plan, this.returnTo);
     }
 
     @Override

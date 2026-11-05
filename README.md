@@ -42,7 +42,7 @@ JEI 配方页 → 点左侧竖条里的九宫格按钮 → 预览勾选 → 生�
 ## 安装
 
 1. 装好 Minecraft 1.20.1 + Forge 47.4.16（或更高 47.x）。
-2. 把 `eae2-pattern-<version>.jar` 放进 `mods/`。
+2. 把 `eae2-pattern-<version>.jar` 放进 `mods/`。**这个 jar 已经内嵌了 ModularUI 3.2.0**（`META-INF/jarjar/`），不用再单独装它。
 3. 确认 `mods/` 里同时有 **AE2 15.2.x** 和 **JEI 15.20.x**。
 4. 服务端也要放同一个 jar —— 采集在客户端，编码和入库在服务端。
 
@@ -69,7 +69,9 @@ JEI 配方页 → 点左侧竖条里的九宫格按钮 → 预览勾选 → 生�
 
 ### 预览界面
 
-界面按**功能模块**切成四张卡：左边是筛选，中间是配方列表，右边是配方详情，右下方是操作。整面板半透明，背后的世界能透出来一点。
+界面现在**用 ModularUI 3.2.0 重写**（就是 GTCEu 那套 GUI 库，整合包里你看到的 GT 机器界面就是它画的）——所以按钮、输入框、滚动列表、物品槽都是这个库的标准控件，手感和整合包里其它界面一致。
+
+1.9.0 是第一版：四张卡的结构（筛选 / 列表 / 详情 / 操作）和之前的布局一致，但控件已经全部换成 ModularUI 的实现，后续调整只改面板拼装，不再手写命中判定。
 
 ![预览界面](docs/images/preview-screen.png)
 
@@ -263,6 +265,13 @@ Windows：
 新的 Minecraft 版本对应新开分支（如 `1.21.1`），互不干扰。
 
 ## 更新日志
+
+### 1.9.0
+
+- **预览界面改用 [ModularUI](https://github.com/GTNewHorizons/ModularUI) 3.2.0 重写**（GTCEu 同款 GUI 库）。这是第一版：布局沿用四卡结构，控件全部换成库里的 `TextFieldWidget` / `ButtonWidget` / `ToggleButton` / `ListWidget` / `TextWidget`，不再自己画按钮和判定点击。
+- ModularUI 以 **jarJar 内嵌**方式打包（`META-INF/jarjar/modularui-mc1.20.1-3.2.0.jar`），玩家不需要额外安装。
+- `mods.toml` 增加对 `modularui` 的依赖声明（CLIENT / AFTER / `[3.2.0,4.0.0)`）。
+- 构建产物：`build/libs/eae2-pattern-1.9.0-all.jar` 才是可发布的那个（含内嵌库），`eae2-pattern-1.9.0.jar` 是不含库的薄包。
 
 ### 1.8.3
 
