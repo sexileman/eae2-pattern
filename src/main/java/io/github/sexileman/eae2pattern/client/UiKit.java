@@ -70,12 +70,18 @@ public final class UiKit {
 
     /** 12x12 rounded checkbox with a hand-drawn tick. */
     public static void checkbox(GuiGraphics graphics, int x, int y, boolean on, int accent, int idleFill, int idleBorder) {
+        checkbox(graphics, x, y, 12, on, accent, idleFill, idleBorder);
+    }
+
+    public static void checkbox(GuiGraphics graphics, int x, int y, int size, boolean on, int accent, int idleFill,
+                                int idleBorder) {
         if (on) {
-            roundedRect(graphics, x, y, 12, 12, 3, accent);
+            roundedRect(graphics, x, y, size, size, Math.max(2, size / 4), accent);
             // Tick: two short strokes, drawn as thin quads.
-            graphics.fill(x + 3, y + 6, x + 5, y + 8, 0xFFFFFFFF);
-            graphics.fill(x + 5, y + 4, x + 9, y + 6, 0xFFFFFFFF);
-            graphics.fill(x + 6, y + 5, x + 8, y + 7, 0xFFFFFFFF);
+            int quarter = Math.max(2, size / 4);
+            graphics.fill(x + quarter, y + size / 2, x + size / 2, y + size - quarter, 0xFFFFFFFF);
+            graphics.fill(x + size / 2, y + quarter, x + size - quarter, y + size / 2 + 1, 0xFFFFFFFF);
+            graphics.fill(x + size / 2, y + quarter + 1, x + size - quarter - 1, y + size / 2, 0xFFFFFFFF);
         } else {
             roundedFrame(graphics, x, y, 12, 12, 3, idleFill, idleBorder);
         }
