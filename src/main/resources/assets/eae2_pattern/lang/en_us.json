@@ -92,5 +92,8 @@
   "eae2_pattern.preview.filter.products_hint": "filter products: name / @mod / #tag",
   "eae2_pattern.preview.filter.ingredients_hint": "filter inputs: name / @mod / #tag",
   "eae2_pattern.preview.filter.only_selected": "selected only",
-  "eae2_pattern.preview.hint.icon": "Click an icon to filter by it"
+  "eae2_pattern.preview.hint.icon": "Click an icon to filter by it",
+  "eae2_pattern.preview.generate_count": "generate %s",
+  "eae2_pattern.preview.section.inputs": "inputs",
+  "eae2_pattern.preview.section.outputs": "products"
 }

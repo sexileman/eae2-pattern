@@ -62,8 +62,19 @@ public final class RecipePlan {
      * @param dropNeverConsumed leaves out the inputs that are needed but not used up
      */
     public List<PatternSpec> selectedSpecs(int multiplier, boolean dropChanceOutputs, boolean dropNeverConsumed) {
+        return selectedSpecs(entries, multiplier, dropChanceOutputs, dropNeverConsumed);
+    }
+
+    /**
+     * Same, but only over the rows the player can currently see.
+     *
+     * <p>The preview filters the list, so what gets generated has to be the filtered list too: generating the
+     * whole plan while showing a handful of rows looks like the search box does nothing.</p>
+     */
+    public List<PatternSpec> selectedSpecs(List<Entry> subset, int multiplier, boolean dropChanceOutputs,
+                                           boolean dropNeverConsumed) {
         List<PatternSpec> specs = new ArrayList<>();
-        for (Entry entry : entries) {
+        for (Entry entry : subset) {
             if (!entry.isSelected()) {
                 continue;
             }
@@ -112,9 +123,13 @@ public final class RecipePlan {
         @Nullable
         private List<String> outputTexts;
         @Nullable
-        private List<String> modIds;
+        private List<String> inputModIds;
         @Nullable
-        private List<String> tags;
+        private List<String> outputModIds;
+        @Nullable
+        private List<String> inputTags;
+        @Nullable
+        private List<String> outputTags;
 
         public Entry(PatternKind kind, ResourceLocation recipeId, Component label, ItemStack icon,
                      List<Ingredient> inputs, List<Ingredient> catalysts, List<Ingredient> outputs, boolean selected) {
@@ -208,38 +223,33 @@ public final class RecipePlan {
             return this.outputTexts;
         }
 
-        public List<String> modIds() {
-            if (this.modIds == null) {
-                List<String> mods = new ArrayList<>(8);
-                for (Ingredient ingredient : inputs) {
-                    mods.add(ingredient.spec().id().getNamespace());
-                }
-                for (Ingredient ingredient : catalysts) {
-                    mods.add(ingredient.spec().id().getNamespace());
-                }
-                for (Ingredient ingredient : outputs) {
-                    mods.add(ingredient.spec().id().getNamespace());
-                }
-                this.modIds = List.copyOf(mods);
+        /** Mod ids of what the recipe consumes, so a products search cannot match a mod that is only consumed. */
+        public List<String> inputModIds() {
+            if (this.inputModIds == null) {
+                this.inputModIds = List.copyOf(modIdsOf(this.inputs, this.catalysts));
             }
-            return this.modIds;
+            return this.inputModIds;
         }
 
-        public List<String> tags() {
-            if (this.tags == null) {
-                List<String> tags = new ArrayList<>();
-                for (Ingredient ingredient : inputs) {
-                    collectTags(ingredient.spec(), tags);
-                }
-                for (Ingredient ingredient : catalysts) {
-                    collectTags(ingredient.spec(), tags);
-                }
-                for (Ingredient ingredient : outputs) {
-                    collectTags(ingredient.spec(), tags);
-                }
-                this.tags = List.copyOf(tags);
+        public List<String> outputModIds() {
+            if (this.outputModIds == null) {
+                this.outputModIds = List.copyOf(modIdsOf(this.outputs));
             }
-            return this.tags;
+            return this.outputModIds;
+        }
+
+        public List<String> inputTags() {
+            if (this.inputTags == null) {
+                this.inputTags = List.copyOf(tagsOf(this.inputs, this.catalysts));
+            }
+            return this.inputTags;
+        }
+
+        public List<String> outputTags() {
+            if (this.outputTags == null) {
+                this.outputTags = List.copyOf(tagsOf(this.outputs));
+            }
+            return this.outputTags;
         }
 
         /**
@@ -343,6 +353,28 @@ public final class RecipePlan {
             texts.add(spec.id().getPath());
         }
         return List.copyOf(texts);
+    }
+
+    @SafeVarargs
+    private static List<String> modIdsOf(List<Ingredient>... groups) {
+        List<String> mods = new ArrayList<>(8);
+        for (List<Ingredient> group : groups) {
+            for (Ingredient ingredient : group) {
+                mods.add(ingredient.spec().id().getNamespace());
+            }
+        }
+        return mods;
+    }
+
+    @SafeVarargs
+    private static List<String> tagsOf(List<Ingredient>... groups) {
+        List<String> tags = new ArrayList<>();
+        for (List<Ingredient> group : groups) {
+            for (Ingredient ingredient : group) {
+                collectTags(ingredient.spec(), tags);
+            }
+        }
+        return tags;
     }
 
     private static void collectTags(StackSpec spec, List<String> into) {

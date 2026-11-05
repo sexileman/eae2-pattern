@@ -14,8 +14,8 @@ import java.util.regex.Pattern;
  * <ul>
  *   <li>{@code iron} - free text, matched against the names, ids, paths and namespaces of the ingredients of the
  *       side this box belongs to;</li>
- *   <li>{@code @gtceu} - only entries that involve a given mod;</li>
- *   <li>{@code #forge:plates} - only entries that involve an item tag;</li>
+ *   <li>{@code @gtceu} - only entries whose side involves a given mod;</li>
+ *   <li>{@code #forge:plates} - only entries whose side involves an item tag;</li>
  *   <li>{@code plate*} / {@code plate?} - wildcards;</li>
  *   <li>{@code -slab} or {@code !slab} - exclude a term.</li>
  * </ul>
@@ -82,11 +82,17 @@ public final class ItemSearchQuery {
         return this.raw;
     }
 
-    /** @param side the texts, mod ids and tags of one side of a recipe row */
+    /**
+     * @param side which half of the recipe this box looks at; nothing from the other half is ever consulted, so a
+     *             products query cannot match a mod that only appears among the ingredients
+     */
     public boolean matches(RecipePlan.Entry entry, Side side) {
-        List<String> texts = side == Side.INPUT ? entry.inputTexts() : entry.outputTexts();
+        boolean inputs = side == Side.INPUT;
+        List<String> texts = inputs ? entry.inputTexts() : entry.outputTexts();
+        List<String> mods = inputs ? entry.inputModIds() : entry.outputModIds();
+        List<String> tags = inputs ? entry.inputTags() : entry.outputTags();
         for (Term term : this.terms) {
-            boolean hit = term.test(entry, texts);
+            boolean hit = term.test(texts, mods, tags);
             if (term.negated() ? hit : !hit) {
                 return false;
             }
@@ -134,10 +140,10 @@ public final class ItemSearchQuery {
             return Pattern.compile(regex.toString(), Pattern.CASE_INSENSITIVE);
         }
 
-        boolean test(RecipePlan.Entry entry, List<String> texts) {
+        boolean test(List<String> texts, List<String> mods, List<String> tags) {
             return switch (this.kind) {
-                case MOD -> anyOf(entry.modIds());
-                case TAG -> anyOf(entry.tags());
+                case MOD -> anyOf(mods);
+                case TAG -> anyOf(tags);
                 case TEXT -> anyOf(texts);
             };
         }

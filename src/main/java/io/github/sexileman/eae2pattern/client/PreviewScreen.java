@@ -74,8 +74,8 @@ public final class PreviewScreen extends Screen implements GenerationListener {
 
     /** Order of the six condition check boxes, matching the keys in the language files. */
     private static final String[] CONDITION_KEYS = {
-            "unconsumed", "chance_input", "chance_output", "chance_byproduct",
-            "drop_chance", "drop_unconsumed",
+            "unconsumed", "chance_input", "drop_unconsumed",
+            "chance_output", "chance_byproduct", "drop_chance",
     };
 
     private static final String[] TOOL_KEYS = {"select_all", "select_none", "invert", "dedupe", "only_selected"};
@@ -122,6 +122,8 @@ public final class PreviewScreen extends Screen implements GenerationListener {
     private int captionCondY;
     private boolean showCaptions;
     private boolean showMatch;
+    private int inputColumnY;
+    private int outputColumnY;
     private int page;
 
     private Box previousPage = Box.EMPTY;
@@ -218,16 +220,20 @@ public final class PreviewScreen extends Screen implements GenerationListener {
             y += 11;
         }
 
+        // One column per side of the recipe: the left column filters what goes in, the right one what comes out.
         int rows = (CONDITION_KEYS.length + 1) / 2;
         int rowHeight = Mth.clamp((contentBottom - y) / rows, 12, 18);
         this.toggles.clear();
         int half = this.sidebarWidth / 2;
         for (int i = 0; i < CONDITION_KEYS.length; i++) {
-            int column = i % 2;
-            int row = i / 2;
+            int column = i / rows;
+            int row = i % rows;
             this.toggles.add(new Box(this.sidebarLeft + column * half, y + row * rowHeight,
                     half - 3, rowHeight - 1));
         }
+
+        this.inputColumnY = y;
+        this.outputColumnY = y;
 
         int toolY = this.footerTop + 5;
         this.tools.clear();
@@ -263,8 +269,14 @@ public final class PreviewScreen extends Screen implements GenerationListener {
         recomputePending();
     }
 
+    /**
+     * Rebuilds what the generate button would send: the selected rows <em>that are currently visible</em>.
+     *
+     * <p>Generating the whole plan while the list shows a filtered subset was the reason the search box looked
+     * decorative.</p>
+     */
     private void recomputePending() {
-        this.pending = this.plan.selectedSpecs(this.multiplier, this.dropChanceOutputs,
+        this.pending = this.plan.selectedSpecs(this.visible, this.multiplier, this.dropChanceOutputs,
                 this.dropNeverConsumed);
     }
 
@@ -470,9 +482,14 @@ public final class PreviewScreen extends Screen implements GenerationListener {
         }
 
         if (this.showCaptions) {
-            UiKit.caption(graphics, this.font,
-                    Component.translatable("eae2_pattern.preview.section.conditions"),
-                    this.sidebarLeft, this.captionCondY, TEXT_MUTED);
+            // The two headings double as the "conditions" title: one column per side of the recipe.
+            int half = this.sidebarWidth / 2;
+            graphics.drawString(this.font,
+                    Component.translatable("eae2_pattern.preview.section.inputs").getString(),
+                    this.sidebarLeft, this.captionCondY, ACCENT, false);
+            graphics.drawString(this.font,
+                    Component.translatable("eae2_pattern.preview.section.outputs").getString(),
+                    this.sidebarLeft + half, this.captionCondY, ACCENT, false);
         }
 
         boolean[] values = conditionValues();
@@ -492,19 +509,18 @@ public final class PreviewScreen extends Screen implements GenerationListener {
     }
 
     private boolean[] conditionValues() {
-        return new boolean[]{this.onlyNeverConsumed, this.onlyProbabilisticInput,
-                this.onlyProbabilisticOutput, this.onlyProbabilisticByproduct,
-                this.dropChanceOutputs, this.dropNeverConsumed};
+        return new boolean[]{this.onlyNeverConsumed, this.onlyProbabilisticInput, this.dropNeverConsumed,
+                this.onlyProbabilisticOutput, this.onlyProbabilisticByproduct, this.dropChanceOutputs};
     }
 
     private void dropCondition(int index, boolean value) {
         switch (index) {
             case 0 -> this.onlyNeverConsumed = value;
             case 1 -> this.onlyProbabilisticInput = value;
-            case 2 -> this.onlyProbabilisticOutput = value;
-            case 3 -> this.onlyProbabilisticByproduct = value;
-            case 4 -> this.dropChanceOutputs = value;
-            case 5 -> this.dropNeverConsumed = value;
+            case 2 -> this.dropNeverConsumed = value;
+            case 3 -> this.onlyProbabilisticOutput = value;
+            case 4 -> this.onlyProbabilisticByproduct = value;
+            case 5 -> this.dropChanceOutputs = value;
             default -> {
             }
         }
@@ -654,9 +670,10 @@ public final class PreviewScreen extends Screen implements GenerationListener {
         graphics.drawString(this.font, label, multi.x() + (multi.width() - this.font.width(label)) / 2,
                 multi.y() + 4, scaled ? TEXT : TEXT_DIM, false);
 
-        drawActionButton(graphics, this.generateButton,
-                Component.translatable("eae2_pattern.preview.generate").getString(),
-                !this.pending.isEmpty(),
+        Component generateLabel = this.pending.isEmpty()
+                ? Component.translatable("eae2_pattern.preview.generate")
+                : Component.translatable("eae2_pattern.preview.generate_count", this.pending.size());
+        drawActionButton(graphics, this.generateButton, generateLabel.getString(), !this.pending.isEmpty(),
                 over(mouseX, mouseY, this.generateButton), true);
         drawActionButton(graphics, this.cancelButton,
                 Component.translatable("eae2_pattern.preview.cancel").getString(), true,

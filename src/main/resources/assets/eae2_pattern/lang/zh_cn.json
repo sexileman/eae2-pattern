@@ -92,5 +92,8 @@
   "eae2_pattern.preview.filter.products_hint": "筛选产物：名称 / @模组 / #标签",
   "eae2_pattern.preview.filter.ingredients_hint": "筛选输入：名称 / @模组 / #标签",
   "eae2_pattern.preview.filter.only_selected": "只看已选",
-  "eae2_pattern.preview.hint.icon": "点图标可以直接按它筛选"
+  "eae2_pattern.preview.hint.icon": "点图标可以直接按它筛选",
+  "eae2_pattern.preview.generate_count": "生成 %s 条",
+  "eae2_pattern.preview.section.inputs": "输入侧",
+  "eae2_pattern.preview.section.outputs": "产物侧"
 }
