@@ -6,7 +6,6 @@ import io.github.sexileman.eae2pattern.pattern.GenerationReport;
 import io.github.sexileman.eae2pattern.pattern.PatternKind;
 import io.github.sexileman.eae2pattern.pattern.PatternSpec;
 import io.github.sexileman.eae2pattern.pattern.StackSpec;
-import io.github.sexileman.eae2pattern.pattern.StackType;
 import net.minecraft.ChatFormatting;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.Button;
@@ -17,7 +16,6 @@ import net.minecraft.util.Mth;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.material.Fluid;
 import net.minecraftforge.client.extensions.common.IClientFluidTypeExtensions;
-import net.minecraftforge.fluids.FluidStack;
 import net.minecraftforge.registries.ForgeRegistries;
 import org.jetbrains.annotations.Nullable;
 import org.lwjgl.glfw.GLFW;
@@ -25,40 +23,41 @@ import org.lwjgl.glfw.GLFW;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
-import java.util.Locale;
 import java.util.Set;
 
 /**
- * Requirement #6: show what would be generated and let the player drop entries.
+ * Requirement #6: show what would be generated, and let the player narrow it down before spending anything.
  *
- * <p>Every row draws the recipe itself - the ingredients going in on the left, an arrow, the result coming out -
- * instead of just the product's icon. That matters as soon as one machine can make the same item in several ways:
- * a GregTech bending machine turns two iron ingots into a double iron plate, and it also turns two iron plates into
- * one. Only the input icons tell those two rows apart, and the amounts printed on the icons tell apart the recipes
- * that differ solely by count.</p>
+ * <p>The window is split in two: a rail of filters on the left and the recipe list on the right. Every row draws
+ * the recipe itself - what goes in, an arrow, what comes out - because one machine routinely makes the same item in
+ * several ways: a GregTech bending machine turns two iron ingots into a double iron plate, and it also turns two
+ * iron plates into one. Only the ingredients tell those rows apart.</p>
  *
  * <p>The list is drawn by hand instead of using a vanilla selection widget so rows can mix checkboxes, item
- * rendering and wrapped text without fighting a generic list's assumptions, and so it can page instead of scroll: a
- * broad category easily holds hundreds of entries and a scrollbar makes the selection state hard to see.</p>
+ * rendering, amounts and badges, and so it can page instead of scroll: a broad category easily holds hundreds of
+ * entries and a scrollbar makes the selection state hard to see.</p>
  */
 public final class PreviewScreen extends Screen implements GenerationListener {
 
-    private static final int ROW_HEIGHT = 24;
-    private static final int HEADER_HEIGHT = 66;
-    private static final int FOOTER_HEIGHT = 46;
-    private static final int PAGE_BUTTON_WIDTH = 18;
-    private static final int PAGE_BUTTON_HEIGHT = 14;
-    private static final int SEARCH_HEIGHT = 14;
-
+    private static final int ROW_HEIGHT = 22;
+    private static final int RAIL_WIDTH = 150;
     private static final int ICON = 16;
     private static final int ICON_STEP = 17;
     private static final int MAX_INPUT_ICONS = 3;
+    private static final int MAX_OUTPUT_ICONS = 2;
 
     private static final int COLOR_TEXT = 0xE0E0E0;
     private static final int COLOR_DIM = 0x909090;
     private static final int COLOR_WARN = 0xE06060;
     private static final int COLOR_OK = 0x60C060;
     private static final int COLOR_ROW_ALT = 0x30FFFFFF;
+    private static final int COLOR_ROW_HOVER = 0x40FFFFFF;
+    private static final int COLOR_FRAME = 0xFF3A3A3A;
+    private static final int COLOR_PANEL = 0xFF151515;
+    private static final int COLOR_CHANCE = 0xFFE0A040;
+    private static final int COLOR_UNCONSUMED = 0xFF5AA0E0;
+
+    private static final int[] MULTIPLIERS = {1, 2, 4, 8, 16, 32, 64};
 
     private final RecipePlan plan;
     private final List<RecipePlan.Entry> visible = new ArrayList<>();
@@ -72,17 +71,36 @@ public final class PreviewScreen extends Screen implements GenerationListener {
     @Nullable
     private Button onlySelectedButton;
     @Nullable
-    private EditBox searchBox;
+    private Button multiplierButton;
+    @Nullable
+    private EditBox productsBox;
+    @Nullable
+    private EditBox ingredientsBox;
 
-    private ItemSearchQuery query = ItemSearchQuery.empty();
+    private final List<Button> conditionButtons = new ArrayList<>();
+
+    private ItemSearchQuery productsQuery = ItemSearchQuery.empty();
+    private ItemSearchQuery ingredientsQuery = ItemSearchQuery.empty();
+
+    private boolean onlyNeverConsumed;
+    private boolean onlyProbabilisticInput;
+    private boolean onlyProbabilisticOutput;
+    private boolean onlyProbabilisticByproduct;
     private boolean onlySelected;
+    private boolean dropChanceOutputs;
+    private boolean dropNeverConsumed = true;
+    private int multiplier = 1;
 
     private int panelLeft;
     private int panelTop;
     private int panelWidth;
     private int panelHeight;
+    private int railLeft;
+    private int listLeft;
+    private int listRight;
     private int listTop;
     private int listBottom;
+    private int footerTop;
     private int page;
 
     @Nullable
@@ -95,80 +113,115 @@ public final class PreviewScreen extends Screen implements GenerationListener {
 
     @Override
     protected void init() {
-        this.panelWidth = Math.min(440, this.width - 40);
-        this.panelHeight = Math.min(320, this.height - 40);
+        this.panelWidth = Math.min(520, this.width - 30);
+        this.panelHeight = Math.min(300, this.height - 30);
         this.panelLeft = (this.width - this.panelWidth) / 2;
         this.panelTop = (this.height - this.panelHeight) / 2;
-        this.listTop = this.panelTop + HEADER_HEIGHT;
-        this.listBottom = this.panelTop + this.panelHeight - FOOTER_HEIGHT;
+
+        this.railLeft = this.panelLeft + 8;
+        this.listLeft = this.panelLeft + RAIL_WIDTH + 14;
+        this.listRight = this.panelLeft + this.panelWidth - 8;
+        this.listTop = this.panelTop + 30;
+        this.footerTop = this.panelTop + this.panelHeight - 62;
+        this.listBottom = this.footerTop - 4;
         this.page = 0;
 
-        int toolY = this.listBottom + 3;
-        int toolX = this.panelLeft + 8;
+        this.previousPageButton = Button.builder(Component.literal("<"), b -> turnPage(-1))
+                .bounds(this.panelLeft + this.panelWidth - 52, this.panelTop + 4, 14, 14).build();
+        this.addRenderableWidget(this.previousPageButton);
+        this.nextPageButton = Button.builder(Component.literal(">"), b -> turnPage(1))
+                .bounds(this.panelLeft + this.panelWidth - 34, this.panelTop + 4, 14, 14).build();
+        this.addRenderableWidget(this.nextPageButton);
 
-        this.addRenderableWidget(Button.builder(Component.translatable("eae2_pattern.preview.select_all"), b -> {
-            this.selectVisible(true);
-        }).bounds(toolX, toolY, 52, 18).build());
-
-        this.addRenderableWidget(Button.builder(Component.translatable("eae2_pattern.preview.select_none"), b -> {
-            this.selectVisible(false);
-        }).bounds(toolX + 54, toolY, 52, 18).build());
-
-        this.addRenderableWidget(Button.builder(Component.translatable("eae2_pattern.preview.invert"), b -> {
-            this.invertVisible();
-        }).bounds(toolX + 108, toolY, 52, 18).build());
-
-        this.addRenderableWidget(Button.builder(Component.translatable("eae2_pattern.preview.dedupe"), b -> {
-            this.dropDuplicates();
-        }).bounds(toolX + 162, toolY, 60, 18).build());
-
-        Button onlySelected = Button.builder(this.onlySelectedLabel(), b -> this.toggleOnlySelected())
-                .bounds(toolX + 224, toolY, 64, 18).build();
-        this.addRenderableWidget(onlySelected);
-        this.onlySelectedButton = onlySelected;
-
-        int actionY = this.listBottom + 24;
-        int cancelX = this.panelLeft + this.panelWidth - 8 - 52;
-        Button generate = Button.builder(Component.translatable("eae2_pattern.preview.generate"), b -> this.generate())
-                .bounds(cancelX - 2 - 64, actionY, 64, 18).build();
-        this.addRenderableWidget(generate);
-        this.generateButton = generate;
-
-        this.addRenderableWidget(Button.builder(Component.translatable("gui.cancel"), b -> this.onClose())
-                .bounds(cancelX, actionY, 52, 18).build());
-
-        int pageButtonY = this.panelTop + 4;
-        int nextX = this.panelLeft + this.panelWidth - 8 - PAGE_BUTTON_WIDTH;
-        int previousX = nextX - PAGE_BUTTON_WIDTH - 2;
-
-        Button previous = Button.builder(Component.literal("<"), b -> this.turnPage(-1))
-                .bounds(previousX, pageButtonY, PAGE_BUTTON_WIDTH, PAGE_BUTTON_HEIGHT).build();
-        this.addRenderableWidget(previous);
-        this.previousPageButton = previous;
-
-        Button next = Button.builder(Component.literal(">"), b -> this.turnPage(1))
-                .bounds(nextX, pageButtonY, PAGE_BUTTON_WIDTH, PAGE_BUTTON_HEIGHT).build();
-        this.addRenderableWidget(next);
-        this.nextPageButton = next;
-
-        EditBox search = new EditBox(this.font, this.panelLeft + 8, this.panelTop + 18,
-                this.panelWidth - 16, SEARCH_HEIGHT, Component.translatable("eae2_pattern.preview.search"));
-        search.setMaxLength(96);
-        search.setHint(Component.translatable("eae2_pattern.preview.search_hint"));
-        search.setValue(this.query.raw());
-        search.setResponder(text -> {
-            this.query = ItemSearchQuery.parse(text);
-            this.rebuildVisible();
-            this.page = 0;
-            this.refreshButtons();
+        this.productsBox = new EditBox(this.font, this.railLeft, this.panelTop + 44, RAIL_WIDTH - 2, 14,
+                Component.translatable("eae2_pattern.preview.filter.products"));
+        this.productsBox.setMaxLength(96);
+        this.productsBox.setHint(Component.translatable("eae2_pattern.preview.filter.hint"));
+        this.productsBox.setResponder(text -> {
+            this.productsQuery = ItemSearchQuery.parse(text);
+            rebuildVisible();
         });
-        this.addRenderableWidget(search);
-        this.searchBox = search;
+        this.addRenderableWidget(this.productsBox);
 
-        this.rebuildVisible();
-        this.refreshButtons();
+        this.ingredientsBox = new EditBox(this.font, this.railLeft, this.panelTop + 72, RAIL_WIDTH - 2, 14,
+                Component.translatable("eae2_pattern.preview.filter.ingredients"));
+        this.ingredientsBox.setMaxLength(96);
+        this.ingredientsBox.setHint(Component.translatable("eae2_pattern.preview.filter.hint"));
+        this.ingredientsBox.setResponder(text -> {
+            this.ingredientsQuery = ItemSearchQuery.parse(text);
+            rebuildVisible();
+        });
+        this.addRenderableWidget(this.ingredientsBox);
+
+        int chipWidth = (RAIL_WIDTH - 6) / 2;
+        int chipTop = this.panelTop + 96;
+        this.conditionButtons.clear();
+        addCondition(this.railLeft, chipTop, chipWidth, "unconsumed", () -> onlyNeverConsumed, v -> onlyNeverConsumed = v);
+        addCondition(this.railLeft + chipWidth + 4, chipTop, chipWidth, "chance_input",
+                () -> onlyProbabilisticInput, v -> onlyProbabilisticInput = v);
+        addCondition(this.railLeft, chipTop + 16, chipWidth, "chance_output",
+                () -> onlyProbabilisticOutput, v -> onlyProbabilisticOutput = v);
+        addCondition(this.railLeft + chipWidth + 4, chipTop + 16, chipWidth, "chance_byproduct",
+                () -> onlyProbabilisticByproduct, v -> onlyProbabilisticByproduct = v);
+        addCondition(this.railLeft, chipTop + 32, chipWidth, "drop_chance",
+                () -> dropChanceOutputs, v -> dropChanceOutputs = v);
+        addCondition(this.railLeft + chipWidth + 4, chipTop + 32, chipWidth, "drop_unconsumed",
+                () -> dropNeverConsumed, v -> dropNeverConsumed = v);
+
+        this.multiplierButton = Button.builder(multiplierLabel(), b -> {
+            this.multiplier = nextMultiplier(this.multiplier);
+            b.setMessage(multiplierLabel());
+            refreshButtons();
+        }).bounds(this.railLeft, chipTop + 52, RAIL_WIDTH - 2, 16).build();
+        this.addRenderableWidget(this.multiplierButton);
+
+        int toolY = this.footerTop;
+        int toolX = this.listLeft;
+        this.addRenderableWidget(Button.builder(Component.translatable("eae2_pattern.preview.select_all"), b -> selectVisible(true))
+                .bounds(toolX, toolY, 46, 18).build());
+        this.addRenderableWidget(Button.builder(Component.translatable("eae2_pattern.preview.select_none"), b -> selectVisible(false))
+                .bounds(toolX + 48, toolY, 54, 18).build());
+        this.addRenderableWidget(Button.builder(Component.translatable("eae2_pattern.preview.invert"), b -> invertVisible())
+                .bounds(toolX + 104, toolY, 46, 18).build());
+        this.addRenderableWidget(Button.builder(Component.translatable("eae2_pattern.preview.dedupe"), b -> dropDuplicates())
+                .bounds(toolX + 152, toolY, 52, 18).build());
+        this.onlySelectedButton = Button.builder(onlySelectedLabel(), b -> {
+            this.onlySelected = !this.onlySelected;
+            b.setMessage(onlySelectedLabel());
+            rebuildVisible();
+        }).bounds(toolX + 206, toolY, 64, 18).build();
+        this.addRenderableWidget(this.onlySelectedButton);
+
+        int actionY = toolY + 20;
+        this.generateButton = Button.builder(Component.translatable("eae2_pattern.preview.generate"), b -> generate())
+                .bounds(this.listRight - 108, actionY, 56, 18).build();
+        this.addRenderableWidget(this.generateButton);
+        this.addRenderableWidget(Button.builder(Component.translatable("eae2_pattern.preview.cancel"), b -> onClose())
+                .bounds(this.listRight - 48, actionY, 48, 18).build());
+
         ClientGenerationFeedback.setListener(this);
         PacketHandler.sendToServer(new C2SQueryNetworkStatusPacket(0));
+        rebuildVisible();
+        refreshButtons();
+    }
+
+    private void addCondition(int x, int y, int width, String key, java.util.function.BooleanSupplier getter,
+                              java.util.function.Consumer<Boolean> setter) {
+        Button button = Button.builder(conditionLabel(key, getter.getAsBoolean()), b -> {
+            setter.accept(!getter.getAsBoolean());
+            b.setMessage(conditionLabel(key, getter.getAsBoolean()));
+            rebuildVisible();
+        }).bounds(x, y, width, 14).build();
+        this.conditionButtons.add(button);
+        this.addRenderableWidget(button);
+    }
+
+    private Component conditionLabel(String key, boolean active) {
+        return Component.literal((active ? "[x] " : "[ ] ") + Component.translatable("eae2_pattern.preview.filter." + key).getString());
+    }
+
+    private Component multiplierLabel() {
+        return Component.translatable("eae2_pattern.preview.multiplier", this.multiplier);
     }
 
     private Component onlySelectedLabel() {
@@ -177,70 +230,31 @@ public final class PreviewScreen extends Screen implements GenerationListener {
                 : "eae2_pattern.preview.only_selected");
     }
 
+    private static int nextMultiplier(int current) {
+        for (int value : MULTIPLIERS) {
+            if (value > current) {
+                return value;
+            }
+        }
+        return MULTIPLIERS[0];
+    }
+
+    private RecipeFilters filters() {
+        return new RecipeFilters(this.productsQuery, this.ingredientsQuery, this.onlyNeverConsumed,
+                this.onlyProbabilisticInput, this.onlyProbabilisticOutput, this.onlyProbabilisticByproduct,
+                this.onlySelected);
+    }
+
     private void rebuildVisible() {
+        RecipeFilters filters = filters();
         this.visible.clear();
         for (RecipePlan.Entry entry : this.plan.entries()) {
-            if (this.onlySelected && !entry.isSelected()) {
-                continue;
-            }
-            if (this.query.matches(entry)) {
+            if (!filters.rejects(entry)) {
                 this.visible.add(entry);
             }
         }
-        this.page = Mth.clamp(this.page, 0, this.pageCount() - 1);
-    }
-
-    private void selectVisible(boolean selected) {
-        for (RecipePlan.Entry entry : this.visible) {
-            entry.setSelected(selected);
-        }
-        this.afterSelectionChanged();
-    }
-
-    private void invertVisible() {
-        for (RecipePlan.Entry entry : this.visible) {
-            entry.setSelected(!entry.isSelected());
-        }
-        this.afterSelectionChanged();
-    }
-
-    /**
-     * Keeps the first selected recipe for every distinct output and drops the other ways of making it.
-     *
-     * <p>This is the "I do not care whether it is made from ingots or from plates" button: it collapses the
-     * GregTech-style variant explosion down to one pattern per product without touching unrelated rows.</p>
-     */
-    private void dropDuplicates() {
-        Set<String> kept = new HashSet<>();
-        int dropped = 0;
-        for (RecipePlan.Entry entry : this.visible) {
-            if (!entry.isSelected()) {
-                continue;
-            }
-            if (!kept.add(entry.outputKey())) {
-                entry.setSelected(false);
-                dropped++;
-            }
-        }
-        this.lastResult = Component.translatable("eae2_pattern.preview.deduped", dropped);
-        this.afterSelectionChanged();
-    }
-
-    private void toggleOnlySelected() {
-        this.onlySelected = !this.onlySelected;
-        if (this.onlySelectedButton != null) {
-            this.onlySelectedButton.setMessage(this.onlySelectedLabel());
-        }
-        this.page = 0;
-        this.rebuildVisible();
-        this.refreshButtons();
-    }
-
-    private void afterSelectionChanged() {
-        if (this.onlySelected) {
-            this.rebuildVisible();
-        }
-        this.refreshButtons();
+        this.page = Mth.clamp(this.page, 0, Math.max(0, pageCount() - 1));
+        refreshButtons();
     }
 
     private int rowsPerPage() {
@@ -248,323 +262,374 @@ public final class PreviewScreen extends Screen implements GenerationListener {
     }
 
     private int pageCount() {
-        int rows = this.rowsPerPage();
-        return Math.max(1, (this.visible.size() + rows - 1) / rows);
+        return Math.max(1, (this.visible.size() + rowsPerPage() - 1) / rowsPerPage());
     }
 
     private void turnPage(int delta) {
-        this.page = Mth.clamp(this.page + delta, 0, this.pageCount() - 1);
-        this.refreshButtons();
+        this.page = Mth.clamp(this.page + delta, 0, pageCount() - 1);
+        refreshButtons();
     }
 
     private void refreshButtons() {
-        if (this.generateButton != null) {
-            this.generateButton.active = this.plan.selectedCount() > 0;
-        }
         if (this.previousPageButton != null) {
             this.previousPageButton.active = this.page > 0;
         }
         if (this.nextPageButton != null) {
-            this.nextPageButton.active = this.page < this.pageCount() - 1;
+            this.nextPageButton.active = this.page < pageCount() - 1;
+        }
+        if (this.generateButton != null) {
+            this.generateButton.active = !buildSpecs().isEmpty();
         }
     }
 
+    private void selectVisible(boolean value) {
+        for (RecipePlan.Entry entry : this.visible) {
+            entry.setSelected(value);
+        }
+        afterSelectionChanged();
+    }
+
+    private void invertVisible() {
+        for (RecipePlan.Entry entry : this.visible) {
+            entry.toggle();
+        }
+        afterSelectionChanged();
+    }
+
+    private void dropDuplicates() {
+        Set<String> seen = new HashSet<>();
+        int dropped = 0;
+        for (RecipePlan.Entry entry : this.visible) {
+            if (!entry.isSelected()) {
+                continue;
+            }
+            if (!seen.add(entry.outputKey())) {
+                entry.setSelected(false);
+                dropped++;
+            }
+        }
+        this.lastResult = Component.translatable("eae2_pattern.preview.deduped", dropped);
+        afterSelectionChanged();
+    }
+
+    private void afterSelectionChanged() {
+        if (this.onlySelected) {
+            rebuildVisible();
+        }
+        refreshButtons();
+    }
+
+    private List<PatternSpec> buildSpecs() {
+        return this.plan.selectedSpecs(this.multiplier, this.dropChanceOutputs, this.dropNeverConsumed);
+    }
+
     private void generate() {
-        List<PatternSpec> specs = this.plan.selectedSpecs();
+        List<PatternSpec> specs = buildSpecs();
         if (specs.isEmpty()) {
+            this.lastResult = Component.translatable("eae2_pattern.preview.nothing_selected");
             return;
         }
         PatternRequestSender.send(specs);
-        this.onClose();
+        this.lastResult = Component.translatable("eae2_pattern.preview.sent", specs.size());
     }
 
     @Override
     public void onGenerationFinished(GenerationReport report) {
+        // The chat lines are printed by ClientGenerationFeedback; the screen only needs the summary line.
         this.lastResult = ClientGenerationFeedback.describe(report);
+    }
+
+    @Override
+    public void onClose() {
+        ClientGenerationFeedback.setListener(null);
+        super.onClose();
+    }
+
+    @Override
+    public boolean isPauseScreen() {
+        return false;
     }
 
     @Override
     public void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
         this.renderBackground(graphics);
 
-        int left = this.panelLeft;
-        int top = this.panelTop;
-        int right = this.panelLeft + this.panelWidth;
-        graphics.fill(left - 1, top - 1, right + 1, top + this.panelHeight + 1, 0xFF101010);
-        graphics.fill(left, top, right, top + this.panelHeight, 0xFF202020);
+        graphics.fill(this.panelLeft - 1, this.panelTop - 1, this.panelLeft + this.panelWidth + 1,
+                this.panelTop + this.panelHeight + 1, 0xFF000000);
+        graphics.fill(this.panelLeft, this.panelTop, this.panelLeft + this.panelWidth,
+                this.panelTop + this.panelHeight, COLOR_PANEL);
 
-        String title = this.font.plainSubstrByWidth(this.title.getString(), this.panelWidth - 112);
-        graphics.drawString(this.font, title, left + 8, top + 6, COLOR_TEXT, false);
+        int titleWidth = this.panelWidth - 130;
+        graphics.drawString(this.font, this.font.plainSubstrByWidth(this.title.getString(), titleWidth),
+                this.panelLeft + 8, this.panelTop + 7, 0xFFFFFF, false);
 
-        Component pageText = Component.translatable("eae2_pattern.preview.page", this.page + 1, this.pageCount());
-        graphics.drawString(this.font, pageText, right - 8 - 2 * PAGE_BUTTON_WIDTH - 6 - this.font.width(pageText),
-                top + 7, COLOR_DIM, false);
+        String pageLabel = (this.page + 1) + " / " + pageCount();
+        graphics.drawString(this.font, pageLabel, this.panelLeft + this.panelWidth - 56 - this.font.width(pageLabel) + 2,
+                this.panelTop + 8, COLOR_DIM, false);
 
-        Component status = this.query.isEmpty()
-                ? Component.translatable("eae2_pattern.preview.selected",
-                        this.plan.selectedCount(), this.plan.entries().size())
-                : Component.translatable("eae2_pattern.preview.selected_filtered",
-                        this.plan.selectedCount(), this.plan.entries().size(), this.visible.size());
-        graphics.drawString(this.font, status, left + 8, top + 36, COLOR_DIM, false);
+        graphics.drawString(this.font, Component.translatable("eae2_pattern.preview.filter.products"),
+                this.railLeft, this.panelTop + 34, COLOR_DIM, false);
+        graphics.drawString(this.font, Component.translatable("eae2_pattern.preview.filter.ingredients"),
+                this.railLeft, this.panelTop + 62, COLOR_DIM, false);
 
-        Component networkLine = this.networkLine();
-        graphics.drawString(this.font, networkLine, left + 8, top + 48, this.networkLineColor(), false);
+        graphics.fill(this.listLeft - 6, this.listTop - 4, this.listLeft - 5, this.listBottom, COLOR_FRAME);
 
-        if (this.plan.isEmpty()) {
-            graphics.drawString(this.font, Component.translatable("eae2_pattern.preview.empty"),
-                    left + 8, this.listTop + 4, COLOR_DIM, false);
-        } else if (this.visible.isEmpty()) {
-            graphics.drawString(this.font, Component.translatable("eae2_pattern.preview.no_match"),
-                    left + 8, this.listTop + 4, COLOR_DIM, false);
-        } else {
-            this.renderRows(graphics);
-            this.renderRowTooltip(graphics, mouseX, mouseY);
-        }
-
-        if (this.lastResult != null) {
-            int maxWidth = this.panelLeft + this.panelWidth - 8 - 126 - (left + 8) - 4;
-            String text = this.font.plainSubstrByWidth(this.lastResult.getString(), Math.max(20, maxWidth));
-            graphics.drawString(this.font, text, left + 8, this.listBottom + 29, COLOR_DIM, false);
-        }
+        renderStatusLine(graphics);
 
         super.render(graphics, mouseX, mouseY, partialTick);
+
+        renderRows(graphics, mouseX, mouseY);
+        renderResultLine(graphics);
+        renderHoveredTooltip(graphics, mouseX, mouseY);
     }
 
-    private void renderRows(GuiGraphics graphics) {
-        int left = this.panelLeft;
-        int right = this.panelLeft + this.panelWidth;
+    private void renderResultLine(GuiGraphics graphics) {
+        if (this.lastResult == null) {
+            return;
+        }
+        int width = this.listRight - this.listLeft;
+        String text = this.font.plainSubstrByWidth(this.lastResult.getString(), width);
+        graphics.drawString(this.font, text, this.listLeft, this.footerTop + 40, 0xFFFFFF, false);
+    }
 
-        graphics.enableScissor(left + 1, this.listTop, right - 1, this.listBottom);
-        int rows = this.rowsPerPage();
-        int first = this.page * rows;
-        int last = Math.min(this.visible.size(), first + rows);
-
-        for (int i = first; i < last; i++) {
-            RecipePlan.Entry entry = this.visible.get(i);
-            int rowY = this.listTop + (i - first) * ROW_HEIGHT;
-            if ((i - first) % 2 == 1) {
-                graphics.fill(left + 1, rowY, right - 1, rowY + ROW_HEIGHT, COLOR_ROW_ALT);
+    private void renderRows(GuiGraphics graphics, int mouseX, int mouseY) {
+        graphics.enableScissor(this.listLeft, this.listTop, this.listRight, this.listBottom);
+        int rows = rowsPerPage();
+        int start = this.page * rows;
+        for (int row = 0; row < rows; row++) {
+            int index = start + row;
+            if (index >= this.visible.size()) {
+                break;
             }
-            this.renderRow(graphics, entry, rowY);
+            int y = this.listTop + row * ROW_HEIGHT;
+            boolean hovered = mouseX >= this.listLeft && mouseX < this.listRight
+                    && mouseY >= y && mouseY < y + ROW_HEIGHT;
+            renderRow(graphics, this.visible.get(index), index, y, hovered);
         }
         graphics.disableScissor();
+        if (this.visible.isEmpty()) {
+            graphics.drawString(this.font, Component.translatable("eae2_pattern.preview.no_match"),
+                    this.listLeft + 8, this.listTop + 8, COLOR_DIM, false);
+        }
     }
 
-    private void renderRow(GuiGraphics graphics, RecipePlan.Entry entry, int rowY) {
-        int left = this.panelLeft;
-        int right = this.panelLeft + this.panelWidth;
-        int iconY = rowY + (ROW_HEIGHT - ICON) / 2;
+    private void renderRow(GuiGraphics graphics, RecipePlan.Entry entry, int index, int y, boolean hovered) {
+        if (hovered) {
+            graphics.fill(this.listLeft, y, this.listRight, y + ROW_HEIGHT, COLOR_ROW_HOVER);
+        } else if ((index & 1) == 1) {
+            graphics.fill(this.listLeft, y, this.listRight, y + ROW_HEIGHT, COLOR_ROW_ALT);
+        }
 
-        int boxX = left + 6;
-        int boxY = rowY + (ROW_HEIGHT - 10) / 2 - 1;
-        graphics.fill(boxX, boxY, boxX + 10, boxY + 10, 0xFF808080);
-        graphics.fill(boxX + 1, boxY + 1, boxX + 9, boxY + 9, 0xFF101010);
+        int checkX = this.listLeft + 3;
+        int checkY = y + 6;
+        graphics.fill(checkX, checkY, checkX + 10, checkY + 10, 0xFF000000);
+        graphics.fill(checkX + 1, checkY + 1, checkX + 9, checkY + 9, entry.isSelected() ? 0xFF60C060 : 0xFF2A2A2A);
         if (entry.isSelected()) {
-            graphics.fill(boxX + 2, boxY + 2, boxX + 8, boxY + 8, COLOR_OK);
+            graphics.fill(checkX + 2, checkY + 2, checkX + 8, checkY + 8, 0xFF2A2A2A);
         }
 
-        // Ingredients, then an arrow, then the product: the reason this screen is worth looking at.
-        List<StackSpec> inputs = entry.inputs();
-        int drawn = Math.min(inputs.size(), MAX_INPUT_ICONS);
-        if (inputs.size() > MAX_INPUT_ICONS) {
-            drawn = MAX_INPUT_ICONS - 1;
+        int iconY = y + 3;
+        int x = this.listLeft + 18;
+        List<Ingredient> inputs = entry.inputs();
+        int shown = Math.min(inputs.size(), MAX_INPUT_ICONS);
+        for (int i = 0; i < shown; i++) {
+            drawIngredient(graphics, inputs.get(i), x + i * ICON_STEP, iconY);
         }
-        int x = this.inputsX();
-        for (int i = 0; i < drawn; i++) {
-            this.renderStackIcon(graphics, inputs.get(i), x, iconY);
-            x += ICON_STEP;
-        }
-        if (inputs.size() > MAX_INPUT_ICONS) {
-            graphics.drawString(this.font, "+" + (inputs.size() - drawn), x + 1, iconY + 4, COLOR_DIM, false);
+        if (inputs.size() > shown) {
+            graphics.drawString(this.font, "+" + (inputs.size() - shown), x + shown * ICON_STEP, iconY + 4,
+                    COLOR_DIM, false);
         }
 
-        graphics.drawString(this.font, "\u2192", this.arrowX(), iconY + 4, COLOR_DIM, false);
+        int arrowX = this.listLeft + 74;
+        graphics.drawString(this.font, "\u2192", arrowX, y + 7, COLOR_DIM, false);
 
-        List<StackSpec> outputs = entry.outputs();
-        if (!outputs.isEmpty()) {
-            this.renderStackIcon(graphics, outputs.get(0), this.outputX(), iconY);
+        List<Ingredient> outputs = entry.outputs();
+        int outShown = Math.min(outputs.size(), MAX_OUTPUT_ICONS);
+        for (int i = 0; i < outShown; i++) {
+            drawIngredient(graphics, outputs.get(i), arrowX + 12 + i * ICON_STEP, iconY);
+        }
+        if (outputs.size() > outShown) {
+            graphics.drawString(this.font, "+" + (outputs.size() - outShown),
+                    arrowX + 12 + outShown * ICON_STEP, iconY + 4, COLOR_DIM, false);
         }
 
-        int labelWidth = Math.max(20, (right - 10 - 52) - this.labelX());
-        String text = this.font.plainSubstrByWidth(entry.label().getString(), labelWidth);
-        graphics.drawString(this.font, text, this.labelX(), rowY + 8,
-                entry.isSelected() ? COLOR_TEXT : COLOR_DIM, false);
+        int badgeX = this.listRight - 4;
+        if (entry.hasNeverConsumedInput()) {
+            graphics.fill(badgeX - 4, y + 10, badgeX, y + 14, COLOR_UNCONSUMED);
+            badgeX -= 7;
+        }
+        if (entry.hasProbabilisticInput()) {
+            graphics.fill(badgeX - 4, y + 10, badgeX, y + 14, COLOR_CHANCE);
+            badgeX -= 7;
+        }
+        if (entry.hasProbabilisticOutput()) {
+            graphics.fill(badgeX - 4, y + 10, badgeX, y + 14, COLOR_WARN);
+            badgeX -= 7;
+        }
 
-        Component kindTag = kindName(entry.spec().kind());
-        int tagWidth = this.font.width(kindTag);
-        graphics.drawString(this.font, kindTag, right - 10 - tagWidth, rowY + 8, COLOR_DIM, false);
+        int labelX = arrowX + 12 + MAX_OUTPUT_ICONS * ICON_STEP + 4;
+        int labelWidth = Math.max(20, badgeX - 6 - labelX);
+        String label = this.font.plainSubstrByWidth(entry.label().getString(), labelWidth);
+        graphics.drawString(this.font, label, labelX, y + 7, entry.isSelected() ? COLOR_TEXT : COLOR_DIM, false);
     }
 
-    private int inputsX() {
-        return this.panelLeft + 19;
-    }
-
-    private int arrowX() {
-        return this.panelLeft + 84;
-    }
-
-    private int outputX() {
-        return this.panelLeft + 94;
-    }
-
-    private int labelX() {
-        return this.panelLeft + 116;
-    }
-
-    private void renderStackIcon(GuiGraphics graphics, StackSpec spec, int x, int y) {
-        if (spec.type() == StackType.ITEM) {
+    private void drawIngredient(GuiGraphics graphics, Ingredient ingredient, int x, int y) {
+        StackSpec spec = ingredient.spec();
+        if (spec.isItem()) {
             ItemStack stack = spec.toItemStack();
             if (!stack.isEmpty()) {
                 graphics.renderItem(stack, x, y);
-                this.renderAmount(graphics, spec.amount(), x, y);
-                return;
             }
+        } else {
+            Fluid fluid = ForgeRegistries.FLUIDS.getValue(spec.id());
+            int tint = 0xFF3F76E4;
+            if (fluid != null) {
+                try {
+                    tint = IClientFluidTypeExtensions.of(fluid).getTintColor();
+                } catch (Throwable ignored) {
+                    // A fluid type without client extensions is not worth a crash.
+                }
+            }
+            graphics.fill(x, y, x + ICON, y + ICON, 0xFF202020);
+            graphics.fill(x + 1, y + 1, x + ICON - 1, y + ICON - 1, tint);
         }
-        int tint = fluidTint(spec);
-        graphics.fill(x, y, x + ICON, y + ICON, 0xFF373737);
-        graphics.fill(x + 1, y + 1, x + ICON - 1, y + ICON - 1, tint);
-        this.renderAmount(graphics, spec.amount(), x, y);
+        drawAmount(graphics, spec.amount(), x, y);
+        if (!ingredient.guaranteedOutput() || ingredient.probabilistic()) {
+            graphics.fill(x, y + ICON - 2, x + ICON, y + ICON, ingredient.neverConsumed() ? COLOR_UNCONSUMED : COLOR_CHANCE);
+        }
     }
 
-    /** Vanilla draws its stack counts at half scale; we do the same so four digit GregTech amounts still fit. */
-    private void renderAmount(GuiGraphics graphics, long amount, int x, int y) {
+    private void drawAmount(GuiGraphics graphics, long amount, int x, int y) {
         if (amount <= 1) {
             return;
         }
         String text = formatAmount(amount);
-        var pose = graphics.pose();
-        pose.pushPose();
-        pose.translate(x, y, 200.0F);
-        pose.scale(0.5F, 0.5F, 1.0F);
-        graphics.drawString(this.font, text, 2 * ICON - this.font.width(text), 18, 0xFFFFFF, true);
-        pose.popPose();
+        graphics.pose().pushPose();
+        graphics.pose().translate(x + ICON - 1, y + ICON - 1, 200.0F);
+        graphics.pose().scale(0.5F, 0.5F, 1.0F);
+        graphics.drawString(this.font, text, -this.font.width(text), -this.font.lineHeight, 0xFFFFFF, true);
+        graphics.pose().popPose();
     }
 
     private static String formatAmount(long amount) {
-        if (amount < 1_000L) {
+        if (amount < 1000) {
             return Long.toString(amount);
         }
-        if (amount < 10_000L) {
-            return String.format(Locale.ROOT, "%.1fk", amount / 1_000.0D);
+        if (amount < 1_000_000) {
+            return (amount / 100) / 10.0D + "k";
         }
-        if (amount < 1_000_000L) {
-            return (amount / 1_000L) + "k";
-        }
-        if (amount < 100_000_000L) {
-            return String.format(Locale.ROOT, "%.1fM", amount / 1_000_000.0D);
-        }
-        return (amount / 1_000_000L) + "M";
+        return (amount / 100_000) / 10.0D + "M";
     }
 
-    private void renderRowTooltip(GuiGraphics graphics, int mouseX, int mouseY) {
-        if (mouseX < this.panelLeft || mouseX > this.panelLeft + this.panelWidth
-                || mouseY < this.listTop || mouseY >= this.listBottom) {
+    /** One line under the title: how much is selected, and what the network can take. */
+    private void renderStatusLine(GuiGraphics graphics) {
+        int selected = this.plan.selectedCount();
+        Component status = Component.translatable("eae2_pattern.preview.status", selected, this.visible.size(),
+                this.plan.entries().size());
+        graphics.drawString(this.font, status, this.panelLeft + 8, this.panelTop + 18,
+                selected == 0 ? COLOR_DIM : COLOR_TEXT, false);
+
+        boolean hasNetwork = ClientNetworkState.hasNetwork();
+        long blanks = ClientNetworkState.blankPatterns();
+        Component right;
+        int color;
+        if (!hasNetwork) {
+            right = Component.translatable("eae2_pattern.preview.no_network");
+            color = COLOR_WARN;
+        } else if (selected > blanks) {
+            right = Component.translatable("eae2_pattern.preview.not_enough_blanks", blanks);
+            color = COLOR_WARN;
+        } else {
+            right = Component.translatable("eae2_pattern.preview.blanks", blanks);
+            color = blankColor(blanks);
+        }
+        int rightX = this.panelLeft + this.panelWidth - 8 - this.font.width(right);
+        graphics.drawString(this.font, right, rightX, this.panelTop + 18, color, false);
+    }
+
+    private static int blankColor(long blanks) {
+        return blanks > 0 ? COLOR_OK : COLOR_WARN;
+    }
+
+    private void renderHoveredTooltip(GuiGraphics graphics, int mouseX, int mouseY) {
+        if (mouseX < this.listLeft || mouseX >= this.listRight || mouseY < this.listTop || mouseY >= this.listBottom) {
             return;
         }
-        int index = this.page * this.rowsPerPage() + (int) ((mouseY - this.listTop) / ROW_HEIGHT);
+        int index = this.page * rowsPerPage() + (mouseY - this.listTop) / ROW_HEIGHT;
         if (index < 0 || index >= this.visible.size()) {
             return;
         }
-        graphics.renderComponentTooltip(this.font, this.describe(this.visible.get(index)), mouseX, mouseY);
-    }
-
-    /** Everything the row cannot fit: every ingredient, every product and where the recipe came from. */
-    private List<Component> describe(RecipePlan.Entry entry) {
+        RecipePlan.Entry entry = this.visible.get(index);
         List<Component> lines = new ArrayList<>();
-        for (StackSpec out : entry.outputs()) {
-            lines.add(Component.literal(out.amount() + "\u00d7 ").withStyle(ChatFormatting.WHITE)
-                    .append(nameOf(out).copy().withStyle(ChatFormatting.WHITE)));
-        }
-        if (!entry.inputs().isEmpty()) {
-            lines.add(Component.empty());
-            for (StackSpec in : entry.inputs()) {
-                lines.add(Component.literal("  " + in.amount() + "\u00d7 ").withStyle(ChatFormatting.GRAY)
-                        .append(nameOf(in).copy().withStyle(ChatFormatting.GRAY)));
-            }
+        for (Ingredient output : entry.outputs()) {
+            lines.add(describe(output, true));
         }
         lines.add(Component.empty());
-        lines.add(Component.translatable("eae2_pattern.preview.tooltip.kind", kindName(entry.spec().kind()))
-                .withStyle(ChatFormatting.DARK_GRAY));
-        lines.add(Component.literal(entry.spec().recipeId().toString()).withStyle(ChatFormatting.DARK_GRAY));
-        return lines;
+        for (Ingredient input : entry.inputs()) {
+            lines.add(describe(input, false));
+        }
+        for (Ingredient catalyst : entry.catalysts()) {
+            lines.add(Component.translatable("eae2_pattern.preview.tooltip.catalyst",
+                    catalyst.spec().amount(), nameOf(catalyst.spec())));
+        }
+        lines.add(Component.empty());
+        lines.add(Component.translatable("eae2_pattern.preview.tooltip.kind", kindName(entry.kind()))
+                .withStyle(ChatFormatting.GRAY));
+        if (this.multiplier > 1) {
+            lines.add(Component.translatable(entry.kind() == PatternKind.PROCESSING
+                            ? "eae2_pattern.preview.tooltip.scaled"
+                            : "eae2_pattern.preview.tooltip.not_scaled", this.multiplier)
+                    .withStyle(ChatFormatting.GRAY));
+        }
+        lines.add(Component.literal(entry.recipeId().toString()).withStyle(ChatFormatting.DARK_GRAY));
+        graphics.renderComponentTooltip(this.font, lines, mouseX, mouseY);
+    }
+
+    private Component describe(Ingredient ingredient, boolean output) {
+        Component name = nameOf(ingredient.spec());
+        if (ingredient.neverConsumed() && !output) {
+            return Component.translatable("eae2_pattern.preview.tooltip.catalyst",
+                    ingredient.spec().amount(), name);
+        }
+        if (!ingredient.guaranteedOutput() || ingredient.probabilistic()) {
+            return Component.translatable("eae2_pattern.preview.tooltip.chance",
+                    ingredient.spec().amount(), name, ingredient.chanceText());
+        }
+        return Component.translatable("eae2_pattern.preview.tooltip.plain", ingredient.spec().amount(), name);
     }
 
     private static Component nameOf(StackSpec spec) {
-        if (spec.type() == StackType.ITEM) {
-            ItemStack stack = spec.toItemStack();
-            if (!stack.isEmpty()) {
-                return stack.getHoverName();
-            }
-        } else {
-            Fluid fluid = ForgeRegistries.FLUIDS.getValue(spec.id());
-            if (fluid != null) {
-                return new FluidStack(fluid, 1).getDisplayName();
-            }
-        }
-        return Component.literal(spec.id().toString());
-    }
-
-    private static int fluidTint(StackSpec spec) {
-        Fluid fluid = ForgeRegistries.FLUIDS.getValue(spec.id());
-        if (fluid != null) {
-            try {
-                int tint = IClientFluidTypeExtensions.of(fluid).getTintColor();
-                if ((tint >>> 24) != 0) {
-                    return tint | 0xFF000000;
-                }
-            } catch (RuntimeException ignored) {
-                // A fluid without a client extension simply keeps the default tint.
-            }
-        }
-        return 0xFF3F76E4;
-    }
-
-    private Component networkLine() {
-        if (!ClientNetworkState.hasStatus()) {
-            return Component.translatable("eae2_pattern.preview.blanks_unknown");
-        }
-        if (!ClientNetworkState.hasNetwork()) {
-            return Component.translatable("eae2_pattern.preview.no_network");
-        }
-        return Component.translatable("eae2_pattern.preview.blanks", ClientNetworkState.blankPatterns());
-    }
-
-    private int networkLineColor() {
-        if (!ClientNetworkState.hasStatus()) {
-            return COLOR_DIM;
-        }
-        if (!ClientNetworkState.hasNetwork()) {
-            return COLOR_WARN;
-        }
-        long available = ClientNetworkState.blankPatterns();
-        long needed = this.plan.selectedCount();
-        return needed > available ? COLOR_WARN : COLOR_OK;
+        ItemStack stack = spec.toItemStack();
+        return stack.isEmpty() ? Component.literal(spec.id().toString()) : stack.getHoverName();
     }
 
     private static Component kindName(PatternKind kind) {
-        return Component.translatable("eae2_pattern.kind." + kind.name().toLowerCase(Locale.ROOT));
+        return Component.translatable("eae2_pattern.kind." + kind.name().toLowerCase(java.util.Locale.ROOT));
     }
 
     @Override
     public boolean mouseClicked(double mouseX, double mouseY, int button) {
-        if (button == 0 && mouseX >= this.panelLeft && mouseX <= this.panelLeft + this.panelWidth
-                && mouseY >= this.listTop && mouseY < this.listBottom) {
-            int row = (int) ((mouseY - this.listTop) / ROW_HEIGHT);
-            int index = this.page * this.rowsPerPage() + row;
+        if (super.mouseClicked(mouseX, mouseY, button)) {
+            return true;
+        }
+        if (button != 0) {
+            return false;
+        }
+        if (mouseX >= this.listLeft && mouseX < this.listRight && mouseY >= this.listTop && mouseY < this.listBottom) {
+            int index = this.page * rowsPerPage() + (int) ((mouseY - this.listTop) / ROW_HEIGHT);
             if (index >= 0 && index < this.visible.size()) {
                 this.visible.get(index).toggle();
-                this.afterSelectionChanged();
+                afterSelectionChanged();
                 return true;
             }
         }
-        return super.mouseClicked(mouseX, mouseY, button);
+        return false;
     }
 
     @Override
     public boolean mouseScrolled(double mouseX, double mouseY, double delta) {
-        if (mouseX >= this.panelLeft && mouseX <= this.panelLeft + this.panelWidth
-                && mouseY >= this.listTop && mouseY <= this.listBottom) {
-            this.turnPage(delta > 0 ? -1 : 1);
+        if (mouseX >= this.listLeft && mouseX < this.listRight && mouseY >= this.listTop && mouseY < this.listBottom) {
+            turnPage(delta > 0 ? -1 : 1);
             return true;
         }
         return super.mouseScrolled(mouseX, mouseY, delta);
@@ -572,29 +637,21 @@ public final class PreviewScreen extends Screen implements GenerationListener {
 
     @Override
     public boolean keyPressed(int keyCode, int scanCode, int modifiers) {
-        // While the search box has focus the arrow keys belong to text editing, not to paging.
-        if (this.searchBox != null && this.searchBox.isFocused()) {
+        if (this.getFocused() instanceof EditBox box && box.isFocused()) {
             return super.keyPressed(keyCode, scanCode, modifiers);
         }
-        if (keyCode == GLFW.GLFW_KEY_LEFT || keyCode == GLFW.GLFW_KEY_PAGE_UP) {
-            this.turnPage(-1);
-            return true;
+        switch (keyCode) {
+            case GLFW.GLFW_KEY_LEFT, GLFW.GLFW_KEY_PAGE_UP -> {
+                turnPage(-1);
+                return true;
+            }
+            case GLFW.GLFW_KEY_RIGHT, GLFW.GLFW_KEY_PAGE_DOWN -> {
+                turnPage(1);
+                return true;
+            }
+            default -> {
+                return super.keyPressed(keyCode, scanCode, modifiers);
+            }
         }
-        if (keyCode == GLFW.GLFW_KEY_RIGHT || keyCode == GLFW.GLFW_KEY_PAGE_DOWN) {
-            this.turnPage(1);
-            return true;
-        }
-        return super.keyPressed(keyCode, scanCode, modifiers);
-    }
-
-    @Override
-    public void removed() {
-        ClientGenerationFeedback.setListener(null);
-        super.removed();
-    }
-
-    @Override
-    public boolean isPauseScreen() {
-        return false;
     }
 }

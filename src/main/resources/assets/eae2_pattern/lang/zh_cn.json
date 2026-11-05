@@ -7,7 +7,6 @@
   "eae2_pattern.report.too_many": "单次请求过大：%s 个样板。请调高服务端配置 max_patterns_per_request 后重试。",
   "eae2_pattern.report.nothing": "没有需要生成的内容。",
   "eae2_pattern.report.no_network": "附近找不到 AE2 网络：请打开一个终端，或随身携带已绑定的无线终端。",
-
   "eae2_pattern.preview.title": "生成样板：%s",
   "eae2_pattern.preview.selected": "已选 %s / %s",
   "eae2_pattern.preview.selected_filtered": "已选 %s / %s（筛选后 %s 条）",
@@ -29,32 +28,25 @@
   "eae2_pattern.preview.deduped": "已去掉 %s 条同一产物的其他做法。",
   "eae2_pattern.preview.tooltip.kind": "样板类型：%s",
   "eae2_pattern.preview.page": "第 %s / %s 页",
-
   "eae2_pattern.collecting.title": "读取配方：%s",
   "eae2_pattern.collecting.progress": "已读取 %s / %s 个配方",
   "eae2_pattern.collecting.cancel": "取消",
-
   "eae2_pattern.kind.crafting": "合成",
   "eae2_pattern.kind.processing": "处理",
   "eae2_pattern.kind.stonecutting": "切石",
   "eae2_pattern.kind.smithing": "锻造",
-
   "eae2_pattern.button.tooltip": "EAE2 Pattern：预览并编码这台机器的全部配方",
   "eae2_pattern.button.title": "样板",
-
   "eae2_pattern.jei.button": "EAE2 Pattern：预览当前配方类别",
   "eae2_pattern.jei.button.desc": "把这台机器的全部配方编码成 AE2 样板",
-
   "eae2_pattern.msg.no_jei": "JEI 不可用，无法读取配方。",
   "eae2_pattern.msg.hover_machine": "请先把鼠标悬停在 JEI 里的机器物品上，再按一次快捷键。",
   "eae2_pattern.msg.no_recipes": "%s 没有可以转成样板的配方。",
   "eae2_pattern.msg.no_patterns": "%s 没有可编码的配方。",
   "eae2_pattern.msg.no_categories": "JEI 没有提供任何配方类别。",
-
   "eae2_pattern.picker.title": "选择配方类别：%s",
   "eae2_pattern.picker.choose": "选择配方类别",
   "eae2_pattern.picker.hint": "这台机器出现在多个 JEI 类别里。",
-
   "eae2_pattern.cmd.entry": "%s = %s",
   "eae2_pattern.cmd.current": "当前值：%s = %s",
   "eae2_pattern.cmd.hint": "用 /eae2_pattern config set <键> <值> 修改；列表还可以用 add / remove。",
@@ -66,7 +58,28 @@
   "eae2_pattern.cmd.err.integer": "%s 只接受整数。",
   "eae2_pattern.cmd.err.range": "%s 超出允许范围，请参考配置文件里的注释。",
   "eae2_pattern.cmd.err.not_list": "%s 不是列表，请改用 set。",
-
   "key.eae2_pattern.open_preview": "预览悬停机器的样板",
-  "key.categories.eae2_pattern": "EAE2 Pattern"
+  "key.categories.eae2_pattern": "EAE2 Pattern",
+  "eae2_pattern.preview.filter.products": "产物筛选",
+  "eae2_pattern.preview.filter.ingredients": "输入筛选",
+  "eae2_pattern.preview.filter.hint": "名称、@模组、#标签、* ?",
+  "eae2_pattern.preview.filter.unconsumed": "不消耗输入",
+  "eae2_pattern.preview.filter.chance_input": "概率输入",
+  "eae2_pattern.preview.filter.chance_output": "概率产物",
+  "eae2_pattern.preview.filter.chance_byproduct": "概率副产物",
+  "eae2_pattern.preview.filter.drop_chance": "排除概率产物",
+  "eae2_pattern.preview.filter.drop_unconsumed": "排除不消耗",
+  "eae2_pattern.preview.multiplier": "倍率 x%s",
+  "eae2_pattern.preview.cancel": "取消",
+  "eae2_pattern.preview.status": "已选 %s - 显示 %s - 共 %s 个配方",
+  "eae2_pattern.preview.not_enough_blanks": "空白样板不足：现有 %s 个",
+  "eae2_pattern.preview.nothing_selected": "没有选中任何样板。",
+  "eae2_pattern.preview.sent": "已向服务端发送 %s 个样板…",
+  "eae2_pattern.preview.tooltip.plain": "%s x %s",
+  "eae2_pattern.preview.tooltip.chance": "%s x %s（%s 概率）",
+  "eae2_pattern.preview.tooltip.catalyst": "%s x %s（不消耗）",
+  "eae2_pattern.preview.tooltip.scaled": "所有数量乘以 %s",
+  "eae2_pattern.preview.tooltip.not_scaled": "这类样板不支持倍率",
+  "eae2_pattern.preview.tooltip.badge.chance": "概率",
+  "eae2_pattern.preview.tooltip.badge.unconsumed": "不消耗"
 }

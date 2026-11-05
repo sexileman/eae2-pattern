@@ -8,22 +8,21 @@ import java.util.Locale;
 import java.util.regex.Pattern;
 
 /**
- * The search box of the preview list, following JEI's query syntax closely enough to feel familiar.
+ * One search box of the preview, following JEI's query syntax closely enough to feel familiar.
  *
  * <p>Supported, all terms ANDed together:</p>
  * <ul>
- *   <li>{@code iron} - free text, matched against the names, ids and namespaces of every ingredient of the
- *       recipe, so {@code iron} finds both "2 iron ingots to double iron plate" and "2 iron plates to double iron
- *       plate";</li>
- *   <li>{@code @gtceu} - only recipes that involve a given mod;</li>
- *   <li>{@code #forge:plates} - only recipes that involve an item tag;</li>
+ *   <li>{@code iron} - free text, matched against the names, ids, paths and namespaces of the ingredients of the
+ *       side this box belongs to;</li>
+ *   <li>{@code @gtceu} - only entries that involve a given mod;</li>
+ *   <li>{@code #forge:plates} - only entries that involve an item tag;</li>
  *   <li>{@code plate*} / {@code plate?} - wildcards;</li>
- *   <li>{@code -slab} - exclude a term.</li>
+ *   <li>{@code -slab} or {@code !slab} - exclude a term.</li>
  * </ul>
  *
- * <p>Two extras that JEI has no equivalent for, because here every row is a recipe rather than an ingredient:
- * {@code >...} restricts a term to what the recipe produces and {@code <...} to what it consumes. That is how you
- * say "recipes that make double iron plates out of ingots" in one line: {@code >double_plate <ingot}.</p>
+ * <p>The preview has one box for the products and one for the ingredients, so the {@code >} and {@code <}
+ * prefixes JEI has no equivalent for are no longer needed. They are still accepted and stripped, so a query
+ * copied from the previous version keeps working.</p>
  */
 public final class ItemSearchQuery {
 
@@ -62,17 +61,14 @@ public final class ItemSearchQuery {
                 parsed.add(Term.of(TermKind.TAG, token.substring(1), negated));
             } else if (token.startsWith("@")) {
                 parsed.add(Term.of(TermKind.MOD, token.substring(1), negated));
-            } else if (token.startsWith(">")) {
-                parsed.add(Term.of(TermKind.OUTPUT, token.substring(1), negated));
-            } else if (token.startsWith("<")) {
-                parsed.add(Term.of(TermKind.INPUT, token.substring(1), negated));
             } else {
-                parsed.add(Term.of(TermKind.TEXT, token, negated));
-            }
-        }
-        for (int i = parsed.size() - 1; i >= 0; i--) {
-            if (parsed.get(i).literal().isEmpty()) {
-                parsed.remove(i);
+                String body = token;
+                if (body.startsWith(">") || body.startsWith("<")) {
+                    body = body.substring(1);
+                }
+                if (!body.isEmpty()) {
+                    parsed.add(Term.of(TermKind.TEXT, body, negated));
+                }
             }
         }
         return parsed.isEmpty() ? EMPTY : new ItemSearchQuery(raw, List.copyOf(parsed));
@@ -86,9 +82,11 @@ public final class ItemSearchQuery {
         return this.raw;
     }
 
-    public boolean matches(RecipePlan.Entry entry) {
+    /** @param side the texts, mod ids and tags of one side of a recipe row */
+    public boolean matches(RecipePlan.Entry entry, Side side) {
+        List<String> texts = side == Side.INPUT ? entry.inputTexts() : entry.outputTexts();
         for (Term term : this.terms) {
-            boolean hit = term.test(entry);
+            boolean hit = term.test(entry, texts);
             if (term.negated() ? hit : !hit) {
                 return false;
             }
@@ -96,12 +94,15 @@ public final class ItemSearchQuery {
         return true;
     }
 
+    public enum Side {
+        INPUT,
+        OUTPUT
+    }
+
     private enum TermKind {
         TEXT,
         MOD,
-        TAG,
-        INPUT,
-        OUTPUT
+        TAG
     }
 
     private record Term(TermKind kind, @Nullable Pattern glob, String literal, boolean negated) {
@@ -133,13 +134,11 @@ public final class ItemSearchQuery {
             return Pattern.compile(regex.toString(), Pattern.CASE_INSENSITIVE);
         }
 
-        boolean test(RecipePlan.Entry entry) {
+        boolean test(RecipePlan.Entry entry, List<String> texts) {
             return switch (this.kind) {
                 case MOD -> anyOf(entry.modIds());
                 case TAG -> anyOf(entry.tags());
-                case INPUT -> anyOf(entry.inputTexts());
-                case OUTPUT -> anyOf(entry.outputTexts());
-                case TEXT -> anyOf(entry.inputTexts()) || anyOf(entry.outputTexts());
+                case TEXT -> anyOf(texts);
             };
         }
 

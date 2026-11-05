@@ -7,7 +7,6 @@
   "eae2_pattern.report.too_many": "Request too large: %s pattern(s) in one go. Raise max_patterns_per_request in the server config and try again.",
   "eae2_pattern.report.nothing": "Nothing to generate.",
   "eae2_pattern.report.no_network": "No AE2 network in reach: open a terminal or carry a linked wireless terminal.",
-
   "eae2_pattern.preview.title": "Generate patterns: %s",
   "eae2_pattern.preview.selected": "%s / %s selected",
   "eae2_pattern.preview.selected_filtered": "%s / %s selected (%s matching the search)",
@@ -29,32 +28,25 @@
   "eae2_pattern.preview.deduped": "Dropped %s other way(s) of making the same item.",
   "eae2_pattern.preview.tooltip.kind": "Pattern kind: %s",
   "eae2_pattern.preview.page": "%s / %s",
-
   "eae2_pattern.collecting.title": "Reading recipes: %s",
   "eae2_pattern.collecting.progress": "Read %s / %s recipes",
   "eae2_pattern.collecting.cancel": "Cancel",
-
   "eae2_pattern.kind.crafting": "Crafting",
   "eae2_pattern.kind.processing": "Processing",
   "eae2_pattern.kind.stonecutting": "Stonecutting",
   "eae2_pattern.kind.smithing": "Smithing",
-
   "eae2_pattern.button.tooltip": "EAE2 Pattern: preview and encode every recipe of this machine",
   "eae2_pattern.button.title": "Patterns",
-
   "eae2_pattern.jei.button": "EAE2 Pattern: preview this category",
   "eae2_pattern.jei.button.desc": "Encode every recipe of this machine into AE2 patterns",
-
   "eae2_pattern.msg.no_jei": "JEI is not available, so recipes cannot be read.",
   "eae2_pattern.msg.hover_machine": "Hover a machine item in JEI first, then press the key again.",
   "eae2_pattern.msg.no_recipes": "%s has no recipes that could be turned into patterns.",
   "eae2_pattern.msg.no_patterns": "%s has no encodable recipes.",
   "eae2_pattern.msg.no_categories": "JEI has no recipe categories to offer.",
-
   "eae2_pattern.picker.title": "Choose a recipe category: %s",
   "eae2_pattern.picker.choose": "Choose a recipe category",
   "eae2_pattern.picker.hint": "This machine appears in several JEI categories.",
-
   "eae2_pattern.cmd.entry": "%s = %s",
   "eae2_pattern.cmd.current": "Current value: %s = %s",
   "eae2_pattern.cmd.hint": "Change one with /eae2_pattern config set <key> <value>; lists also accept add / remove.",
@@ -66,7 +58,28 @@
   "eae2_pattern.cmd.err.integer": "%s expects a whole number.",
   "eae2_pattern.cmd.err.range": "%s is outside the allowed range; see the comments in the config file.",
   "eae2_pattern.cmd.err.not_list": "%s is not a list, use set instead.",
-
   "key.eae2_pattern.open_preview": "Preview patterns for the hovered machine",
-  "key.categories.eae2_pattern": "EAE2 Pattern"
+  "key.categories.eae2_pattern": "EAE2 Pattern",
+  "eae2_pattern.preview.filter.products": "Products",
+  "eae2_pattern.preview.filter.ingredients": "Ingredients",
+  "eae2_pattern.preview.filter.hint": "name, @mod, #tag, * ?",
+  "eae2_pattern.preview.filter.unconsumed": "Not consumed",
+  "eae2_pattern.preview.filter.chance_input": "Chance input",
+  "eae2_pattern.preview.filter.chance_output": "Chance output",
+  "eae2_pattern.preview.filter.chance_byproduct": "Chance byproduct",
+  "eae2_pattern.preview.filter.drop_chance": "Drop chance outs",
+  "eae2_pattern.preview.filter.drop_unconsumed": "Drop unconsumed",
+  "eae2_pattern.preview.multiplier": "Scale x%s",
+  "eae2_pattern.preview.cancel": "Cancel",
+  "eae2_pattern.preview.status": "%s selected - %s shown - %s recipes",
+  "eae2_pattern.preview.not_enough_blanks": "Not enough blank patterns: %s available",
+  "eae2_pattern.preview.nothing_selected": "Nothing selected.",
+  "eae2_pattern.preview.sent": "Sending %s pattern(s) to the server...",
+  "eae2_pattern.preview.tooltip.plain": "%s x %s",
+  "eae2_pattern.preview.tooltip.chance": "%s x %s (%s chance)",
+  "eae2_pattern.preview.tooltip.catalyst": "%s x %s (not consumed)",
+  "eae2_pattern.preview.tooltip.scaled": "Every amount is multiplied by %s",
+  "eae2_pattern.preview.tooltip.not_scaled": "Scaling does not apply to this pattern kind",
+  "eae2_pattern.preview.tooltip.badge.chance": "Chance",
+  "eae2_pattern.preview.tooltip.badge.unconsumed": "Not consumed"
 }
