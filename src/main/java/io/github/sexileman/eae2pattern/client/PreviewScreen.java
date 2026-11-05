@@ -13,12 +13,15 @@ import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
+import net.minecraft.Util;
 import net.minecraft.util.Mth;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.material.Fluid;
 import net.minecraftforge.client.extensions.common.IClientFluidTypeExtensions;
 import net.minecraftforge.registries.ForgeRegistries;
 import org.lwjgl.glfw.GLFW;
+
+import javax.annotation.Nullable;
 
 import java.util.ArrayList;
 import java.util.HashSet;
@@ -104,6 +107,8 @@ public final class PreviewScreen extends Screen implements GenerationListener {
 
     private int page;
     private Component notice;
+    private boolean noticeFailure;
+    private long noticeUntil;
 
     // Panel and cards, all rebuilt in layout().
     private int panelLeft;
@@ -149,8 +154,7 @@ public final class PreviewScreen extends Screen implements GenerationListener {
         this.productsBox.setBordered(false);
         this.productsBox.setMaxLength(64);
         this.productsBox.setTextColor(TEXT);
-        this.productsBox.setHint(Component.translatable("eae2_pattern.preview.filter.products_hint")
-                .withStyle(ChatFormatting.DARK_GRAY));
+        this.productsBox.setHint(Component.empty());
         this.productsBox.setResponder(text -> {
             this.productsQuery = ItemSearchQuery.parse(text);
             refresh();
@@ -162,8 +166,7 @@ public final class PreviewScreen extends Screen implements GenerationListener {
         this.ingredientsBox.setBordered(false);
         this.ingredientsBox.setMaxLength(64);
         this.ingredientsBox.setTextColor(TEXT);
-        this.ingredientsBox.setHint(Component.translatable("eae2_pattern.preview.filter.ingredients_hint")
-                .withStyle(ChatFormatting.DARK_GRAY));
+        this.ingredientsBox.setHint(Component.empty());
         this.ingredientsBox.setResponder(text -> {
             this.ingredientsQuery = ItemSearchQuery.parse(text);
             refresh();
@@ -224,8 +227,8 @@ public final class PreviewScreen extends Screen implements GenerationListener {
         int fx = this.filterCard.x() + 6;
         int fw = this.filterCard.width() - 12;
         int fy = this.filterCard.y() + CARD_TITLE_H;
-        this.productsField = new Box(fx, fy, fw, FIELD_H);
-        this.ingredientsField = new Box(fx, fy + FIELD_H + 5, fw, FIELD_H);
+        this.ingredientsField = new Box(fx, fy, fw, FIELD_H);
+        this.productsField = new Box(fx, fy + FIELD_H + 5, fw, FIELD_H);
         this.productsHelp = new Box(this.productsField.right() - 11, fy + 2, 8, 8);
         this.ingredientsHelp = new Box(this.ingredientsField.right() - 11, this.ingredientsField.y() + 2, 8, 8);
 
@@ -445,7 +448,23 @@ public final class PreviewScreen extends Screen implements GenerationListener {
         renderActionCard(graphics, mouseX, mouseY);
 
         super.render(graphics, mouseX, mouseY, partialTick);
+        renderNotice(graphics);
         renderHoveredTooltip(graphics, mouseX, mouseY);
+    }
+
+    private void renderNotice(GuiGraphics graphics) {
+        if (this.notice == null || Util.getMillis() >= this.noticeUntil) {
+            this.notice = null;
+            return;
+        }
+        String text = this.notice.getString();
+        int width = Math.min(this.panelWidth - 2 * PAD - 24, this.font.width(text) + 16);
+        int x = this.panelLeft + (this.panelWidth - width) / 2;
+        int y = this.panelTop + HEADER_H - 11;
+        int border = this.noticeFailure ? BAD : OK;
+        UiKit.roundedRect(graphics, x, y, width, 12, 3, this.noticeFailure ? 0xE03A2024 : 0xE01F3A28);
+        UiKit.roundedFrame(graphics, x, y, width, 12, 3, 0x00000000, border);
+        graphics.drawString(this.font, UiKit.fit(this.font, text, width - 10), x + 5, y + 3, TEXT, false);
     }
 
     private void renderHeader(GuiGraphics graphics, int mouseX, int mouseY) {
@@ -477,8 +496,10 @@ public final class PreviewScreen extends Screen implements GenerationListener {
         renderCards(graphics, this.filterCard, Component.translatable("eae2_pattern.preview.module.filter"),
                 Component.translatable("eae2_pattern.preview.module.filter_count", 2).getString());
 
-        drawField(graphics, this.productsField, this.productsHelp, mouseX, mouseY);
-        drawField(graphics, this.ingredientsField, this.ingredientsHelp, mouseX, mouseY);
+        drawField(graphics, this.ingredientsField, this.ingredientsHelp, this.ingredientsBox,
+                Component.translatable("eae2_pattern.preview.filter.ingredients_hint"), mouseX, mouseY);
+        drawField(graphics, this.productsField, this.productsHelp, this.productsBox,
+                Component.translatable("eae2_pattern.preview.filter.products_hint"), mouseX, mouseY);
 
         boolean[] values = conditionValues();
         for (int i = 0; i < this.toggles.size(); i++) {
@@ -509,12 +530,17 @@ public final class PreviewScreen extends Screen implements GenerationListener {
         }
     }
 
-    private void drawField(GuiGraphics graphics, Box field, Box help, int mouseX, int mouseY) {
-        boolean focused = (this.productsBox != null && this.productsBox.isFocused() && field == this.productsField)
-                || (this.ingredientsBox != null && this.ingredientsBox.isFocused() && field == this.ingredientsField);
+    private void drawField(GuiGraphics graphics, Box field, Box help, @Nullable EditBox box, Component placeholder,
+                           int mouseX, int mouseY) {
+        boolean focused = box != null && box.isFocused();
         UiKit.roundedRect(graphics, field.x(), field.y(), field.width(), field.height(), 3, FIELD);
         UiKit.roundedFrame(graphics, field.x(), field.y(), field.width(), field.height(), 3, FIELD,
                 focused ? ACCENT : FIELD_BORDER);
+        if (box != null && box.getValue().isEmpty()) {
+            // Placeholder: drawn here rather than through EditBox so it keeps the same muted style when focused.
+            graphics.drawString(this.font, UiKit.fit(this.font, placeholder.getString(), field.width() - 18),
+                    field.x() + 4, field.y() + 3, TEXT_MUTED, false);
+        }
         boolean hovered = over(mouseX, mouseY, help);
         UiKit.roundedRect(graphics, help.x(), help.y(), help.width(), help.height(), 2,
                 hovered ? ACCENT : 0x22FFFFFF);
@@ -550,7 +576,7 @@ public final class PreviewScreen extends Screen implements GenerationListener {
         for (int i = first; i < last; i++) {
             int row = i - first;
             int y = this.rowArea.y() + row * STEP;
-            renderRow(graphics, this.visible.get(i), y, row == hoveredRow);
+            renderRow(graphics, this.visible.get(i), i, y, row == hoveredRow);
         }
         graphics.disableScissor();
 
@@ -582,16 +608,22 @@ public final class PreviewScreen extends Screen implements GenerationListener {
         graphics.drawString(this.font, glyph, box.x() + 4, box.y() + 2, hovered ? TEXT : TEXT_DIM, false);
     }
 
-    private void renderRow(GuiGraphics graphics, RecipePlan.Entry entry, int y, boolean hovered) {
+    private void renderRow(GuiGraphics graphics, RecipePlan.Entry entry, int index, int y, boolean hovered) {
         boolean selected = entry.isSelected();
         int left = this.rowArea.x();
         int right = this.rowArea.right();
+        // Zebra stripes make consecutive recipes distinguishable when the names are long and similar.
+        if (index % 2 == 1) {
+            graphics.fill(left, y - 1, right, y - 1 + ROW_H, 0x14FFFFFF);
+        }
         if (selected) {
             UiKit.roundedRect(graphics, left, y - 1, right - left, ROW_H, 3, ROW_ON);
+            graphics.fill(left, y - 1, left + 2, y - 1 + ROW_H, ACCENT);
         } else if (hovered) {
             UiKit.roundedRect(graphics, left, y - 1, right - left, ROW_H, 3, ROW_HOVER);
         }
-        UiKit.checkbox(graphics, left + 2, y + 2, CHECKBOX, selected, ACCENT, 0x33FFFFFF, 0x14000000);
+        graphics.fill(left, y - 1 + ROW_H, right, y + ROW_H, 0x10FFFFFF);
+        UiKit.checkbox(graphics, left + 4, y + 2, CHECKBOX, selected, ACCENT, 0x33FFFFFF, 0x14000000);
 
         List<Ingredient> inputs = entry.inputs();
         int shownInputs = Math.min(inputs.size(), this.availableInputIcons);
@@ -673,10 +705,14 @@ public final class PreviewScreen extends Screen implements GenerationListener {
             return;
         }
 
-        int cell = Math.min(20, Math.max(14, (this.detailGrid.width() - 4) / 3));
+        int inner = this.detailCard.width() - 16;
+        int cell = Math.min(20, Math.max(14, (inner - 4) / 3));
+        int gridWidth = cell * 3 + 4;
+        int gridLeft = this.detailCard.x() + (this.detailCard.width() - gridWidth) / 2;
+        int gridTop = this.detailCard.y() + CARD_TITLE_H + 2;
         for (int i = 0; i < 9; i++) {
-            int cx = this.detailGrid.x() + (i % 3) * (cell + 2);
-            int cy = this.detailGrid.y() + (i / 3) * (cell + 2);
+            int cx = gridLeft + (i % 3) * (cell + 2);
+            int cy = gridTop + (i / 3) * (cell + 2);
             UiKit.roundedRect(graphics, cx, cy, cell, cell, 2, 0x1CFFFFFF);
         }
         int slot = 0;
@@ -684,29 +720,53 @@ public final class PreviewScreen extends Screen implements GenerationListener {
             if (slot >= 9) {
                 break;
             }
-            drawIngredient(graphics, input, this.detailGrid.x() + (slot % 3) * (cell + 2),
-                    this.detailGrid.y() + (slot / 3) * (cell + 2));
+            // Centre the 12px icon inside the slot instead of letting it hug the corner.
+            drawIngredient(graphics, input, gridLeft + (slot % 3) * (cell + 2) + (cell - ICON) / 2,
+                    gridTop + (slot / 3) * (cell + 2) + (cell - ICON) / 2);
             slot++;
         }
-
-        int ty = this.detailGrid.bottom() + 4;
-        graphics.drawString(this.font, UiKit.fit(this.font, entry.label().getString(), this.detailCard.width() - 14),
-                this.detailCard.x() + 7, ty, TEXT, false);
-        graphics.drawString(this.font,
-                Component.translatable("eae2_pattern.preview.detail.io", entry.inputs().size(), entry.outputs().size())
-                        .getString(), this.detailCard.x() + 7, ty + 10, TEXT_DIM, false);
-        graphics.drawString(this.font,
-                Component.translatable("eae2_pattern.preview.detail.kind", kindName(entry.kind()).getString())
-                        .getString(), this.detailCard.x() + 7, ty + 20, TEXT_MUTED, false);
-        graphics.drawString(this.font, UiKit.fit(this.font, entry.recipeId().toString(), this.detailCard.width() - 14),
-                this.detailCard.x() + 7, ty + 30, TEXT_MUTED, false);
-
-        int badgeY = ty + 44;
-        if (badgeY + 10 < this.detailCard.bottom()) {
-            graphics.drawString(this.font, Component.translatable("eae2_pattern.preview.detail.marks"),
-                    this.detailCard.x() + 7, badgeY - 10, TEXT_MUTED, false);
-            drawRowBadges(graphics, entry, this.detailCard.x() + 7, badgeY);
+        if (entry.inputs().isEmpty()) {
+            String none = "-";
+            graphics.drawString(this.font, none, gridLeft + (gridWidth - this.font.width(none)) / 2,
+                    gridTop + cell + 1, TEXT_MUTED, false);
         }
+
+        int x = this.detailCard.x() + 8;
+        int ty = gridTop + cell * 3 + 5;
+        // Title, divider and then label/value rows: the labels are muted, the values brighter, so the
+        // block reads as a list instead of a wall of same-weight text.
+        graphics.drawString(this.font, UiKit.fit(this.font, entry.label().getString(), inner), x, ty, TEXT, false);
+        graphics.fill(x, ty + 10, x + inner, ty + 11, CARD_DIVIDER);
+
+        int row = ty + 14;
+        detailRow(graphics, x, row, inner, Component.translatable("eae2_pattern.preview.detail.label.io"),
+                Component.translatable("eae2_pattern.preview.detail.io", entry.inputs().size(),
+                        entry.outputs().size()));
+        row += 11;
+        if (row + 9 < this.detailCard.bottom() - 14) {
+            detailRow(graphics, x, row, inner, Component.translatable("eae2_pattern.preview.detail.label.kind"),
+                    kindName(entry.kind()));
+        }
+        row += 11;
+        if (row + 9 < this.detailCard.bottom() - 14) {
+            detailRow(graphics, x, row, inner, Component.translatable("eae2_pattern.preview.detail.label.id"),
+                    Component.literal(entry.recipeId().toString()));
+        }
+        row += 11;
+        if (row + 8 < this.detailCard.bottom()) {
+            graphics.drawString(this.font, Component.translatable("eae2_pattern.preview.detail.marks"), x, row,
+                    TEXT_MUTED, false);
+            drawRowBadges(graphics, entry, x, row + 9);
+        }
+    }
+
+    /** One label / value pair: muted label on the left, value on the right, both on the same baseline. */
+    private void detailRow(GuiGraphics graphics, int x, int y, int width, Component label, Component value) {
+        String text = label.getString();
+        graphics.drawString(this.font, text, x, y, TEXT_MUTED, false);
+        int valueX = x + Math.min(this.font.width(text) + 6, Math.max(18, width / 3));
+        graphics.drawString(this.font, UiKit.fit(this.font, value.getString(), x + width - valueX), valueX, y,
+                TEXT_DIM, false);
     }
 
     private void renderActionCard(GuiGraphics graphics, int mouseX, int mouseY) {
@@ -1039,12 +1099,19 @@ public final class PreviewScreen extends Screen implements GenerationListener {
             return;
         }
         PatternRequestSender.send(this.pending);
-        this.notice = Component.translatable("eae2_pattern.preview.sent", this.pending.size());
+        showNotice(Component.translatable("eae2_pattern.preview.sent", this.pending.size()), false);
     }
 
     @Override
     public void onGenerationFinished(GenerationReport report) {
-        this.notice = ClientGenerationFeedback.describe(report);
+        boolean ok = report.reason() == GenerationReport.StopReason.COMPLETED;
+        showNotice(ClientGenerationFeedback.describe(report), !ok);
+    }
+
+    private void showNotice(Component message, boolean failure) {
+        this.notice = message;
+        this.noticeFailure = failure;
+        this.noticeUntil = Util.getMillis() + 8000L;
     }
 
     private static boolean over(double mouseX, double mouseY, Box box) {

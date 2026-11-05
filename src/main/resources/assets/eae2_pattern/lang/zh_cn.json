@@ -128,5 +128,8 @@
   "eae2_pattern.preview.tool.invert": "反选",
   "eae2_pattern.preview.tool.dedupe": "去重",
   "eae2_pattern.preview.tool.only_selected": "只看已选",
-  "eae2_pattern.preview.tooltip.cancel": "关闭，不生成样板"
+  "eae2_pattern.preview.tooltip.cancel": "关闭，不生成样板",
+  "eae2_pattern.preview.detail.label.io": "输入 / 输出",
+  "eae2_pattern.preview.detail.label.kind": "样板",
+  "eae2_pattern.preview.detail.label.id": "配方"
 }

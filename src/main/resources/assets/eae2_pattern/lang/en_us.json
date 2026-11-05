@@ -128,5 +128,8 @@
   "eae2_pattern.preview.tool.invert": "Invert",
   "eae2_pattern.preview.tool.dedupe": "Dedupe",
   "eae2_pattern.preview.tool.only_selected": "Selected",
-  "eae2_pattern.preview.tooltip.cancel": "Close without generating"
+  "eae2_pattern.preview.tooltip.cancel": "Close without generating",
+  "eae2_pattern.preview.detail.label.io": "In / Out",
+  "eae2_pattern.preview.detail.label.kind": "Pattern",
+  "eae2_pattern.preview.detail.label.id": "Recipe"
 }
