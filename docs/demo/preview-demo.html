@@ -1,0 +1,700 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>EAE2 Pattern · 预览界面原型</title>
+<style>
+  :root { color-scheme: dark; }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 18px 22px 40px;
+    background: #0e1014; color: #e6e8ee;
+    font: 13px/1.55 "Noto Sans SC", "Microsoft YaHei", system-ui, sans-serif;
+  }
+  h1 { font-size: 15px; font-weight: 700; margin: 0 0 4px; letter-spacing: .2px; }
+  .hint { color: #8b929f; font-size: 12px; margin: 0 0 14px; }
+  .stage {
+    display: inline-block; padding: 10px; border-radius: 12px;
+    background: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='48' height='48'><rect width='48' height='48' fill='%23161a20'/><rect width='24' height='24' fill='%231b2027'/><rect x='24' y='24' width='24' height='24' fill='%231b2027'/></svg>");
+    box-shadow: 0 10px 30px rgba(0,0,0,.45);
+  }
+  canvas {
+    display: block; image-rendering: pixelated;
+    width: 1440px; height: 810px;   /* 480x270 * 3 */
+  }
+  .bar {
+    display: flex; flex-wrap: wrap; gap: 14px 22px; align-items: center;
+    margin: 16px 0 0; padding: 12px 14px; border-radius: 10px;
+    background: #14171d; border: 1px solid #23272f;
+  }
+  .grp { display: flex; align-items: center; gap: 8px; }
+  .grp > label { color: #9aa2b0; font-size: 12px; }
+  select, input[type=range] { background: #1b1f27; color: #e6e8ee; border: 1px solid #2b313b; border-radius: 6px; }
+  select { padding: 4px 6px; font: inherit; font-size: 12px; }
+  input[type=range] { width: 110px; }
+  .swatch { width: 16px; height: 16px; border-radius: 5px; border: 1px solid rgba(255,255,255,.25); cursor: pointer; }
+  .swatch[data-on="1"] { outline: 2px solid #cfe1ff; outline-offset: 1px; }
+  button {
+    font: inherit; font-size: 12px; padding: 5px 10px; border-radius: 7px; cursor: pointer;
+    background: #1e2530; color: #dbe3f0; border: 1px solid #313a48;
+  }
+  button:hover { background: #26303d; }
+  #out { width: 100%; height: 74px; margin-top: 12px; font: 12px/1.5 ui-monospace, monospace;
+         background: #101319; color: #9fd0a8; border: 1px solid #23272f; border-radius: 8px; padding: 8px; }
+</style>
+</head>
+<body>
+
+<h1>EAE2 Pattern — 预览界面原型（可交互）</h1>
+<p class="hint">
+  画布等于游戏里 <b>GUI 缩放 4</b> 的 480×270 逻辑像素，所以尺寸和真机一致。下面可以实时换皮肤 / 强调色 / 密度 / 圆角 / 面板不透明度，
+  也能真的搜索、勾选、翻页、改倍率。挑到满意的组合后点“导出参数”，把那段 JSON 发我，我按这组数值改 Java。
+</p>
+
+<div class="stage"><canvas id="c" width="480" height="270"></canvas></div>
+
+<div class="bar">
+  <div class="grp"><label>皮肤</label>
+    <select id="skin">
+      <option value="dark">深色磨砂</option>
+      <option value="midnight">午夜蓝</option>
+      <option value="graphite">石墨灰</option>
+      <option value="glass">玻璃分层</option>
+      <option value="vanilla">原版浅灰（AE2/JEI 同族）</option>
+    </select>
+  </div>
+  <div class="grp"><label>强调色</label><span id="accents"></span></div>
+  <div class="grp"><label>密度</label>
+    <select id="density"><option value="compact">紧凑</option><option value="cozy">舒适</option></select>
+  </div>
+  <div class="grp"><label>圆角 <b id="radv">4</b></label><input id="radius" type="range" min="0" max="8" step="1" value="4"></div>
+  <div class="grp"><label>面板不透明度 <b id="alphav">72%</b></label><input id="alpha" type="range" min="35" max="100" step="1" value="72"></div>
+  <div class="grp"><button id="export">导出参数</button><button id="reset">重置交互</button></div>
+</div>
+<textarea id="out" readonly placeholder="点“导出参数”后，这里会显示当前这套样式的数值。"></textarea>
+
+<script>
+(() => {
+  "use strict";
+
+  const W = 480, H = 270;                       // logical pixels, like GUI scale 4
+  const cvs = document.getElementById("c");
+  const ctx = cvs.getContext("2d");
+  ctx.imageSmoothingEnabled = false;
+
+  /* ---------------------------------------------------------------- themes */
+  const SKINS = {
+    dark:     { panel:"#1b1d23", card:"#0a0c10", border:"#ffffff2e", divider:"#ffffff22",
+                text:"#e9ebef", dim:"#9aa0aa", muted:"#70757f", field:"#06070a", rowOn:"#2f4e77" },
+    midnight: { panel:"#141a26", card:"#0c1220", border:"#4c9aff33", divider:"#4c9aff26",
+                text:"#e6edf8", dim:"#93a4bd", muted:"#6b7c94", field:"#0a0f18", rowOn:"#1f3c66" },
+    graphite: { panel:"#202226", card:"#141619", border:"#ffffff26", divider:"#ffffff1c",
+                text:"#e8e9ea", dim:"#a3a6ab", muted:"#7b7f85", field:"#0d0e10", rowOn:"#3a3f47" },
+    glass:    { panel:"#121722", card:"#0a0e16", border:"#ffffff3d", divider:"#ffffff2a",
+                text:"#eef2f8", dim:"#a6b1c2", muted:"#79859a", field:"#070a10", rowOn:"#26425f" },
+    vanilla:  { panel:"#c6c6c6", card:"#8b8b8b", border:"#373737", divider:"#5a5a5a",
+                text:"#1d1d1d", dim:"#2f2f2f", muted:"#4a4a4a", field:"#e9e9e9", rowOn:"#b7cbe3" }
+  };
+  const ACCENTS = ["#4c9aff", "#22c1c3", "#56c271", "#a46bff", "#f2a03d"];
+
+  const state = {
+    skin: "dark", accent: ACCENTS[0], density: "compact", radius: 4, alpha: 72,
+    products: "", ingredients: "",
+    cond: { unconsumed:false, chanceIn:false, dropUnconsumed:false,
+            chanceOut:false, chanceByproduct:false, dropChance:false },
+    page: 0, multiplier: 1, onlySelected: false,
+    hover: -1, selecting: new Set(), toast: null, toastUntil: 0
+  };
+
+  // Allow deep links so a screenshot can pin one exact look:
+  //   preview-demo.html?skin=midnight&acc=2&density=cozy&radius=6&alpha=88&sel=1
+  (() => {
+    const q = new URLSearchParams(location.search);
+    if (SKINS[q.get("skin")]) state.skin = q.get("skin");
+    const ai = parseInt(q.get("acc"), 10);
+    if (ai >= 0 && ai < ACCENTS.length) state.accent = ACCENTS[ai];
+    if (q.get("acc") && /^[0-9a-f]{6}$/i.test(q.get("acc"))) state.accent = "#" + q.get("acc");
+    if (q.get("density") === "cozy") state.density = "cozy";
+    if (q.get("radius")) state.radius = Math.max(0, Math.min(8, parseInt(q.get("radius"), 10) || 0));
+    if (q.get("alpha")) state.alpha = Math.max(35, Math.min(100, parseInt(q.get("alpha"), 10) || 72));
+    if (q.get("q")) state.products = q.get("q");
+    if (q.get("qi")) state.ingredients = q.get("qi");
+    if (q.get("cond")) {
+      for (const k of q.get("cond").split(",")) {
+        if (k in state.cond) state.cond[k] = true;
+      }
+    }
+    if (q.get("sel")) { for (let i = 0; i < 5; i++) state.selecting.add(i); state.hover = 1; }
+    document.getElementById("skin").value = state.skin;
+    document.getElementById("density").value = state.density;
+    document.getElementById("radius").value = state.radius;
+    document.getElementById("alpha").value = state.alpha;
+    document.getElementById("radv").textContent = state.radius;
+    document.getElementById("alphav").textContent = state.alpha + "%";
+    [...document.getElementById("accents").children].forEach(n => n.dataset.on = n.dataset.color === state.accent ? "1" : "0");
+  })();
+
+  const D = state.density === "cozy"
+    ? { rowH: 13, step: 14, icon: 12, check: 8, font: 8, small: 6, titleH: 16 }
+    : { rowH: 11, step: 12, icon: 10, check: 7, font: 7, small: 6, titleH: 15 };
+
+  /* ------------------------------------------------------------------ data */
+  const PALETTE = ["#6f8f52","#c9a227","#8a8a8a","#a06cae","#4f86c6","#c2683f",
+                   "#5aa39b","#b9553f","#7f6ac4","#c9c9c9","#3f8f6a","#a87b3c"];
+  function tile(seed) { return PALETTE[seed % PALETTE.length]; }
+
+  const NAMES = ["双层铁板","小型电路板","钛合金板","钢齿轮","不锈钢板","聚四氟乙烯板","铝板","青铜板",
+    "钨钢板","高速钢","钛锭","镍铬合金","锌板","黄铜板","铱板","铂板","铌锭","钽板","钴板","铅板",
+    "单晶硅","硅锭","碳板","石墨板","金刚石板","铜线圈","铁线圈","钢机壳","铝机壳","钛机壳"];
+
+  const rows = [];
+  for (let i = 0; i < 164; i++) {
+    const name = NAMES[i % NAMES.length] + (i >= NAMES.length ? " " + (1 + Math.floor(i / NAMES.length)) : "");
+    const ins = 1 + (i % 3), outs = 1 + (i % 2);
+    rows.push({
+      id: i,
+      name,
+      mod: i % 4 === 0 ? "gregtech" : (i % 4 === 1 ? "minecraft" : "gtceu"),
+      recipeId: (i % 4 === 0 ? "gtceu:" : "minecraft:") + "bender_" + i,
+      tags: i % 3 === 0 ? ["forge:plates", "forge:ingots"] : (i % 3 === 1 ? ["forge:plates"] : ["gtceu:circuits"]),
+      inputs:  Array.from({length: ins},  (_, k) => ({ tile: tile(i + k), n: 1 + ((i + k) % 3), chance: (k === 1 && i % 7 === 0) ? 0.35 : 1, never: (k === 0 && i % 11 === 0) })),
+      outputs: Array.from({length: outs}, (_, k) => ({ tile: tile(i + 4 + k), n: 1 + ((i + k) % 2), chance: (k === 1 && i % 5 === 0) ? 0.5 : 1 })),
+      kind: "处理"
+    });
+  }
+  const mark = r => ({
+    nc: r.inputs.some(x => x.never),
+    inChance: r.inputs.some(x => !x.never && x.chance < 1),
+    outChance: r.outputs.some(x => x.chance < 1),
+    byChance: r.outputs.slice(1).some(x => x.chance < 1)
+  });
+
+  /* --------------------------------------------------------------- helpers */
+  const px = v => Math.round(v);
+  function hexToRgb(h) {
+    const s = h.replace("#", "");
+    const v = s.length === 3 ? s.split("").map(c => c + c).join("") : s.slice(0, 6);
+    return [parseInt(v.slice(0,2),16), parseInt(v.slice(2,4),16), parseInt(v.slice(4,6),16)];
+  }
+  function rgba(h, a) { const [r,g,b] = hexToRgb(h); return `rgba(${r},${g},${b},${a})`; }
+
+  function roundRect(x, y, w, h, r, fill, stroke) {
+    r = Math.max(0, Math.min(r, Math.floor(Math.min(w, h) / 2)));
+    ctx.beginPath();
+    if (r === 0) { ctx.rect(x, y, w, h); }
+    else {
+      ctx.moveTo(x + r, y);
+      ctx.arcTo(x + w, y, x + w, y + h, r);
+      ctx.arcTo(x + w, y + h, x, y + h, r);
+      ctx.arcTo(x, y + h, x, y, r);
+      ctx.arcTo(x, y, x + w, y, r);
+      ctx.closePath();
+    }
+    if (fill) { ctx.fillStyle = fill; ctx.fill(); }
+    if (stroke) { ctx.strokeStyle = stroke; ctx.lineWidth = 1; ctx.stroke(); }
+  }
+  function rect(x, y, w, h, fill) { ctx.fillStyle = fill; ctx.fillRect(px(x), px(y), px(w), px(h)); }
+
+  function font(size, bold) { ctx.font = `${bold ? "600 " : ""}${size}px "Noto Sans SC","Microsoft YaHei",sans-serif`; }
+  function text(x, y, s, color, size, align, bold) {
+    font(size || D.font, bold); ctx.fillStyle = color; ctx.textAlign = align || "left"; ctx.textBaseline = "top";
+    ctx.fillText(s, px(x), px(y)); ctx.textAlign = "left";
+  }
+  function textMid(x, yCenter, s, color, size, align, bold) {
+    font(size || D.font, bold); ctx.fillStyle = color; ctx.textAlign = align || "left"; ctx.textBaseline = "middle";
+    ctx.fillText(s, px(x), px(yCenter)); ctx.textAlign = "left"; ctx.textBaseline = "top";
+  }
+  function fit(s, maxW, size) {
+    font(size || D.font);
+    if (ctx.measureText(s).width <= maxW) return s;
+    let lo = 0, hi = s.length;
+    while (lo < hi) { const mid = (lo + hi + 1) >> 1; if (ctx.measureText(s.slice(0, mid) + "…").width <= maxW) lo = mid; else hi = mid - 1; }
+    return s.slice(0, lo) + "…";
+  }
+  function tw(s, size) { font(size || D.font); return ctx.measureText(s).width; }
+
+  function checkbox(x, y, size, on, accent, thin) {
+    const s = state.skin === "vanilla";
+    roundRect(x, y, size, size, Math.min(2, state.radius), s ? "#ffffff" : rgba("#000000", .45),
+              on ? accent : (s ? "#373737" : rgba("#ffffff", .28)));
+    if (on) {
+      ctx.strokeStyle = "#ffffff"; ctx.lineWidth = Math.max(1, size / 6); ctx.lineCap = "round";
+      ctx.beginPath();
+      ctx.moveTo(x + size * 0.22, y + size * 0.53);
+      ctx.lineTo(x + size * 0.43, y + size * 0.74);
+      ctx.lineTo(x + size * 0.79, y + size * 0.27);
+      ctx.stroke();
+    }
+  }
+  function iconTile(x, y, size, tileColor, count, chance) {
+    roundRect(x, y, size, size, Math.min(2, state.radius), tileColor, rgba("#000000", .55));
+    const inner = Math.max(2, Math.round(size / 3));
+    rect(x + (size - inner) / 2, y + (size - inner) / 2, inner, inner, rgba("#000000", .28));
+    if (chance !== undefined && chance < 1) {
+      rect(x, y + size - 1, size, 1, rgba("#f2a03d", .95));
+    }
+    if (count && count > 1) {
+      const s = String(count), w = 4.5 + s.length * 2.6;
+      rect(x + size - w, y + size - 5, w, 5, "rgba(0,0,0,.78)");
+      textMid(x + size - w / 2, y + size - 2.6, s, "#ffffff", 5);
+    }
+  }
+  function nowMs() { return performance.now(); }
+  function toast(msg, ok) { state.toast = msg; state.toastOk = ok; state.toastUntil = nowMs() + 2600; }
+
+  /* ---------------------------------------------------------------- search */
+  function parse(q) {
+    if (!q.trim()) return null;
+    const groups = q.split("|").map(g => g.trim()).filter(Boolean);
+    return groups.map(g => {
+      const toks = g.match(/-?"[^"]*"|\S+/g) || [];
+      return toks.map(raw => {
+        let s = raw, neg = false;
+        if (s.startsWith("-")) { neg = true; s = s.slice(1); }
+        if (s.startsWith('"') && s.endsWith('"')) s = s.slice(1, -1);
+        let kind = "name";
+        if (s.length > 1) {
+          if (s[0] === "@") { kind = "mod"; s = s.slice(1); }
+          else if (s[0] === "$") { kind = "tag"; s = s.slice(1); }
+          else if (s[0] === "&") { kind = "id"; s = s.slice(1); }
+        }
+        return { kind, value: s.toLowerCase(), neg };
+      });
+    });
+  }
+  function hay(row, side) {
+    const list = side === "in" ? row.inputs : row.outputs;
+    return {
+      name: row.name.toLowerCase(),
+      mod: row.mod.toLowerCase(),
+      id: row.recipeId.toLowerCase(),
+      tag: row.tags.join(" ").toLowerCase() + " " + (side === "in" ? "forge:plates" : ""),
+      items: list.map(() => "").join(" ")
+    };
+  }
+  function matchTerm(t, h) {
+    if (t.kind === "mod") return h.mod.includes(t.value);
+    if (t.kind === "tag") return h.tag.includes(t.value);
+    if (t.kind === "id") return h.id.includes(t.value);
+    return h.name.includes(t.value) || h.id.includes(t.value);
+  }
+  function pass(q, row, side) {
+    if (!q) return true;
+    const h = hay(row, side);
+    return q.some(group => {
+      const pos = group.filter(t => !t.neg), neg = group.filter(t => t.neg);
+      const okPos = pos.length === 0 || pos.every(t => matchTerm(t, h));
+      if (!okPos) return false;
+      return neg.every(t => !matchTerm(t, h));
+    });
+  }
+  function visibleRows() {
+    const pq = parse(state.products), iq = parse(state.ingredients);
+    return rows.filter(r => {
+      const m = mark(r);
+      if (!pass(pq, r, "out")) return false;
+      if (!pass(iq, r, "in")) return false;
+      if (state.cond.unconsumed && !m.nc) return false;
+      if (state.cond.chanceIn && !m.inChance) return false;
+      if (state.cond.chanceOut && !m.outChance) return false;
+      if (state.cond.chanceByproduct && !m.byChance) return false;
+      if (state.onlySelected && !state.selecting.has(r.id)) return false;
+      return true;
+    });
+  }
+
+  /* ---------------------------------------------------------------- layout */
+  function layout() {
+    const pad = 6;
+    const panel = { x: pad, y: pad, w: W - 2 * pad, h: H - 2 * pad };
+    const headerH = 30;
+    const top = panel.y + headerH;
+    const bottom = panel.y + panel.h - 6;
+    const filterW = 128;
+    const detailW = 128;
+    const gap = 6;
+
+    const filter = { x: panel.x + 4, y: top, w: filterW, h: bottom - top };
+    const list = { x: filter.x + filter.w + gap, y: top,
+                   w: panel.w - 8 - filterW - detailW - 2 * gap, h: bottom - top };
+    const detail = { x: list.x + list.w + gap, y: top, w: detailW, h: 154 };
+    const action = { x: detail.x, y: detail.y + detail.h + gap, w: detailW, h: bottom - (detail.y + detail.h + gap) };
+
+    const listFooterY = list.y + list.h - 14;
+    const rowTop = list.y + D.titleH + 14;
+    const rowsPerPage = Math.max(1, Math.floor((listFooterY - 3 - rowTop) / D.step));
+
+    return { pad, panel, headerH, filter, list, detail, action, listFooterY, rowTop, rowsPerPage, gap };
+  }
+
+  /* ----------------------------------------------------------------- paint */
+  function paint() {
+    const L = layout();
+    const S = SKINS[state.skin];
+    const acc = state.accent;
+    const panelAlpha = state.alpha / 100;
+    const dark = state.skin !== "vanilla";
+
+    ctx.clearRect(0, 0, W, H);
+    // dim
+    rect(0, 0, W, H, rgba("#000000", dark ? .55 : .35));
+
+    // panel
+    roundRect(L.panel.x, L.panel.y, L.panel.w, L.panel.h, Math.max(4, state.radius + 2),
+              rgba(S.panel, panelAlpha), rgba(S.border, 1));
+
+    // header
+    text(L.panel.x + 7, L.panel.y + 5, "生成样板：卷板机", S.text, 9, "left", true);
+    const vis = visibleRows();
+    text(L.panel.x + 7, L.panel.y + 19,
+         `已选 ${state.selecting.size} · 匹配 ${vis.length} / 全部 ${rows.length}`,
+         S.dim, 7);
+
+    // close
+    roundRect(L.panel.x + L.panel.w - 20, L.panel.y + 4, 14, 13, Math.min(3, state.radius), rgba("#ffffff", dark ? .08 : .0),
+              rgba(S.border, 1));
+    text(L.panel.x + L.panel.w - 13, L.panel.y + 6.5, "×", S.dim, 8, "center");
+
+    // toast
+    if (state.toast && nowMs() < state.toastUntil) {
+      const ok = state.toastOk !== false;
+      const w = tw(state.toast) + 14;
+      const x = L.panel.x + L.panel.w - 24 - w, y = L.panel.y + 5;
+      roundRect(x, y, w, 12, Math.min(3, state.radius), rgba(ok ? "#1d3b28" : "#3b1d1d", .92),
+                ok ? "#5ec97f" : "#e06a6a");
+      text(x + 7, y + 2.5, state.toast, ok ? "#9fe6b4" : "#f0a8a8", 7);
+    }
+
+    // ---- filter card
+    card(L.filter, "筛选", "2 个搜索框", S, dark);
+    const fx = L.filter.x + 6, fw = L.filter.w - 12;
+    let fy = L.filter.y + D.titleH + 4;
+
+    field(fx, fy, fw, state.ingredients, "输入：名称 @模组 $标签", S, dark, acc, "in");
+    fy += 15;
+    field(fx, fy, fw, state.products, "产物：名称 @模组 $标签", S, dark, acc, "out");
+    fy += 19;
+
+    text(fx, fy, "条件", S.muted, 7, "left", true);
+    fy += 10;
+    const conds = [
+      ["unconsumed", "不消耗输入"], ["chanceOut", "概率产物"], ["chanceIn", "概率输入"],
+      ["chanceByproduct", "概率副产物"], ["dropUnconsumed", "排除不消耗"], ["dropChance", "排除概率产物"]
+    ];
+    for (const [key, label] of conds) {
+      checkbox(fx, fy + 1, D.check, state.cond[key], acc);
+      text(fx + 10, fy, label, S.text, 7);
+      fy += 12;
+    }
+    fy += 3;
+    text(fx, fy, "标记", S.muted, 7, "left", true); fy += 10;
+    const legend = [["NC", "必需但不会消耗", "#6ea8e8"], ["IN%", "按概率消耗", "#e8b06e"],
+                    ["OUT%", "按概率产出", "#e88686"], ["BY%", "副产物按概率产出", "#e8a0d0"]];
+    for (const [tag, desc, color] of legend) {
+      text(fx, fy, tag, color, 7); text(fx + 22, fy, desc, S.dim, 7); fy += 10;
+    }
+
+    // ---- list card
+    card(L.list, "配方列表", `${vis.length} / ${rows.length}`, S, dark);
+    const lx = L.list.x + 6, lw = L.list.w - 12;
+    const colIn = lx + 11, colArrow = colIn + 3 * D.step + 1, colOut = colArrow + 8,
+          colName = colOut + 2 * D.step + 4;
+    text(colIn, L.list.y + D.titleH + 2, "输入", S.muted, 7);
+    text(colOut, L.list.y + D.titleH + 2, "产物", S.muted, 7);
+    text(colName, L.list.y + D.titleH + 2, "配方", S.muted, 7);
+
+    const pageCount = Math.max(1, Math.ceil(vis.length / L.rowsPerPage));
+    state.page = Math.min(state.page, pageCount - 1);
+    const start = state.page * L.rowsPerPage;
+    const slice = vis.slice(start, start + L.rowsPerPage);
+
+    slice.forEach((row, i) => {
+      const y = L.rowTop + i * D.step;
+      const on = state.selecting.has(row.id);
+      const hovered = state.hover === row.id;
+      if (on) roundRect(lx - 3, y, lw + 6, D.rowH, 3, rgba(S.rowOn, .9));
+      else if (hovered) roundRect(lx - 3, y, lw + 6, D.rowH, 3, rgba("#ffffff", dark ? .06 : .12));
+      else if (i % 2 === 1) roundRect(lx - 3, y, lw + 6, D.rowH, 3, rgba("#ffffff", dark ? .028 : .06));
+      if (on) rect(lx - 3, y, 2, D.rowH, acc);
+
+      checkbox(lx + 1, y + (D.rowH - D.check) / 2, D.check, on, acc);
+
+      row.inputs.slice(0, 3).forEach((it, k) => iconTile(colIn + k * D.step, y + (D.rowH - D.icon) / 2,
+        D.icon, it.tile, it.n, it.never ? 0 : it.chance));
+      textMid(colArrow, y + D.rowH / 2, ">", S.dim, 7);
+      row.outputs.slice(0, 2).forEach((it, k) => iconTile(colOut + k * D.step, y + (D.rowH - D.icon) / 2,
+        D.icon, it.tile, it.n, it.chance));
+
+      const m = mark(row);
+      const badges = [];
+      if (m.outChance) badges.push(["OUT%", "#e88686"]);
+      if (m.byChance) badges.push(["BY%", "#e8a0d0"]);
+      if (m.inChance) badges.push(["IN%", "#e8b06e"]);
+      if (m.nc) badges.push(["NC", "#6ea8e8"]);
+      let badgeW = 0;
+      for (const [t] of badges) badgeW += tw(t) + 4;
+
+      const nameMax = lx + lw - colName - badgeW - 4;
+      textMid(colName, y + D.rowH / 2, fit(row.name, Math.max(10, nameMax)), on ? S.text : S.dim, 7);
+
+      let bx = lx + lw;
+      for (const [t, c] of badges) { bx -= tw(t) + 4; textMid(bx, y + D.rowH / 2, t, c, 7); }
+    });
+
+    if (slice.length === 0) {
+      const msg = "没有匹配的配方 · 试试 @模组 / $标签 / -排除 / | 或";
+      textMid(L.list.x + L.list.w / 2, L.list.y + L.list.h / 2, msg, S.muted, 7, "center");
+    }
+
+    // list footer: tools left, pager right
+    const fyTool = L.listFooterY;
+    const tools = [["全选"], ["反选"], ["去重"], ["只看已选"]];
+    let tx = L.list.x + 6;
+    tools.forEach(([label], i) => {
+      const active = i === 3 && state.onlySelected;
+      const w = tw(label) + 6;
+      roundRect(tx, fyTool + 1, w, 11, 3, active ? rgba(acc, .22) : rgba("#ffffff", dark ? .05 : .1), active ? rgba(acc, .8) : null);
+      text(tx + 3, fyTool + 2.5, label, active ? acc : S.dim, 7);
+      tx += w + 5;
+    });
+    const pagerRight = L.list.x + L.list.w - 6;
+    const pageText = `${state.page + 1} / ${pageCount}`;
+    const nextX = pagerRight - 11, prevX = nextX - 13;
+    text(prevX - 4 - tw(pageText), fyTool + 2.5, pageText, S.muted, 7);
+    roundRect(prevX, fyTool + 1, 11, 11, 2, rgba("#ffffff", dark ? .06 : .12), rgba(S.border, .8));
+    text(prevX + 5.5, fyTool + 2.5, "<", S.dim, 7, "center");
+    roundRect(nextX, fyTool + 1, 11, 11, 2, rgba("#ffffff", dark ? .06 : .12), rgba(S.border, .8));
+    text(nextX + 5.5, fyTool + 2.5, ">", S.dim, 7, "center");
+
+    // ---- detail card
+    const sel = rows.find(r => r.id === state.hover) || rows.find(r => state.selecting.has(r.id));
+    card(L.detail, "配方详情", sel ? "已选 1" : "", S, dark);
+    const dx = L.detail.x + 6, dw = L.detail.w - 12;
+    const cell = Math.max(14, Math.min(19, Math.floor((dw - 4) / 3)));
+    const gridW = cell * 3, gridX = dx + Math.floor((dw - gridW) / 2), gridY = L.detail.y + D.titleH + 3;
+    for (let i = 0; i < 9; i++) {
+      const cx = gridX + (i % 3) * cell, cy = gridY + Math.floor(i / 3) * cell;
+      roundRect(cx + 1, cy + 1, cell - 2, cell - 2, 2, rgba("#ffffff", dark ? .05 : .16), rgba(S.border, .7));
+      if (sel && i < sel.inputs.length) {
+        iconTile(cx + (cell - D.icon) / 2, cy + (cell - D.icon) / 2, D.icon, sel.inputs[i].tile, sel.inputs[i].n);
+      }
+    }
+    let ty = gridY + cell * 3 + 6;
+    if (sel) {
+      text(dx, ty, fit(sel.name, dw), S.text, 8, "left", true);
+      ty += 11; rect(dx, ty, dw, 1, rgba(S.divider, 1)); ty += 4;
+      const kv = [["输入 / 输出", `${sel.inputs.length} / ${sel.outputs.length}`],
+                  ["样板", sel.kind], ["配方", sel.recipeId]];
+      for (const [k, v] of kv) {
+        text(dx, ty, k, S.muted, 7);
+        const fitted = fit(v, Math.max(8, dw - tw(k) - 6), 7);
+        text(dx + dw - tw(fitted), ty, fitted, S.dim, 7);
+        ty += 11;
+      }
+      text(dx, ty, "标记", S.muted, 7); ty += 10;
+      let mx = dx;
+      const m = mark(sel);
+      const marks = [];
+      if (m.nc) marks.push(["NC", "#6ea8e8"]);
+      if (m.inChance) marks.push(["IN%", "#e8b06e"]);
+      if (m.outChance) marks.push(["OUT%", "#e88686"]);
+      if (m.byChance) marks.push(["BY%", "#e8a0d0"]);
+      for (const [t, c] of marks) { text(mx, ty, t, c, 7); mx += tw(t) + 5; }
+    } else {
+      text(dx, ty, "未选择配方", S.muted, 7);
+    }
+
+    // ---- action card
+    card(L.action, "操作", state.selecting.size ? `已选 ${state.selecting.size} 条` : "", S, dark);
+    const aw = L.action.w - 12, ax = L.action.x + 6;
+    let ay = L.action.y + D.titleH + 4;
+    const mw = 14, mgap = 2;
+    [1, 2, 4, 8, 16, 32, 64].forEach((m, i) => {
+      const on = state.multiplier === m;
+      const bx = ax + i * (mw + mgap);
+      roundRect(bx, ay, mw, 11, 2, on ? rgba(acc, .9) : rgba("#ffffff", dark ? .06 : .12), on ? null : rgba(S.border, .7));
+      text(bx + mw / 2, ay + 2, String(m), on ? "#0b0e13" : S.dim, 6.5, "center");
+    });
+    ay += 15;
+    const n = state.selecting.size;
+    roundRect(ax, ay, aw, 14, 3, n ? acc : rgba(acc, .3), null);
+    text(ax + aw / 2, ay + 3, n ? `生成 ${n} 条` : "生成", n ? "#0b0e13" : rgba("#0b0e13", .7), 8, "center", true);
+    ay += 17;
+    roundRect(ax, ay, aw, 12, 3, rgba("#ffffff", dark ? .06 : .12), rgba(S.border, .8));
+    text(ax + aw / 2, ay + 2, "取消", S.dim, 7.5, "center");
+  }
+
+  function card(box, title, trailing, S, dark) {
+    roundRect(box.x, box.y, box.w, box.h, Math.max(3, state.radius), rgba(S.card, dark ? .85 : .55), rgba(S.border, .8));
+    text(box.x + 6, box.y + 4, title, S.dim, 8, "left", true);
+    if (trailing) text(box.x + box.w - 6, box.y + 5, trailing, S.muted, 7, "right");
+    rect(box.x + 6, box.y + D.titleH - 1, box.w - 12, 1, rgba(S.divider, 1));
+  }
+
+  function field(x, y, w, value, placeholder, S, dark, acc, which) {
+    const focused = document.activeElement && document.activeElement.dataset
+      && document.activeElement.dataset.field === which;
+    roundRect(x, y, w, 13, Math.min(3, state.radius), rgba(S.field, dark ? .9 : .95),
+              focused ? acc : rgba(S.border, .9));
+    const shown = value || placeholder;
+    text(x + 4, y + 3, fit(shown, w - 18), value ? S.text : S.muted, 7);
+    roundRect(x + w - 12, y + 3, 8, 8, 2, rgba("#ffffff", .07), rgba(S.border, .8));
+    text(x + w - 8, y + 3.5, "?", S.muted, 6.5, "center");
+  }
+
+  /* ------------------------------------------------------------ interaction
+     A hidden input receives focus so the demo can be typed into with a real
+     keyboard / IME; the canvas just mirrors the value. */
+  const fieldInput = document.createElement("input");
+  fieldInput.type = "text";
+  fieldInput.style.cssText = "position:fixed;left:-9999px;opacity:0;";
+  document.body.appendChild(fieldInput);
+
+  function beginTyping(which) {
+    fieldInput.dataset.field = which;
+    fieldInput.value = which === "in" ? state.ingredients : state.products;
+    fieldInput.focus();
+    paint();
+  }
+  fieldInput.addEventListener("input", () => {
+    if (fieldInput.dataset.field === "in") state.ingredients = fieldInput.value;
+    else state.products = fieldInput.value;
+    state.page = 0; paint();
+  });
+  fieldInput.addEventListener("blur", () => { fieldInput.dataset.field = ""; paint(); });
+
+  cvs.addEventListener("mousemove", e => {
+    const r = cvs.getBoundingClientRect();
+    const x = (e.clientX - r.left) / (r.width / W);
+    const y = (e.clientY - r.top) / (r.height / H);
+    const L = layout();
+    const vis = visibleRows();
+    const start = state.page * L.rowsPerPage;
+    const idx = Math.floor((y - L.rowTop) / D.step);
+    const row = idx >= 0 && idx < L.rowsPerPage ? vis[start + idx] : null;
+    const hovered = row && y >= L.rowTop + idx * D.step && y < L.rowTop + idx * D.step + D.rowH ? row.id : -1;
+    if (hovered !== state.hover) { state.hover = hovered; paint(); }
+    cvs.style.cursor = hovered >= 0 ? "pointer" : "default";
+  });
+
+  cvs.addEventListener("mousedown", e => {
+    const r = cvs.getBoundingClientRect();
+    const x = (e.clientX - r.left) / (r.width / W);
+    const y = (e.clientY - r.top) / (r.height / H);
+    const L = layout();
+
+    // fields
+    const fx = L.filter.x + 6, fw = L.filter.w - 12;
+    const inY = L.filter.y + D.titleH + 4, outY = inY + 15;
+    if (x >= fx && x <= fx + fw && y >= inY && y < inY + 13) return beginTyping("in");
+    if (x >= fx && x <= fx + fw && y >= outY && y < outY + 13) return beginTyping("out");
+
+    // condition checkboxes
+    let cy = outY + 19 + 10;
+    const keys = ["unconsumed", "chanceOut", "chanceIn", "chanceByproduct", "dropUnconsumed", "dropChance"];
+    for (const k of keys) {
+      if (x >= fx && x <= fx + fw && y >= cy - 1 && y < cy + 11) {
+        state.cond[k] = !state.cond[k]; state.page = 0; paint(); return;
+      }
+      cy += 12;
+    }
+
+    // rows
+    const vis = visibleRows();
+    const start = state.page * L.rowsPerPage;
+    const idx = Math.floor((y - L.rowTop) / D.step);
+    if (idx >= 0 && idx < L.rowsPerPage) {
+      const row = vis[start + idx];
+      const rowY = L.rowTop + idx * D.step;
+      if (row && y >= rowY && y < rowY + D.rowH) {
+        if (state.selecting.has(row.id)) state.selecting.delete(row.id); else state.selecting.add(row.id);
+        paint(); return;
+      }
+    }
+
+    // footer tools
+    const fyTool = L.listFooterY;
+    if (y >= fyTool && y <= fyTool + 13) {
+      const tools = ["全选", "反选", "去重", "只看已选"];
+      let tx = L.list.x + 6;
+      for (const label of tools) {
+        const w = tw(label) + 6;
+        if (x >= tx && x <= tx + w) {
+          if (label === "全选") vis.forEach(r => state.selecting.add(r.id));
+          if (label === "反选") vis.forEach(r => state.selecting.has(r.id) ? state.selecting.delete(r.id) : state.selecting.add(r.id));
+          if (label === "去重") {
+            const seen = new Set(); const drop = [];
+            vis.forEach(r => { const k = r.name; if (seen.has(k)) drop.push(r.id); else seen.add(k); });
+            drop.forEach(id => state.selecting.delete(id));
+            toast(`已去掉 ${drop.length} 条同一产物的其他做法`, true);
+          }
+          if (label === "只看已选") { state.onlySelected = !state.onlySelected; state.page = 0; }
+          paint(); return;
+        }
+        tx += w + 5;
+      }
+      const pagerRight = L.list.x + L.list.w - 6;
+      const nextX = pagerRight - 11, prevX = nextX - 13;
+      if (x >= prevX && x <= prevX + 11) { state.page = Math.max(0, state.page - 1); paint(); return; }
+      if (x >= nextX && x <= nextX + 11) { state.page = Math.min(Math.ceil(vis.length / L.rowsPerPage) - 1, state.page + 1); paint(); return; }
+    }
+
+    // multiplier + buttons
+    const ax = L.action.x + 6, aw = L.action.w - 12;
+    const ay = L.action.y + D.titleH + 4;
+    if (y >= ay && y <= ay + 11 && x >= ax && x < ax + 7 * 16) {
+      const i = Math.floor((x - ax) / 16);
+      if (i >= 0 && i < 7) { state.multiplier = [1,2,4,8,16,32,64][i]; paint(); return; }
+    }
+    if (x >= ax && x <= ax + aw && y >= ay + 15 && y <= ay + 29) {
+      const n = state.selecting.size;
+      if (!n) { toast("先勾选要生成的配方", false); }
+      else { toast(`生成完成：已写入 ${n} 条样板`, true); }
+      paint(); return;
+    }
+    if (x >= ax && x <= ax + aw && y >= ay + 32 && y <= ay + 44) { window.close ? null : null; toast("已取消", false); paint(); return; }
+
+    // close
+    if (x >= L.panel.x + L.panel.w - 20 && y >= L.panel.y + 4 && y <= L.panel.y + 17) { toast("关闭（演示）", true); paint(); }
+  });
+
+  /* ------------------------------------------------------------------ bars */
+  const accentsBox = document.getElementById("accents");
+  ACCENTS.forEach(c => {
+    const d = document.createElement("span");
+    d.className = "swatch"; d.style.background = c; d.dataset.color = c;
+    d.dataset.on = c === state.accent ? "1" : "0";
+    d.onclick = () => { state.accent = c; [...accentsBox.children].forEach(n => n.dataset.on = n === d ? "1" : "0"); paint(); };
+    accentsBox.appendChild(d);
+  });
+
+  document.getElementById("skin").onchange = e => { state.skin = e.target.value; paint(); };
+  document.getElementById("density").onchange = e => {
+    state.density = e.target.value;
+    Object.assign(D, state.density === "cozy"
+      ? { rowH: 13, step: 14, icon: 12, check: 8, font: 8, small: 6, titleH: 16 }
+      : { rowH: 11, step: 12, icon: 10, check: 7, font: 7, small: 6, titleH: 15 });
+    paint();
+  };
+  document.getElementById("radius").oninput = e => { state.radius = +e.target.value; document.getElementById("radv").textContent = state.radius; paint(); };
+  document.getElementById("alpha").oninput = e => { state.alpha = +e.target.value; document.getElementById("alphav").textContent = state.alpha + "%"; paint(); };
+  document.getElementById("reset").onclick = () => { state.selecting.clear(); state.page = 0; state.hover = -1; state.onlySelected = false; paint(); };
+  document.getElementById("export").onclick = () => {
+    const out = {
+      skin: state.skin, accent: state.accent, density: state.density,
+      radius: state.radius, panelAlpha: state.alpha / 100,
+      rowH: D.rowH, step: D.step, icon: D.icon, checkbox: D.check,
+      font: D.font, titleH: D.titleH,
+      grid: layout()
+    };
+    document.getElementById("out").value = JSON.stringify(out, null, 2);
+    document.getElementById("out").select();
+    document.execCommand && document.execCommand("copy");
+  };
+
+  paint();
+  setInterval(paint, 250);   // keeps the toast timer ticking
+})();
+</script>
+</body>
+</html>
