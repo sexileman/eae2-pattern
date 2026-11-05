@@ -1,0 +1,709 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>EAE2 Pattern · Material 3 原型</title>
+<style>
+  :root { color-scheme: dark; }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 18px 22px 40px; background: #101014; color: #e6e0e9;
+    font: 13px/1.55 "Noto Sans SC", "Microsoft YaHei", system-ui, sans-serif;
+  }
+  h1 { font-size: 15px; font-weight: 500; margin: 0 0 4px; }
+  .hint { color: #938f99; font-size: 12px; margin: 0 0 14px; max-width: 1180px; }
+  .stage { display: inline-block; padding: 10px; border-radius: 12px; background: #0b0b0e; }
+  canvas { display: block; width: 1440px; height: 810px; }
+  .bar {
+    display: flex; flex-wrap: wrap; gap: 12px 20px; align-items: center; margin-top: 16px;
+    padding: 12px 16px; border-radius: 12px; background: #1d1b20; border: 1px solid #2b2930;
+  }
+  .grp { display: flex; align-items: center; gap: 8px; }
+  .grp > label { color: #cac4d0; font-size: 12px; }
+  select, input[type=range] { background: #2b2930; color: #e6e0e9; border: 1px solid #49454f; border-radius: 8px; }
+  select { padding: 5px 8px; font: inherit; font-size: 12px; }
+  input[type=range] { width: 120px; }
+  button {
+    font: inherit; font-size: 12px; font-weight: 500; padding: 6px 14px; border-radius: 20px;
+    background: #4f378b; color: #eadcff; border: none; cursor: pointer;
+  }
+  button:hover { background: #5c4499; }
+  .swatch { width: 18px; height: 18px; border-radius: 9px; border: 1px solid #49454f; cursor: pointer; }
+  .swatch[data-on="1"] { outline: 2px solid #d0bcff; outline-offset: 2px; }
+  #out { width: 100%; height: 78px; margin-top: 12px; font: 12px/1.5 ui-monospace, monospace;
+         background: #131218; color: #acd7a6; border: 1px solid #2b2930; border-radius: 10px; padding: 8px; }
+</style>
+</head>
+<body>
+
+<h1>EAE2 Pattern — Material 3 原型</h1>
+<p class="hint">
+  按 <a style="color:#d0bcff" href="https://m3.material.io/styles/color/roles">MD3 色彩角色</a>、
+  <a style="color:#d0bcff" href="https://m3.material.io/styles/shape/corner-radius-scale">圆角标尺</a>、
+  <a style="color:#d0bcff" href="https://m3.material.io/styles/typography/type-scale-tokens">字体标尺</a> 做的紧凑版：
+  画布 = 游戏里 GUI 缩放 4 的 480×270 逻辑像素，所以所有 dp 按 <b>÷2</b> 映射（14sp → 7px、12dp 圆角 → 6px）。
+</p>
+
+<div class="stage"><canvas id="c" width="480" height="270"></canvas></div>
+
+<div class="bar">
+  <div class="grp"><label>配色种子</label><span id="seeds"></span></div>
+  <div class="grp"><label>明暗</label>
+    <select id="mode"><option value="dark">Dark</option><option value="light">Light</option></select>
+  </div>
+  <div class="grp"><label>密度</label>
+    <select id="density"><option value="compact">紧凑</option><option value="cozy">舒适</option></select>
+  </div>
+  <div class="grp"><label>表面层级</label>
+    <select id="surface"><option value="low">surface-container-low</option><option value="container">surface-container</option><option value="high">surface-container-high</option></select>
+  </div>
+  <div class="grp"><button id="export">导出参数</button></div>
+</div>
+<textarea id="out" readonly placeholder="点“导出参数”得到当前这套 token。"></textarea>
+
+<script>
+(() => {
+  "use strict";
+
+  const W = 480, H = 270;
+  const HIDPI = Math.min(4, Math.max(3, Math.ceil(window.devicePixelRatio || 1) * 2));
+  const cvs = document.getElementById("c");
+  cvs.width = W * HIDPI; cvs.height = H * HIDPI;
+  const ctx = cvs.getContext("2d");
+  ctx.setTransform(HIDPI, 0, 0, HIDPI, 0, 0);
+
+  /* ----------------------------------------------------- MD3 colour roles
+     Baseline palettes are the spec's default purple; the other seeds derive a
+     tonal ladder in HSL, which is close enough for a layout prototype.        */
+  const BASELINE = {
+    light: {
+      primary:"#6750A4", onPrimary:"#FFFFFF", primaryContainer:"#EADDFF", onPrimaryContainer:"#21005D",
+      secondaryContainer:"#E8DEF8", onSecondaryContainer:"#1D192B",
+      tertiary:"#7D5260", tertiaryContainer:"#FFD8E4", onTertiaryContainer:"#31111D",
+      errorContainer:"#F9DEDC", onErrorContainer:"#410E0B",
+      surface:"#FEF7FF", surfaceContainerLowest:"#FFFFFF", surfaceContainerLow:"#F7F2FA",
+      surfaceContainer:"#F3EDF7", surfaceContainerHigh:"#ECE6F0", surfaceContainerHighest:"#E6E0E9",
+      onSurface:"#1D1B20", onSurfaceVariant:"#49454F", outline:"#79747E", outlineVariant:"#CAC4D0",
+      error:"#B3261E", onError:"#FFFFFF"
+    },
+    dark: {
+      primary:"#D0BCFF", onPrimary:"#381E72", primaryContainer:"#4F378B", onPrimaryContainer:"#EADDFF",
+      secondaryContainer:"#4A4458", onSecondaryContainer:"#E8DEF8",
+      tertiary:"#EFB8C8", tertiaryContainer:"#633B48", onTertiaryContainer:"#FFD8E4",
+      errorContainer:"#8C1D18", onErrorContainer:"#F9DEDC",
+      surface:"#141218", surfaceContainerLowest:"#0F0D13", surfaceContainerLow:"#1D1B20",
+      surfaceContainer:"#211F26", surfaceContainerHigh:"#2B2930", surfaceContainerHighest:"#36343B",
+      onSurface:"#E6E0E9", onSurfaceVariant:"#CAC4D0", outline:"#938F99", outlineVariant:"#49454F",
+      error:"#F2B8B5", onError:"#601410"
+    }
+  };
+
+  function hsl(h, s, l, a) {
+    return a === undefined ? `hsl(${h} ${s}% ${l}%)` : `hsl(${h} ${s}% ${l}% / ${a})`;
+  }
+  function palette(seed, mode) {
+    if (seed === "purple") return BASELINE[mode];
+    const dark = mode === "dark";
+    const H = { blue: 246, green: 128, orange: 38 }[seed];
+    if (!dark) {
+      return {
+        primary: hsl(H, 52, 38), onPrimary: "#FFFFFF",
+        primaryContainer: hsl(H, 62, 90), onPrimaryContainer: hsl(H, 70, 16),
+        secondaryContainer: hsl(H, 32, 88), onSecondaryContainer: hsl(H, 40, 18),
+        tertiary: hsl(H + 60, 32, 38), tertiaryContainer: hsl(H + 60, 60, 90), onTertiaryContainer: hsl(H + 60, 60, 18),
+        errorContainer: "#F9DEDC", onErrorContainer: "#410E0B",
+        surface: hsl(H, 30, 98), surfaceContainerLowest: "#FFFFFF", surfaceContainerLow: hsl(H, 26, 96),
+        surfaceContainer: hsl(H, 24, 94), surfaceContainerHigh: hsl(H, 22, 91), surfaceContainerHighest: hsl(H, 20, 88),
+        onSurface: hsl(H, 16, 12), onSurfaceVariant: hsl(H, 12, 32),
+        outline: hsl(H, 10, 50), outlineVariant: hsl(H, 12, 78),
+        error: "#B3261E", onError: "#FFFFFF"
+      };
+    }
+    return {
+      primary: hsl(H, 80, 82), onPrimary: hsl(H, 60, 18),
+      primaryContainer: hsl(H, 45, 34), onPrimaryContainer: hsl(H, 70, 92),
+      secondaryContainer: hsl(H, 26, 30), onSecondaryContainer: hsl(H, 50, 92),
+      tertiary: hsl(H + 60, 60, 82), tertiaryContainer: hsl(H + 60, 30, 32), onTertiaryContainer: hsl(H + 60, 60, 92),
+      errorContainer: "#8C1D18", onErrorContainer: "#F9DEDC",
+      surface: hsl(H, 12, 8), surfaceContainerLowest: hsl(H, 12, 6), surfaceContainerLow: hsl(H, 12, 11),
+      surfaceContainer: hsl(H, 12, 13), surfaceContainerHigh: hsl(H, 12, 17), surfaceContainerHighest: hsl(H, 12, 21),
+      onSurface: hsl(H, 20, 92), onSurfaceVariant: hsl(H, 14, 78),
+      outline: hsl(H, 10, 60), outlineVariant: hsl(H, 12, 30),
+      error: "#F2B8B5", onError: "#601410"
+    };
+  }
+
+  /* shape scale: none 0 / xs 4 / s 8 / m 12 / l 16 / xl 28 → halved for 480x270 */
+  const SHAPE = { none: 0, xs: 2, s: 4, m: 6, l: 8, xl: 14, full: 999 };
+
+  const state = {
+    seed: "purple", mode: "dark", density: "compact", surface: "low",
+    products: "", ingredients: "",
+    cond: { unconsumed:false, chanceOut:false, chanceIn:false, chanceByproduct:false, dropUnconsumed:false, dropChance:false },
+    page: 0, multiplier: 1, onlySelected: false,
+    hover: -1, selecting: new Set(), toast: null, toastUntil: 0
+  };
+
+  const D = state.density === "cozy"
+    ? { rowH: 14, step: 15, icon: 12, check: 9, font: 7, small: 6, barH: 18 }
+    : { rowH: 12, step: 13, icon: 10, check: 9, font: 7, small: 6, barH: 16 };
+
+  /* ------------------------------------------------------------------ data */
+  const PALETTE = ["#b0a892","#c9c06a","#9aa0a6","#b58fc0","#7fa6d0","#c98a6a",
+                   "#7fb3ab","#c1796a","#9a8fd0","#cfcfcf","#6fa98a","#b89a72"];
+  const tile = s => PALETTE[s % PALETTE.length];
+  const NAMES = ["双层铁板","小型电路板","钛合金板","钢齿轮","不锈钢板","聚四氟乙烯板","铝板","青铜板",
+    "钨钢板","高速钢","钛锭","镍铬合金","锌板","黄铜板","铱板","铂板","铌锭","钽板","钴板","铅板"];
+  const rows = [];
+  for (let i = 0; i < 164; i++) {
+    const name = NAMES[i % NAMES.length] + (i >= NAMES.length ? " " + (1 + Math.floor(i / NAMES.length)) : "");
+    rows.push({
+      id: i, name,
+      mod: i % 4 === 0 ? "gregtech" : (i % 4 === 1 ? "minecraft" : "gtceu"),
+      recipeId: (i % 4 === 0 ? "gtceu:" : "minecraft:") + "bender_" + i,
+      tags: i % 3 === 0 ? ["forge:plates","forge:ingots"] : (i % 3 === 1 ? ["forge:plates"] : ["gtceu:circuits"]),
+      inputs: Array.from({length: 1 + (i % 3)}, (_, k) => ({ tile: tile(i + k), n: 1 + ((i + k) % 3),
+        chance: (k === 1 && i % 7 === 0) ? 0.35 : 1, never: (k === 0 && i % 11 === 0) })),
+      outputs: Array.from({length: 1 + (i % 2)}, (_, k) => ({ tile: tile(i + 4 + k), n: 1 + ((i + k) % 2),
+        chance: (k === 1 && i % 5 === 0) ? 0.5 : 1 })),
+      kind: "处理"
+    });
+  }
+  const mark = r => ({
+    nc: r.inputs.some(x => x.never),
+    inChance: r.inputs.some(x => !x.never && x.chance < 1),
+    outChance: r.outputs.some(x => x.chance < 1),
+    byChance: r.outputs.slice(1).some(x => x.chance < 1)
+  });
+
+  /* --------------------------------------------------------------- helpers */
+  const px = v => Math.round(v);
+  function P() { return palette(state.seed, state.mode); }
+
+  function clipRound(x, y, w, h, r) {
+    r = Math.max(0, Math.min(r, Math.floor(Math.min(w, h) / 2)));
+    ctx.beginPath();
+    if (!r) { ctx.rect(x, y, w, h); return; }
+    ctx.moveTo(x + r, y);
+    ctx.arcTo(x + w, y, x + w, y + h, r);
+    ctx.arcTo(x + w, y + h, x, y + h, r);
+    ctx.arcTo(x, y + h, x, y, r);
+    ctx.arcTo(x, y, x + w, y, r);
+    ctx.closePath();
+  }
+  function fillRound(x, y, w, h, r, fill, stroke) {
+    clipRound(x, y, w, h, r);
+    if (fill) { ctx.fillStyle = fill; ctx.fill(); }
+    if (stroke) { ctx.strokeStyle = stroke; ctx.lineWidth = 1; ctx.stroke(); }
+  }
+  function box(x, y, w, h, fill) { ctx.fillStyle = fill; ctx.fillRect(px(x), px(y), px(w), px(h)); }
+  function font(size, weight) { ctx.font = `${weight || 400} ${size}px "Noto Sans SC","Microsoft YaHei",sans-serif`; }
+  function txt(x, y, s, color, size, align, weight) {
+    font(size, weight); ctx.fillStyle = color; ctx.textAlign = align || "left"; ctx.textBaseline = "top";
+    ctx.fillText(s, px(x), px(y)); ctx.textAlign = "left";
+  }
+  function txtMid(x, yc, s, color, size, align, weight) {
+    font(size, weight); ctx.fillStyle = color; ctx.textAlign = align || "left"; ctx.textBaseline = "middle";
+    ctx.fillText(s, px(x), px(yc)); ctx.textAlign = "left"; ctx.textBaseline = "top";
+  }
+  function tw(s, size, weight) { font(size, weight); return ctx.measureText(s).width; }
+  function clip(s, maxW, size, weight) {
+    font(size, weight);
+    if (ctx.measureText(s).width <= maxW) return s;
+    let lo = 0, hi = s.length;
+    while (lo < hi) { const m = (lo + hi + 1) >> 1; if (ctx.measureText(s.slice(0, m) + "…").width <= maxW) lo = m; else hi = m - 1; }
+    return s.slice(0, lo) + "…";
+  }
+  // MD3 state layer: onSurface at 8% hover / 12% pressed
+  function stateLayer(x, y, w, h, r, op) { fillRound(x, y, w, h, r, mdRgba("#e6e0e9", op)); }
+  function mdRgba(hex, a) {
+    const s = hex.replace("#", "");
+    const v = s.length === 3 ? s.split("").map(c => c + c).join("") : s;
+    const r = parseInt(v.slice(0,2),16), g = parseInt(v.slice(2,4),16), b = parseInt(v.slice(4,6),16);
+    return `rgba(${r},${g},${b},${a})`;
+  }
+  function now() { return performance.now(); }
+
+  /* MD3 checkbox: 18dp → 9px, radius xs, 2dp stroke */
+  function checkbox(x, y, s, on, p) {
+    fillRound(x, y, s, s, SHAPE.xs, on ? p.primary : "transparent", on ? null : p.onSurfaceVariant);
+    if (on) {
+      ctx.strokeStyle = p.onPrimary; ctx.lineWidth = 1.2; ctx.lineCap = "round";
+      ctx.beginPath();
+      ctx.moveTo(x + s * 0.24, y + s * 0.52);
+      ctx.lineTo(x + s * 0.44, y + s * 0.72);
+      ctx.lineTo(x + s * 0.76, y + s * 0.3);
+      ctx.stroke();
+    }
+  }
+  /* MD3 filter chip: 32dp → 12px high, radius s, outline when unselected, tonal when on */
+  function chip(x, y, label, on, p, w) {
+    const width = w || (tw(label, D.small, 500) + 12);
+    fillRound(x, y, width, 12, SHAPE.s, on ? p.secondaryContainer : "transparent",
+              on ? null : p.outlineVariant);
+    txtMid(x + 6, y + 6, label, on ? p.onSecondaryContainer : p.onSurfaceVariant, D.small, "left", 500);
+    return width;
+  }
+  function itemTile(x, y, size, color, count, chance, p) {
+    fillRound(x, y, size, size, SHAPE.xs, color, mdRgba("#000000", .35));
+    const inner = Math.max(2, Math.round(size / 3));
+    box(x + (size - inner) / 2, y + (size - inner) / 2, inner, inner, mdRgba("#000000", .22));
+    if (chance !== undefined && chance < 1) box(x, y + size - 1, size, 1, p.tertiaryColor || "#e8b06e");
+    if (count > 1) {
+      const s = String(count), w = 4 + s.length * 2.4;
+      box(x + size - w, y + size - 4.6, w, 4.6, mdRgba("#000000", .72));
+      txtMid(x + size - w / 2, y + size - 2.4, s, "#ffffff", 5, "center", 500);
+    }
+  }
+
+  /* ---------------------------------------------------------------- search */
+  function parse(q) {
+    if (!q.trim()) return null;
+    return q.split("|").map(g => g.trim()).filter(Boolean).map(g => {
+      const toks = g.match(/-?"[^"]*"|\S+/g) || [];
+      return toks.map(raw => {
+        let s = raw, neg = false;
+        if (s.startsWith("-")) { neg = true; s = s.slice(1); }
+        if (s.startsWith('"') && s.endsWith('"')) s = s.slice(1, -1);
+        let kind = "name";
+        if (s.length > 1) {
+          if (s[0] === "@") { kind = "mod"; s = s.slice(1); }
+          else if (s[0] === "$") { kind = "tag"; s = s.slice(1); }
+          else if (s[0] === "&") { kind = "id"; s = s.slice(1); }
+        }
+        return { kind, value: s.toLowerCase(), neg };
+      });
+    });
+  }
+  function hay(row, side) {
+    return {
+      name: row.name.toLowerCase(), mod: row.mod.toLowerCase(), id: row.recipeId.toLowerCase(),
+      tag: (row.tags.join(" ") + (side === "in" ? " forge:plates" : "")).toLowerCase()
+    };
+  }
+  function hit(t, h) {
+    if (t.kind === "mod") return h.mod.includes(t.value);
+    if (t.kind === "tag") return h.tag.includes(t.value);
+    if (t.kind === "id") return h.id.includes(t.value);
+    return h.name.includes(t.value) || h.id.includes(t.value);
+  }
+  function pass(q, row, side) {
+    if (!q) return true;
+    const h = hay(row, side);
+    return q.some(g => {
+      const pos = g.filter(t => !t.neg), neg = g.filter(t => t.neg);
+      return (pos.length === 0 || pos.every(t => hit(t, h))) && neg.every(t => !hit(t, h));
+    });
+  }
+  function visibleRows() {
+    const pq = parse(state.products), iq = parse(state.ingredients);
+    return rows.filter(r => {
+      const m = mark(r);
+      if (!pass(pq, r, "out") || !pass(iq, r, "in")) return false;
+      if (state.cond.unconsumed && !m.nc) return false;
+      if (state.cond.chanceIn && !m.inChance) return false;
+      if (state.cond.chanceOut && !m.outChance) return false;
+      if (state.cond.chanceByproduct && !m.byChance) return false;
+      if (state.onlySelected && !state.selecting.has(r.id)) return false;
+      return true;
+    });
+  }
+
+  /* ---------------------------------------------------------------- layout */
+  function layout() {
+    const pad = 6;
+    const panel = { x: pad, y: pad, w: W - 2 * pad, h: H - 2 * pad };
+    const barH = D.barH + 10;
+    const top = panel.y + barH;
+    const bottom = panel.y + panel.h - 6;
+    const filterW = 128, detailW = 128, gap = 6;
+    const filter = { x: panel.x + 4, y: top, w: filterW, h: bottom - top };
+    const list = { x: filter.x + filter.w + gap, y: top, w: panel.w - 8 - filterW - detailW - 2 * gap, h: bottom - top };
+    const detail = { x: list.x + list.w + gap, y: top, w: detailW, h: 150 };
+    const action = { x: detail.x, y: detail.y + detail.h + gap, w: detailW, h: bottom - (detail.y + detail.h + gap) };
+    const listFooterY = list.y + list.h - 16;
+    const rowTop = list.y + 16;
+    const rowsPerPage = Math.max(1, Math.floor((listFooterY - 3 - rowTop) / D.step));
+    return { pad, panel, barH, filter, list, detail, action, listFooterY, rowTop, rowsPerPage, gap };
+  }
+
+  /* ----------------------------------------------------------------- paint */
+  function paint() {
+    const p = P(), L = layout();
+    const surf = state.surface === "container" ? p.surfaceContainer
+      : state.surface === "high" ? p.surfaceContainerHigh : p.surfaceContainerLow;
+
+    ctx.clearRect(0, 0, W, H);
+    box(0, 0, W, H, p.surface);
+
+    // top app bar (surface container, MD3 64dp → 24px)
+    box(L.panel.x, L.panel.y, L.panel.w, L.barH, p.surfaceContainer);
+    txt(L.panel.x + 8, L.panel.y + 5, "生成样板：卷板机", p.onSurface, 8, "left", 500);
+    const vis = visibleRows();
+    txt(L.panel.x + 8, L.panel.y + L.barH - 10,
+        `已选 ${state.selecting.size} · 匹配 ${vis.length} / 全部 ${rows.length}`, p.onSurfaceVariant, D.small);
+    // close icon button 40dp → 16px
+    fillRound(L.panel.x + L.panel.w - 20, L.panel.y + 4, 16, 16, SHAPE.full, "transparent");
+    txtMid(L.panel.x + L.panel.w - 12, L.panel.y + 11, "✕", p.onSurfaceVariant, 8, "center");
+
+    // toast = MD3 snackbar (inverse surface)
+    if (state.toast && now() < state.toastUntil) {
+      const ok = state.toastOk !== false;
+      const w = tw(state.toast, D.small) + 16;
+      const x = L.panel.x + L.panel.w - 24 - w, y = L.panel.y + L.barH + 4;
+      fillRound(x, y, w, 14, SHAPE.xs, p.onSurface);
+      txtMid(x + 8, y + 7, state.toast, p.surface, D.small, "left", 500);
+    }
+
+    /* ---- filter ------------------------------------------------------- */
+    fillRound(L.filter.x, L.filter.y, L.filter.w, L.filter.h, SHAPE.m, surf, p.outlineVariant);
+    const fx = L.filter.x + 6, fw = L.filter.w - 12;
+    let fy = L.filter.y + 6;
+    fy = filledField(fx, fy, fw, state.ingredients, "输入：名称 @模组 $标签", p, "in") + 6;
+    fy = filledField(fx, fy, fw, state.products, "产物：名称 @模组 $标签", p, "out") + 8;
+
+    txt(fx, fy, "筛选条件", p.onSurfaceVariant, D.small, "left", 500);
+    fy += 10;
+    const conds = [
+      ["unconsumed","不消耗输入"],["chanceIn","概率输入"],["dropUnconsumed","排除不消耗"],
+      ["chanceOut","概率产物"],["chanceByproduct","概率副产物"],["dropChance","排除概率产物"]
+    ];
+    let cx = fx, cy = fy, rowUsed = 0;
+    for (const [key, label] of conds) {
+      const w = tw(label, D.small, 500) + 12;
+      if (cx + w > fx + fw) { cx = fx; cy += 14; }
+      chip(cx, cy, label, state.cond[key], p);
+      cx += w + 4; rowUsed = Math.max(rowUsed, cy);
+    }
+    fy = rowUsed + 16;
+
+    txt(fx, fy, "标记", p.onSurfaceVariant, D.small, "left", 500); fy += 10;
+    const legend = [["NC","必需但不会消耗",p.primaryContainer,p.onPrimaryContainer],
+                    ["IN%","按概率消耗",p.secondaryContainer,p.onSecondaryContainer],
+                    ["OUT%","按概率产出",p.errorContainer,p.onErrorContainer],
+                    ["BY%","副产物按概率产出",p.tertiaryContainer,p.onTertiaryContainer]];
+    for (const [tag, desc, bg, fg] of legend) {
+      fillRound(fx, fy - 1, tw(tag, D.small, 500) + 8, 9, SHAPE.xs, bg);
+      txtMid(fx + 4, fy + 3.5, tag, fg, D.small, "left", 500);
+      txt(fx + 24, fy, desc, p.onSurfaceVariant, D.small);
+      fy += 10;
+    }
+
+    /* ---- list --------------------------------------------------------- */
+    fillRound(L.list.x, L.list.y, L.list.w, L.list.h, SHAPE.m, surf, p.outlineVariant);
+    const lx = L.list.x + 6, lw = L.list.w - 12;
+    const colIn = lx + 12, colArrow = colIn + 3 * D.step + 1, colOut = colArrow + 8,
+          colName = colOut + 2 * D.step + 4;
+    txt(colIn, L.list.y + 4, "输入", p.onSurfaceVariant, D.small, "left", 500);
+    txt(colOut, L.list.y + 4, "产物", p.onSurfaceVariant, D.small, "left", 500);
+    txt(colName, L.list.y + 4, "配方", p.onSurfaceVariant, D.small, "left", 500);
+    box(L.list.x, L.list.y + 14, L.list.w, 1, p.outlineVariant);
+
+    const pageCount = Math.max(1, Math.ceil(vis.length / L.rowsPerPage));
+    state.page = Math.min(state.page, pageCount - 1);
+    const start = state.page * L.rowsPerPage;
+    const slice = vis.slice(start, start + L.rowsPerPage);
+
+    slice.forEach((row, i) => {
+      const y = L.rowTop + i * D.step;
+      const on = state.selecting.has(row.id);
+      if (on) box(L.list.x, y - 1, L.list.w, D.rowH, p.secondaryContainer);
+      else if (state.hover === row.id) box(L.list.x, y - 1, L.list.w, D.rowH, mdRgba(state.mode === "dark" ? "#e6e0e9" : "#1d1b20", .06));
+      if (i > 0) box(lx, y - 1, lw, 1, p.outlineVariant);
+
+      checkbox(lx + 1, y + (D.rowH - D.check) / 2, D.check, on, p);
+      row.inputs.slice(0, 3).forEach((it, k) =>
+        itemTile(colIn + k * D.step, y + (D.rowH - D.icon) / 2, D.icon, it.tile, it.n, it.never ? 0 : it.chance, p));
+      txtMid(colArrow, y + D.rowH / 2, "›", p.onSurfaceVariant, 7);
+      row.outputs.slice(0, 2).forEach((it, k) =>
+        itemTile(colOut + k * D.step, y + (D.rowH - D.icon) / 2, D.icon, it.tile, it.n, it.chance, p));
+
+      const m = mark(row);
+      const badges = [];
+      if (m.outChance) badges.push(["OUT%", p.errorContainer, p.onErrorContainer]);
+      if (m.byChance) badges.push(["BY%", p.tertiaryContainer, p.onTertiaryContainer]);
+      if (m.inChance) badges.push(["IN%", p.secondaryContainer, p.onSecondaryContainer]);
+      if (m.nc) badges.push(["NC", p.primaryContainer, p.onPrimaryContainer]);
+      let bw = 0;
+      for (const [t] of badges) bw += tw(t, D.small, 500) + 8;
+
+      const nameMax = lx + lw - colName - bw - 4;
+      txtMid(colName, y + D.rowH / 2, clip(row.name, Math.max(10, nameMax), D.font),
+             on ? p.onSecondaryContainer : p.onSurface, D.font);
+      let bx = lx + lw;
+      for (const [t, bg, fg] of badges) {
+        const w = tw(t, D.small, 500) + 8;
+        bx -= w + 3;
+        fillRound(bx, y + (D.rowH - 9) / 2, w, 9, SHAPE.xs, bg);
+        txtMid(bx + w / 2, y + D.rowH / 2, t, fg, D.small, "center", 500);
+      }
+    });
+
+    if (slice.length === 0) {
+      txtMid(L.list.x + L.list.w / 2, L.list.y + L.list.h / 2, "没有匹配的配方 · 试试 @模组 / $标签 / -排除", p.onSurfaceVariant, D.small, "center");
+    }
+
+    // footer: text buttons + pager
+    const fyT = L.listFooterY;
+    const tools = [["全选"],["反选"],["去重"],["只看已选"]];
+    let tx = L.list.x + 4;
+    tools.forEach(([label], i) => {
+      const active = i === 3 && state.onlySelected;
+      const w = tw(label, D.small, 500) + 10;
+      fillRound(tx, fyT, w, 14, SHAPE.full, active ? p.secondaryContainer : "transparent");
+      txtMid(tx + w / 2, fyT + 7, label, active ? p.onSecondaryContainer : p.primary, D.small, "center", 500);
+      tx += w + 2;
+    });
+    const pagerRight = L.list.x + L.list.w - 6;
+    const pageText = `${state.page + 1} / ${pageCount}`;
+    const nextX = pagerRight - 12, prevX = nextX - 14;
+    txtMid(prevX - 4, fyT + 7, pageText, p.onSurfaceVariant, D.small, "right");
+    fillRound(prevX, fyT + 1, 12, 12, SHAPE.full, "transparent");
+    txtMid(prevX + 6, fyT + 7, "‹", p.onSurfaceVariant, 8, "center");
+    fillRound(nextX, fyT + 1, 12, 12, SHAPE.full, "transparent");
+    txtMid(nextX + 6, fyT + 7, "›", p.onSurfaceVariant, 8, "center");
+
+    /* ---- detail ------------------------------------------------------- */
+    fillRound(L.detail.x, L.detail.y, L.detail.w, L.detail.h, SHAPE.m, surf, p.outlineVariant);
+    const sel = rows.find(r => r.id === state.hover) || rows.find(r => state.selecting.has(r.id));
+    const dx = L.detail.x + 6, dw = L.detail.w - 12;
+    const cell = Math.max(14, Math.min(19, Math.floor((dw - 4) / 3)));
+    const gridW = cell * 3, gridX = dx + Math.floor((dw - gridW) / 2), gridY = L.detail.y + 8;
+    for (let i = 0; i < 9; i++) {
+      const gx = gridX + (i % 3) * cell, gy = gridY + Math.floor(i / 3) * cell;
+      fillRound(gx + 1, gy + 1, cell - 2, cell - 2, SHAPE.xs + 1, p.surfaceContainerHighest);
+      if (sel && i < sel.inputs.length) {
+        itemTile(gx + (cell - D.icon) / 2, gy + (cell - D.icon) / 2, D.icon, sel.inputs[i].tile, sel.inputs[i].n, 1, p);
+      }
+    }
+    let ty = gridY + cell * 3 + 8;
+    if (sel) {
+      txt(dx, ty, clip(sel.name, dw, 8, 500), p.onSurface, 8, "left", 500);
+      ty += 11; box(dx, ty, dw, 1, p.outlineVariant); ty += 4;
+      const kv = [["输入 / 输出", `${sel.inputs.length} / ${sel.outputs.length}`],
+                  ["样板", sel.kind], ["配方", sel.recipeId]];
+      for (const [k, v] of kv) {
+        txt(dx, ty, k, p.onSurfaceVariant, D.small);
+        const fitted = clip(v, Math.max(8, dw - tw(k, D.small) - 6), D.small);
+        txt(dx + dw - tw(fitted, D.small), ty, fitted, p.onSurface, D.small);
+        ty += 10;
+      }
+      const m = mark(sel), marks = [];
+      if (m.nc) marks.push(["NC","#7fb3d0"]);
+      if (m.inChance) marks.push(["IN%","#e8b06e"]);
+      if (m.outChance) marks.push(["OUT%","#e88686"]);
+      if (m.byChance) marks.push(["BY%","#e8a0d0"]);
+      if (marks.length) {
+        ty += 2; txt(dx, ty, "标记", p.onSurfaceVariant, D.small, "left", 500); ty += 10;
+        let mx = dx;
+        for (const [t, c] of marks) { txt(mx, ty, t, c, D.small, "left", 500); mx += tw(t, D.small, 500) + 6; }
+      }
+    } else {
+      txt(dx, ty, "未选择配方", p.onSurfaceVariant, D.small);
+    }
+
+    /* ---- action ------------------------------------------------------- */
+    fillRound(L.action.x, L.action.y, L.action.w, L.action.h, SHAPE.m, surf, p.outlineVariant);
+    const ax = L.action.x + 6, aw = L.action.w - 12;
+    let ay = L.action.y + 8;
+
+    // segmented button (MD3 40dp → 14px, outer corners full)
+    const segW = Math.floor(aw / 7);
+    [1,2,4,8,16,32,64].forEach((mul, i) => {
+      const sx = ax + i * segW, on = state.multiplier === mul;
+      const first = i === 0, last = i === 6;
+      const r = first || last ? SHAPE.full : 0;
+      fillRound(sx, ay, segW, 14, r, on ? p.secondaryContainer : "transparent");
+      if (!on) { box(sx, ay, 1, 14, p.outline); }
+      if (last) box(sx + segW - 1, ay, 1, 14, p.outline);
+      box(sx, ay, segW + (last ? 0 : 1), 1, p.outline);
+      box(sx, ay + 13, segW + (last ? 0 : 1), 1, p.outline);
+      txtMid(sx + segW / 2, ay + 7, String(mul), on ? p.onSecondaryContainer : p.onSurface, D.small, "center", 500);
+    });
+    ay += 20;
+
+    const n = state.selecting.size;
+    fillRound(ax, ay, aw, 16, SHAPE.full, n ? p.primary : p.surfaceContainerHighest);
+    txtMid(ax + aw / 2, ay + 8, n ? `生成 ${n} 条` : "生成",
+           n ? p.onPrimary : p.onSurfaceVariant, 7, "center", 500);
+    ay += 20;
+
+    fillRound(ax, ay, aw, 14, SHAPE.full, "transparent", p.outline);
+    txtMid(ax + aw / 2, ay + 7, "取消", p.primary, 7, "center", 500);
+  }
+
+  /* MD3 filled text field: surface-container-highest, 2dp primary underline on focus */
+  function filledField(x, y, w, value, placeholder, p, which) {
+    const focused = document.activeElement && document.activeElement.dataset
+      && document.activeElement.dataset.field === which;
+    fillRound(x, y, w, 14, SHAPE.xs, p.surfaceContainerHighest);
+    box(x, y + 13, w, focused ? 2 : 1, focused ? p.primary : p.outline);
+    txt(x + 5, y + 3.5, clip(value || placeholder, w - 18, D.small), value ? p.onSurface : p.onSurfaceVariant, D.small);
+    txtMid(x + w - 7, y + 7, "?", p.onSurfaceVariant, D.small, "center", 500);
+    return y + 14;
+  }
+
+  /* ----------------------------------------------------------------- input */
+  const fieldInput = document.createElement("input");
+  fieldInput.type = "text";
+  fieldInput.style.cssText = "position:fixed;left:-9999px;opacity:0;";
+  document.body.appendChild(fieldInput);
+  function beginTyping(which) {
+    fieldInput.dataset.field = which;
+    fieldInput.value = which === "in" ? state.ingredients : state.products;
+    fieldInput.focus(); paint();
+  }
+  fieldInput.addEventListener("input", () => {
+    if (fieldInput.dataset.field === "in") state.ingredients = fieldInput.value;
+    else state.products = fieldInput.value;
+    state.page = 0; paint();
+  });
+  fieldInput.addEventListener("blur", () => { fieldInput.dataset.field = ""; paint(); });
+
+  function point(e) {
+    const r = cvs.getBoundingClientRect();
+    return { x: (e.clientX - r.left) / (r.width / W), y: (e.clientY - r.top) / (r.height / H) };
+  }
+  cvs.addEventListener("mousemove", e => {
+    const { x, y } = point(e), L = layout(), vis = visibleRows();
+    const start = state.page * L.rowsPerPage;
+    const idx = Math.floor((y - L.rowTop) / D.step);
+    let hoverId = -1;
+    if (idx >= 0 && idx < L.rowsPerPage) {
+      const ry = L.rowTop + idx * D.step;
+      if (vis[start + idx] && y >= ry - 1 && y < ry + D.rowH) hoverId = vis[start + idx].id;
+    }
+    if (hoverId !== state.hover) { state.hover = hoverId; paint(); }
+    cvs.style.cursor = hoverId >= 0 || y > L.list.y && y < L.list.y + 16 ? "pointer" : "default";
+  });
+
+  cvs.addEventListener("mousedown", e => {
+    const { x, y } = point(e), L = layout(), p = P();
+    const fx = L.filter.x + 6, fw = L.filter.w - 12;
+    if (x >= fx && x <= fx + fw && y >= L.filter.y + 6 && y < L.filter.y + 20) return beginTyping("in");
+    if (x >= fx && x <= fx + fw && y >= L.filter.y + 26 && y < L.filter.y + 40) return beginTyping("out");
+
+    // chips: replay the same wrap to hit-test
+    const conds = ["unconsumed","chanceIn","dropUnconsumed","chanceOut","chanceByproduct","dropChance"];
+    const labels = ["不消耗输入","概率输入","排除不消耗","概率产物","概率副产物","排除概率产物"];
+    let cx = fx, cy = L.filter.y + 6 + 14 + 8 + 10 + 8, i = 0;
+    for (const key of conds) {
+      const w = tw(labels[i], D.small, 500) + 12;
+      if (cx + w > fx + fw) { cx = fx; cy += 14; }
+      if (x >= cx && x <= cx + w && y >= cy && y <= cy + 12) {
+        state.cond[key] = !state.cond[key]; state.page = 0; paint(); return;
+      }
+      cx += w + 4; i++;
+    }
+
+    const vis = visibleRows(), start = state.page * L.rowsPerPage;
+    const idx = Math.floor((y - L.rowTop) / D.step);
+    if (idx >= 0 && idx < L.rowsPerPage) {
+      const ry = L.rowTop + idx * D.step, row = vis[start + idx];
+      if (row && y >= ry - 1 && y < ry + D.rowH) {
+        state.selecting.has(row.id) ? state.selecting.delete(row.id) : state.selecting.add(row.id);
+        paint(); return;
+      }
+    }
+
+    const fyT = L.listFooterY;
+    if (y >= fyT && y <= fyT + 14) {
+      let tx = L.list.x + 4, labels2 = ["全选","反选","去重","只看已选"];
+      for (const label of labels2) {
+        const w = tw(label, D.small, 500) + 10;
+        if (x >= tx && x <= tx + w) {
+          if (label === "全选") vis.forEach(r => state.selecting.add(r.id));
+          if (label === "反选") vis.forEach(r => state.selecting.has(r.id) ? state.selecting.delete(r.id) : state.selecting.add(r.id));
+          if (label === "去重") {
+            const seen = new Set(), drop = [];
+            vis.forEach(r => { if (seen.has(r.name)) drop.push(r.id); else seen.add(r.name); });
+            drop.forEach(id => state.selecting.delete(id));
+            state.toast = `已去掉 ${drop.length} 条重复做法`; state.toastOk = true; state.toastUntil = now() + 2400;
+          }
+          if (label === "只看已选") { state.onlySelected = !state.onlySelected; state.page = 0; }
+          paint(); return;
+        }
+        tx += w + 2;
+      }
+      const pagerRight = L.list.x + L.list.w - 6, nextX = pagerRight - 12, prevX = nextX - 14;
+      if (x >= prevX && x <= prevX + 12) { state.page = Math.max(0, state.page - 1); paint(); return; }
+      if (x >= nextX && x <= nextX + 12) { state.page = Math.min(Math.ceil(vis.length / L.rowsPerPage) - 1, state.page + 1); paint(); return; }
+    }
+
+    const ax = L.action.x + 6, aw = L.action.w - 12;
+    const ay = L.action.y + 8, segW = Math.floor(aw / 7);
+    if (y >= ay && y <= ay + 14 && x >= ax && x < ax + segW * 7) {
+      const i = Math.floor((x - ax) / segW);
+      if (i >= 0 && i < 7) { state.multiplier = [1,2,4,8,16,32,64][i]; paint(); return; }
+    }
+    if (x >= ax && x <= ax + aw && y >= ay + 20 && y <= ay + 36) {
+      const n = state.selecting.size;
+      state.toast = n ? `已在网络里写入 ${n} 条样板` : "先勾选要生成的配方";
+      state.toastOk = !!n; state.toastUntil = now() + 2600; paint(); return;
+    }
+    if (x >= ax && x <= ax + aw && y >= ay + 40 && y <= ay + 54) {
+      state.toast = "已取消"; state.toastOk = false; state.toastUntil = now() + 1800; paint(); return;
+    }
+    if (x >= L.panel.x + L.panel.w - 20 && x <= L.panel.x + L.panel.w - 4 &&
+        y >= L.panel.y + 4 && y <= L.panel.y + 20) {
+      state.toast = "关闭（演示）"; state.toastOk = true; state.toastUntil = now() + 1800; paint();
+    }
+  });
+
+  /* ------------------------------------------------------------------ bar */
+  const SEEDS = [["purple","#6750A4"],["blue","#1B6EF3"],["green","#2E7D32"],["orange","#B26A00"]];
+  const seedsBox = document.getElementById("seeds");
+  SEEDS.forEach(([id, color]) => {
+    const d = document.createElement("span");
+    d.className = "swatch"; d.style.background = color; d.dataset.id = id;
+    d.dataset.on = id === state.seed ? "1" : "0";
+    d.onclick = () => { state.seed = id; [...seedsBox.children].forEach(n => n.dataset.on = n === d ? "1" : "0"); paint(); };
+    seedsBox.appendChild(d);
+  });
+  document.getElementById("mode").onchange = e => { state.mode = e.target.value; document.documentElement.style.colorScheme = e.target.value; paint(); };
+  document.getElementById("density").onchange = e => {
+    state.density = e.target.value;
+    Object.assign(D, state.density === "cozy"
+      ? { rowH: 14, step: 15, icon: 12, check: 9, font: 7, small: 6, barH: 18 }
+      : { rowH: 12, step: 13, icon: 10, check: 9, font: 7, small: 6, barH: 16 });
+    paint();
+  };
+  document.getElementById("surface").onchange = e => { state.surface = e.target.value; paint(); };
+  document.getElementById("export").onclick = () => {
+    const p = P(), out = {
+      style: "material3", seed: state.seed, mode: state.mode, density: state.density,
+      surfaceUsed: state.surface,
+      roles: p,
+      shape: SHAPE, metrics: D,
+      grid: layout()
+    };
+    document.getElementById("out").value = JSON.stringify(out, null, 2);
+    document.getElementById("out").select();
+    document.execCommand && document.execCommand("copy");
+  };
+
+  // deep link: preview-md3.html?seed=blue&mode=light&density=cozy&sel=1&q=钢&cond=chanceOut
+  (() => {
+    const q = new URLSearchParams(location.search);
+    if (["purple","blue","green","orange"].includes(q.get("seed"))) state.seed = q.get("seed");
+    if (q.get("mode") === "light") state.mode = "light";
+    if (q.get("density") === "cozy") state.density = "cozy";
+    if (q.get("surface")) state.surface = q.get("surface");
+    if (q.get("q")) state.products = q.get("q");
+    if (q.get("qi")) state.ingredients = q.get("qi");
+    if (q.get("cond")) for (const k of q.get("cond").split(",")) if (k in state.cond) state.cond[k] = true;
+    if (q.get("sel")) { for (let i = 0; i < 5; i++) state.selecting.add(i); state.hover = 1; }
+    if (state.density === "cozy") Object.assign(D, { rowH: 14, step: 15, icon: 12, check: 9, font: 7, small: 6, barH: 18 });
+    document.getElementById("mode").value = state.mode;
+    document.getElementById("density").value = state.density;
+    document.getElementById("surface").value = state.surface;
+    document.documentElement.style.colorScheme = state.mode;
+    [...document.getElementById("seeds").children].forEach(n => n.dataset.on = n.dataset.id === state.seed ? "1" : "0");
+  })();
+
+  paint();
+  setInterval(paint, 250);
+})();
+</script>
+</body>
+</html>
