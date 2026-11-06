@@ -36,6 +36,9 @@ public final class PatternWorkbenchScreen extends Screen implements GenerationLi
     private final List<RecipePlan.Entry> matching = new ArrayList<>();
     private final List<DetailLine> details = new ArrayList<>();
     private final List<DetailLine> referenceDetails = new ArrayList<>();
+    private DetailRowLayout detailRows = DetailRowLayout.of(List.of(), ignored -> false);
+    private DetailRowLayout referenceRows = DetailRowLayout.of(List.of(), ignored -> false);
+    private WorkbenchLayout layout;
     private final StackVisuals visuals = new StackVisuals();
     private final List<IconHit> iconHits = new ArrayList<>();
     private final Set<String> expanded = new HashSet<>();
@@ -65,6 +68,7 @@ public final class PatternWorkbenchScreen extends Screen implements GenerationLi
     private double listScroll, detailScroll;
     private int left, top, panelWidth, panelHeight, split, bodyTop, bodyBottom;
     private int selectedCount, eligibleCount, tickCount, searchDelay;
+    private int footerStatusX, footerStatusY, footerStatusWidth;
     private Component notice = Component.empty();
     private Action generate, inputFilter, outputFilter, tools, products, multiplier, grouping, more, detailMode;
 
@@ -77,18 +81,17 @@ public final class PatternWorkbenchScreen extends Screen implements GenerationLi
     private static Component tr(String key, Object... args) { return Component.translatable("eae2_pattern.workbench." + key, args); }
 
     @Override protected void init() {
-        WorkbenchLayout layout = WorkbenchLayout.measure(width, height);
+        layout = WorkbenchLayout.measure(width, height);
         panelWidth = layout.width(); panelHeight = layout.height(); left = layout.left(); top = layout.top(); split = layout.split();
         int searchY = layout.searchY(), filterY = layout.filterY(), toolbarY = layout.toolbarY();
         bodyTop = layout.bodyTop(); bodyBottom = layout.bodyBottom();
         int half = (panelWidth - 28) / 2;
-        inputBox = addRenderableWidget(new EditBox(font, left + 16, top + searchY + 5, half - 12, 14, tr("input")));
-        outputBox = addRenderableWidget(new EditBox(font, left + 24 + half, top + searchY + 5, half - 12, 14, tr("output")));
+        inputBox = addRenderableWidget(new WorkbenchSearchBox(font, left + 16, top + searchY + 5, half - 12, tr("input")));
+        outputBox = addRenderableWidget(new WorkbenchSearchBox(font, left + 24 + half, top + searchY + 5, half - 12, tr("output")));
         inputBox.setMaxLength(160); outputBox.setMaxLength(160);
         inputBox.setBordered(false); outputBox.setBordered(false);
         inputBox.setTextColor(TEXT); outputBox.setTextColor(TEXT);
         inputBox.setValue(inputText); outputBox.setValue(outputText);
-        inputBox.setHint(tr("input")); outputBox.setHint(tr("output"));
         inputBox.setResponder(value -> { inputText = value; exactInput = null; searchDelay = 3; });
         outputBox.setResponder(value -> { outputText = value; exactOutput = null; searchDelay = 3; });
         int q = (panelWidth - 32) / 4;
@@ -100,8 +103,8 @@ public final class PatternWorkbenchScreen extends Screen implements GenerationLi
         grouping = action(left + 10, top + toolbarY, w * 2, () -> choose(grouping, "grouping.", 4, groupingMode, value -> {
             groupingMode = value; expanded.clear(); refresh();
         }));
-        action(left + 14 + w * 2, top + toolbarY, w, () -> { if (filtering || checking) return; visible.forEach(e -> e.setSelected(true)); refresh(); }).setMessage(tr("all"));
-        action(left + 18 + w * 3, top + toolbarY, w, () -> { if (filtering || checking) return; visible.forEach(e -> e.setSelected(false)); refresh(); }).setMessage(tr("none"));
+        action(left + 14 + w * 2, top + toolbarY, w, () -> { if (filtering || checking) return; visible.forEach(e -> e.setSelected(true)); refresh(); }).help("selection_help").setMessage(tr("all"));
+        action(left + 18 + w * 3, top + toolbarY, w, () -> { if (filtering || checking) return; visible.forEach(e -> e.setSelected(false)); refresh(); }).help("selection_help").setMessage(tr("none"));
         more = action(left + 22 + w * 4, top + toolbarY, w, this::moreMenu);
         detailMode = action(split + 10, top + toolbarY, Math.max(35, left + panelWidth - split - 65), () -> {
             choice = new Choice(detailMode, List.of(tr("final_view"), tr("source_view")), sourceView ? 1 : 0,
@@ -113,18 +116,18 @@ public final class PatternWorkbenchScreen extends Screen implements GenerationLi
                 if (jeiReturn == null) minecraft.setScreen(parent);
                 RecipeNavigation.show(plan, focused);
             }
-        }).setMessage(Component.literal("JEI ↗"));
-        multiplier = action(left + 10, top + panelHeight - 45, 54, () -> {
+        }).help("jei_help").setMessage(Component.literal("JEI ↗"));
+        multiplier = action(left + 18, layout.footerControlsY(), 54, () -> {
             List<Component> labels = new ArrayList<>();
             for (int preset : ProcessingMultiplier.PRESETS) labels.add(tr(preset == 1 ? "default_multiplier" : "multiplier", preset));
             choice = new Choice(multiplier, labels, -1, index -> multiplierBox.setValue(Integer.toString(ProcessingMultiplier.PRESETS[index])));
         });
-        multiplierBox = addRenderableWidget(new EditBox(font, left + 72, top + panelHeight - 40, 38, 14, tr("multiplier_input")));
+        multiplierBox = addRenderableWidget(new WorkbenchSearchBox(font, left + 86, layout.footerControlsY() + 5, 34, tr("multiplier_input"), tr("multiplier_empty")));
         multiplierBox.setMaxLength(5); multiplierBox.setFilter(ProcessingMultiplier::acceptsText);
         multiplierBox.setBordered(false); multiplierBox.setValue(multiplierText);
         multiplierBox.setResponder(value -> { multiplierText = value; optionsChanged(); });
-        action(left + panelWidth - 62, top + 9, 52, this::onClose).setMessage(tr("close"));
-        generate = action(left + panelWidth - 130, top + panelHeight - 45, 120, this::generate);
+        action(left + panelWidth - 62, top + 9, 52, this::onClose).help("close_help").setMessage(tr("close"));
+        generate = action(left + panelWidth - 138, layout.footerControlsY(), 120, this::generate).help("scope_help");
         choice = null; navigatingToJei = false;
         ClientGenerationFeedback.setListener(this); InspectionFeedback.setListener(this::inspectionFinished);
         ClientNetworkState.reset(); queryNetwork(); queuePreview(); rebuildDetails(); updateButtons();
@@ -216,10 +219,9 @@ public final class PatternWorkbenchScreen extends Screen implements GenerationLi
     }
     private void addIngredient(Ingredient i, boolean product, boolean byproduct) {
         StackSpec spec = i.spec();
-        String state = product ? (byproduct ? "byproduct" : "main") : (i.neverConsumed() ? "not_consumed" : i.probabilistic() ? "chance_consumed" : "consumed");
-        details.add(stackLine(spec, product ? 1 : 0));
-        if (i.neverConsumed() || i.probabilistic() || product && byproduct)
-            details.add(new DetailLine(tr(state).copy().append(" · " + i.chanceText()), null, i.probabilistic() || i.neverConsumed() ? 0xFFEBC078 : DIM));
+        DetailLine line = stackLine(spec, product ? 1 : 0);
+        Component label = product && byproduct ? line.text.copy().append(" · ").append(tr("byproduct")) : line.text;
+        details.add(new DetailLine(label, spec, TEXT, product ? 1 : 0, IngredientPresentation.of(i, product ? 1 : 0)));
     }
     private Component name(StackSpec spec) {
         return visuals.name(spec);
@@ -282,6 +284,8 @@ public final class PatternWorkbenchScreen extends Screen implements GenerationLi
     }
     private void rebuildDetails() {
         details.clear(); referenceDetails.clear();
+        detailRows = DetailRowLayout.of(List.of(), ignored -> false);
+        referenceRows = DetailRowLayout.of(List.of(), ignored -> false);
         if (focused == null) return;
         if (sourceView) {
             if (pinned != null && pinned != focused) {
@@ -296,9 +300,9 @@ public final class PatternWorkbenchScreen extends Screen implements GenerationLi
             details.add(new DetailLine(previewNotice, null, preview == null ? WorkbenchTheme.WARNING : DIM));
             if (preview != null) {
                 details.add(new DetailLine(tr("encoded_inputs"), null, ACCENT));
-                for (StackSpec input : preview.inputs()) details.add(stackLine(input, 0));
+                for (StackSpec input : preview.inputs()) details.add(encodedLine(input, 0));
                 details.add(new DetailLine(tr("encoded_outputs"), null, ACCENT));
-                for (StackSpec output : preview.outputs()) details.add(stackLine(output, 1));
+                for (StackSpec output : preview.outputs()) details.add(encodedLine(output, 1));
                 if (focused.hasProbabilisticOutput()) details.add(new DetailLine(tr("chance_warning"), null, WorkbenchTheme.WARNING));
                 if (focused.hasProbabilisticInput()) details.add(new DetailLine(tr("chance_input_warning"), null, WorkbenchTheme.WARNING));
             }
@@ -309,13 +313,19 @@ public final class PatternWorkbenchScreen extends Screen implements GenerationLi
             }
             details.add(new DetailLine(tr("server_preview_help"), null, DIM));
         }
+        detailRows = DetailRowLayout.of(details, line -> line.spec != null);
+        referenceRows = DetailRowLayout.of(referenceDetails, line -> line.spec != null);
         detailScroll = clamp(detailScroll, detailContentHeight());
     }
+    private DetailLine encodedLine(StackSpec spec, int side) {
+        DetailLine line = stackLine(spec, side);
+        return new DetailLine(line.text, spec, TEXT, side, IngredientPresentation.encoded(focused, spec, side, dropTools));
+    }
     private DetailLine stackLine(StackSpec spec, int side) {
-        Component text = Component.literal(spec.amount() + (spec.isItem() ? " × " : " mB ")).append(name(spec));
+        Component text = name(spec);
         if (spec.tag() != null && spec.tag().contains("Configuration"))
             text = text.copy().append(" · ").append(tr("circuit_setting", spec.tag().getInt("Configuration")));
-        return new DetailLine(text, spec, TEXT, side);
+        return new DetailLine(text, spec, TEXT, side, IngredientPresentation.REGULAR);
     }
     private void sourceDetails(RecipePlan.Entry entry) {
         details.add(new DetailLine(entry.label(), null, TEXT));
@@ -367,28 +377,33 @@ public final class PatternWorkbenchScreen extends Screen implements GenerationLi
         if (panelHeight >= 230) g.fill(left + 10, top + 27, left + panelWidth - 10, top + 28, LINE);
         searchSurface(g, inputBox); searchSurface(g, outputBox);
         g.fill(split, bodyTop - 27, split + 1, bodyBottom, LINE);
-        WorkbenchTheme.rounded(g, left + 68, top + panelHeight - 45, 48, 19, SURFACE);
         renderList(g, mx, my); renderDetails(g);
         Component status = !ClientNetworkState.hasStatus() ? tr("querying") : !ClientNetworkState.hasNetwork() ? tr("no_network") : tr("stock", ClientNetworkState.blankPatterns(), eligibleCount);
         if (ProcessingMultiplier.parse(multiplierText) == 0) status = tr("multiplier_invalid", ProcessingMultiplier.MAX);
-        g.fill(left + 10, bodyBottom + 3, left + panelWidth - 10, bodyBottom + 4, LINE);
-        text(g, status, left + 124, top + panelHeight - 39, panelWidth - 260, ClientNetworkState.hasNetwork() && ClientNetworkState.blankPatterns() >= eligibleCount ? DIM : WorkbenchTheme.WARNING);
+        renderFooter(g, status);
         Component summary = notice.getString().isEmpty() ? tr("scope_counts", visible.size(), plan.entries().size(), selectedCount, hiddenSelected, skippedCount) : notice;
-        text(g, summary, left + 10, top + panelHeight - 17, panelWidth - 20, DIM);
+        text(g, summary, left + 10, layout.statsY(), panelWidth - 20, DIM);
         super.render(g, mx, my, partial);
         if (choice != null) { choice.render(g, mx, my); return; }
-        if (over(mx, my, left + 10, top + panelHeight - 20, left + panelWidth - 10, top + panelHeight - 5))
+        if (over(mx, my, left + 10, layout.statsY() - 2, left + panelWidth - 10, layout.statsY() + 11))
             g.renderComponentTooltip(font, List.of(summary, tr("scope_help")), mx, my);
-        if (over(mx, my, left + 124, top + panelHeight - 45, left + panelWidth - 134, top + panelHeight - 22)) g.renderComponentTooltip(font, List.of(status), mx, my);
+        if (over(mx, my, footerStatusX, footerStatusY - 2, footerStatusX + footerStatusWidth, footerStatusY + 11))
+            g.renderComponentTooltip(font, List.of(status), mx, my);
         if (inputBox.isMouseOver(mx, my) || outputBox.isMouseOver(mx, my)) {
             boolean exact = inputBox.isMouseOver(mx, my) ? exactInput != null : exactOutput != null;
             g.renderComponentTooltip(font, exact ? List.of(tr("exact_filter"), tr("search_help")) : List.of(tr("search_help")), mx, my);
         }
         if (multiplierBox.isMouseOver(mx, my)) g.renderComponentTooltip(font, List.of(tr("multiplier_help", ProcessingMultiplier.MAX)), mx, my);
         for (var child : children()) if (child instanceof Action a && a.isHovered())
-            g.renderComponentTooltip(font, List.of(a.getMessage(), tr(a == tools ? "tools_help" : a == multiplier ? "multiplier_help" : a == more ? "more_help" : a == grouping ? "group_help" : "option_help", ProcessingMultiplier.MAX)), mx, my);
+            g.renderComponentTooltip(font, List.of(a.getMessage(), tr(a.helpKey != null ? a.helpKey : a == tools ? "tools_help" : a == multiplier ? "multiplier_help" : a == more ? "more_help" : a == grouping ? "group_help" : "option_help", ProcessingMultiplier.MAX)), mx, my);
         IconHit hit = iconAt(mx, my);
-        if (hit != null) { g.renderComponentTooltip(font, iconTooltip(hit), mx, my); return; }
+        if (hit != null) {
+            if (hit.spec.isItem()) {
+                var stack = visuals.item(hit.spec);
+                g.renderTooltip(font, iconTooltip(hit), stack.getTooltipImage(), stack, mx, my);
+            } else g.renderComponentTooltip(font, iconTooltip(hit), mx, my);
+            return;
+        }
         if (over(mx, my, left + 10, bodyTop, split - 12, bodyBottom)) {
             int index = (int) ((my - bodyTop + listScroll) / ROW);
             if (index < rows.size()) {
@@ -396,17 +411,37 @@ public final class PatternWorkbenchScreen extends Screen implements GenerationLi
                 g.renderComponentTooltip(font, row.header() ? List.of(row.group().key().label(), tr("group_hint", row.group().entries().size())) : rowTooltip(row.entry()), mx, my);
             }
         } else if (over(mx, my, split + 4, bodyTop, left + panelWidth - 18, bodyBottom)) {
-            int index = (int) ((my - bodyTop + detailScroll) / 18);
-            List<DetailLine> hoveredDetails = !referenceDetails.isEmpty() && mx < (split + left + panelWidth) / 2 ? referenceDetails : details;
+            boolean reference = !referenceDetails.isEmpty() && mx < (split + left + panelWidth) / 2;
+            int index = (reference ? referenceRows : detailRows).indexAt(my - bodyTop + (int) detailScroll);
+            List<DetailLine> hoveredDetails = reference ? referenceDetails : details;
             if (index >= 0 && index < hoveredDetails.size()) {
                 DetailLine line = hoveredDetails.get(index);
                 g.renderComponentTooltip(font, List.of(line.text), mx, my);
             }
         }
     }
+    private void renderFooter(GuiGraphics g, Component status) {
+        WorkbenchTheme.control(g, left + 8, layout.footerTop(), panelWidth - 16, layout.footerHeight(), 0xFF202020, LINE);
+        searchSurface(g, multiplierBox);
+        boolean ready = ClientNetworkState.hasNetwork() && ClientNetworkState.blankPatterns() >= eligibleCount
+                && ProcessingMultiplier.parse(multiplierText) > 0;
+        footerStatusX = left + 140;
+        if (layout.footerTitle()) {
+            footerStatusY = layout.footerTop() + (layout.footerHeight() >= 50 ? 9 : 4);
+            footerStatusWidth = panelWidth - 160;
+            text(g, tr("generation_settings"), left + 18, footerStatusY, 112, TEXT);
+            int room = panelWidth - 286;
+            if (room >= 70) text(g, tr("processing_only"), left + 140, layout.footerControlsY() + 5, room, DIM);
+        } else {
+            footerStatusY = layout.footerControlsY() + 5;
+            footerStatusWidth = Math.max(10, panelWidth - 286);
+        }
+        text(g, !layout.footerTitle() && footerStatusWidth < 70 ? Component.literal(ready ? "✓" : "!") : status,
+                footerStatusX, footerStatusY, footerStatusWidth, ready ? DIM : WorkbenchTheme.WARNING);
+    }
     private void searchSurface(GuiGraphics g, EditBox box) {
-        WorkbenchTheme.rounded(g, box.getX() - 6, box.getY() - 5, box.getWidth() + 12, 19, box.isFocused() ? LINE : SURFACE);
-        WorkbenchTheme.rounded(g, box.getX() - 5, box.getY() - 4, box.getWidth() + 10, 17, SURFACE);
+        WorkbenchTheme.control(g, box.getX() - 6, box.getY() - 5, box.getWidth() + 12, 19,
+                WorkbenchTheme.INPUT, box.isFocused() ? 0xFF666666 : LINE);
     }
     private void renderList(GuiGraphics g, int mx, int my) {
         int x = left + 10, right = split - 12;
@@ -431,7 +466,7 @@ public final class PatternWorkbenchScreen extends Screen implements GenerationLi
             if (e == focused || over(mx, my, x, y, right, y + ROW)) WorkbenchTheme.rounded(g, x, y, right - x, ROW - 1, e == focused ? WorkbenchTheme.HOVER : SURFACE);
             checkbox(g, x + 4, y + 13, e.isSelected());
             String flag = existing.contains(e.recipeId()) ? tr("stored_badge").getString() : !skipReason(e).isEmpty() ? "!" : e == pinned ? tr("reference").getString()
-                    : (e.hasNeverConsumedInput() ? "NC " : "") + (e.hasProbabilisticInput() ? "IN% " : "") + (e.hasProbabilisticOutput() ? "OUT%" : "");
+                    : e.hasProbabilisticInput() || e.hasProbabilisticOutput() ? tr("chance_badge").getString() : "";
             int flagWidth = flag.isEmpty() ? 0 : font.width(flag) + 5;
             text(g, e.label(), x + 19, y + 3, right - x - 23 - flagWidth, e.isSelected() ? TEXT : DIM);
             if (!flag.isEmpty()) g.drawString(font, flag, right - flagWidth, y + 3, DIM, false);
@@ -445,14 +480,15 @@ public final class PatternWorkbenchScreen extends Screen implements GenerationLi
         g.disableScissor(); scrollbar(g, split - 10, listScroll, rows.size() * ROW);
     }
     private void checkbox(GuiGraphics g, int x, int y, boolean checked) {
-        WorkbenchTheme.rounded(g, x, y, 9, 9, checked ? ACCENT : LINE);
-        if (checked) { g.fill(x + 2, y + 4, x + 4, y + 6, BG); g.fill(x + 4, y + 2, x + 6, y + 6, BG); }
+        g.fill(x, y, x + 9, y + 9, checked ? 0xFF777777 : LINE);
+        g.fill(x + 1, y + 1, x + 8, y + 8, checked ? WorkbenchTheme.PRIMARY : BG);
+        if (checked) { g.fill(x + 2, y + 4, x + 4, y + 6, TEXT); g.fill(x + 4, y + 2, x + 6, y + 6, TEXT); }
     }
     private int drawIngredients(GuiGraphics g, List<Ingredient> ingredients, int x, int y, int max, int side) {
         for (int i = 0; i < Math.min(max, ingredients.size()); i++) {
             Ingredient ingredient = ingredients.get(i);
             visuals.draw(g, ingredient.spec(), x, y);
-            iconHits.add(new IconHit(x, y, ingredient.spec(), side, ingredient)); x += 18;
+            iconHits.add(new IconHit(x, y, ingredient.spec(), side, IngredientPresentation.of(ingredient, side))); x += 18;
         }
         if (ingredients.size() > max) { String extra = "+" + (ingredients.size() - max); g.drawString(font, extra, x, y + 5, DIM, false); x += font.width(extra) + 3; }
         return x;
@@ -461,23 +497,43 @@ public final class PatternWorkbenchScreen extends Screen implements GenerationLi
         int x = split + 12, right = left + panelWidth - 18;
         if (!referenceDetails.isEmpty()) {
             int middle = (split + left + panelWidth) / 2;
-            renderDetailColumn(g, referenceDetails, x, middle - 5);
+            renderDetailColumn(g, referenceDetails, referenceRows, x, middle - 5);
             g.fill(middle, bodyTop, middle + 1, bodyBottom, LINE);
-            renderDetailColumn(g, details, middle + 6, right);
-        } else renderDetailColumn(g, details, x, right);
+            renderDetailColumn(g, details, detailRows, middle + 6, right);
+        } else renderDetailColumn(g, details, detailRows, x, right);
         scrollbar(g, left + panelWidth - 15, detailScroll, detailContentHeight());
     }
-    private int detailContentHeight() { return Math.max(details.size(), referenceDetails.size()) * 18; }
-    private void renderDetailColumn(GuiGraphics g, List<DetailLine> lines, int x, int right) {
+    private int detailContentHeight() { return Math.max(detailRows.height(), referenceRows.height()); }
+    private void renderDetailColumn(GuiGraphics g, List<DetailLine> lines, DetailRowLayout positions, int x, int right) {
+        if (lines.isEmpty() || detailScroll >= positions.height()) return;
         g.enableScissor(x, bodyTop, right, bodyBottom);
-        int first = (int) detailScroll / 18, count = Math.max(1, (bodyBottom - bodyTop) / 18 + 2);
-        for (int n = first; n < Math.min(lines.size(), first + count); n++) {
-            DetailLine line = lines.get(n); int y = bodyTop + n * 18 - (int) detailScroll;
+        int first = Math.max(0, positions.indexAt((int) detailScroll));
+        for (int n = first; n < lines.size(); n++) {
+            int y = bodyTop + positions.top(n) - (int) detailScroll;
+            if (y >= bodyBottom) break;
+            DetailLine line = lines.get(n);
             if (line.spec != null) {
-                visuals.draw(g, line.spec, x, y);
-                iconHits.add(new IconHit(x, y, line.spec, line.side, null));
-            }
-            text(g, line.text, x + (line.spec == null ? 0 : 20), y + 4, right - x - (line.spec == null ? 0 : 20), line.color);
+                WorkbenchTheme.slot(g, x, y + 2, line.presentation);
+                visuals.draw(g, line.spec, x + 4, y + 6);
+                String badge = line.presentation.badge();
+                if (!badge.isEmpty()) {
+                    int bx = x + 23 - font.width(badge);
+                    g.fill(bx - 1, y + 3, x + 23, y + 12, WorkbenchTheme.INPUT);
+                    g.drawString(font, badge, bx, y + 3, line.presentation.color(), false);
+                }
+                iconHits.add(new IconHit(x, y + 2, line.spec, line.side, line.presentation, 24));
+                text(g, line.text, x + 30, y + 3, right - x - 30, line.color);
+                Component amount = amountText(line.spec);
+                Component state = line.presentation.description();
+                int room = right - x - 30, amountWidth = font.width(amount);
+                boolean special = line.presentation.kind() != IngredientPresentation.Kind.REGULAR;
+                if (special && amountWidth + 6 + font.width(state) > room)
+                    text(g, state, x + 30, y + 16, room, line.presentation.color());
+                else {
+                    text(g, amount, x + 30, y + 16, room, DIM);
+                    if (special) text(g, state, x + 36 + amountWidth, y + 16, room - amountWidth - 6, line.presentation.color());
+                }
+            } else text(g, line.text, x, y + 4, right - x, line.color);
         }
         g.disableScissor();
     }
@@ -485,40 +541,49 @@ public final class PatternWorkbenchScreen extends Screen implements GenerationLi
         if (my < bodyTop || my >= bodyBottom) return null;
         for (int i = iconHits.size() - 1; i >= 0; i--) {
             IconHit hit = iconHits.get(i);
-            if (over(mx, my, hit.x, hit.y, hit.x + 16, hit.y + 16)) return hit;
+            if (over(mx, my, hit.x, hit.y, hit.x + hit.size, hit.y + hit.size)) return hit;
         }
         return null;
     }
     private List<Component> iconTooltip(IconHit hit) {
         List<Component> lines = new ArrayList<>();
         if (hit.spec.isItem()) {
-            try { lines.addAll(visuals.item(hit.spec).getTooltipLines(minecraft.player, net.minecraft.world.item.TooltipFlag.Default.NORMAL)); }
+            try { lines.addAll(visuals.item(hit.spec).getTooltipLines(minecraft.player, minecraft.options.advancedItemTooltips
+                    ? net.minecraft.world.item.TooltipFlag.Default.ADVANCED : net.minecraft.world.item.TooltipFlag.Default.NORMAL)); }
             catch (RuntimeException ignored) { lines.add(name(hit.spec)); }
         } else { lines.add(name(hit.spec)); lines.add(Component.literal(hit.spec.id().toString())); }
-        lines.add(Component.literal(hit.spec.amount() + (hit.spec.isItem() ? " × " : " mB ")).append(name(hit.spec)));
-        if (hit.ingredient != null) {
-            if (hit.ingredient.neverConsumed()) lines.add(tr("not_consumed"));
-            else if (hit.ingredient.probabilistic()) lines.add(tr(hit.side == 0 ? "chance_consumed" : "byproduct").copy().append(" " + hit.ingredient.chanceText()));
+        var runtime = io.github.sexileman.eae2pattern.compat.jei.JeiRuntimeHolder.get();
+        if (runtime != null) {
+            try {
+                if (hit.spec.isItem()) lines = new ArrayList<>(runtime.getJeiHelpers().getModIdHelper().addModNameToIngredientTooltip(
+                        lines, visuals.item(hit.spec), runtime.getIngredientManager().getIngredientHelper(mezz.jei.api.constants.VanillaTypes.ITEM_STACK)));
+                else lines = new ArrayList<>(runtime.getJeiHelpers().getModIdHelper().addModNameToIngredientTooltip(
+                        lines, visuals.fluid(hit.spec), runtime.getIngredientManager().getIngredientHelper(mezz.jei.api.forge.ForgeTypes.FLUID_STACK)));
+            } catch (RuntimeException ignored) { }
         }
+        lines.add(amountText(hit.spec).copy().withStyle(net.minecraft.ChatFormatting.AQUA));
+        if (hit.presentation.kind() != IngredientPresentation.Kind.REGULAR) lines.add(hit.presentation.description());
         lines.add(tr("click_filter"));
         return lines;
     }
     private List<Component> rowTooltip(RecipePlan.Entry entry) {
         List<Component> lines = new ArrayList<>(List.of(entry.label(), Component.literal(entry.recipeId().toString()), tr("inputs")));
-        for (Ingredient i : entry.inputs().stream().limit(4).toList()) lines.add(ingredientSummary(i));
+        for (Ingredient i : entry.inputs().stream().limit(4).toList()) lines.add(ingredientSummary(i, 0));
         if (entry.inputs().size() > 4) lines.add(tr("more_slots", entry.inputs().size() - 4));
         if (!entry.catalysts().isEmpty()) lines.add(tr("required_tools"));
         lines.add(tr("outputs"));
-        for (Ingredient i : entry.outputs().stream().limit(3).toList()) lines.add(ingredientSummary(i));
+        for (Ingredient i : entry.outputs().stream().limit(3).toList()) lines.add(ingredientSummary(i, 1));
         if (entry.outputs().size() > 3) lines.add(tr("more_slots", entry.outputs().size() - 3));
         String reason = skipReason(entry);
         if (!reason.isEmpty()) lines.add(tr(reason));
         lines.add(tr("row_help"));
         return lines;
     }
-    private Component ingredientSummary(Ingredient ingredient) {
-        return Component.literal(ingredient.spec().amount() + (ingredient.spec().isItem() ? " × " : " mB "))
-                .append(name(ingredient.spec())).append(ingredient.neverConsumed() ? " [NC]" : ingredient.probabilistic() ? " [" + ingredient.chanceText() + "]" : "");
+    private Component amountText(StackSpec spec) { return tr(spec.isItem() ? "item_amount" : "fluid_amount", spec.amount()); }
+    private Component ingredientSummary(Ingredient ingredient, int side) {
+        Component text = Component.literal(ingredient.spec().amount() + (ingredient.spec().isItem() ? " × " : " mB ")).append(name(ingredient.spec()));
+        IngredientPresentation presentation = IngredientPresentation.of(ingredient, side);
+        return presentation.kind() == IngredientPresentation.Kind.REGULAR ? text : text.copy().append(" · ").append(presentation.description());
     }
     private void text(GuiGraphics g, Component value, int x, int y, int room, int color) {
         String s = value.getString(); g.drawString(font, font.width(s) <= room ? s : font.plainSubstrByWidth(s, Math.max(0, room - 6)) + "…", x, y, color, false);
@@ -611,10 +676,12 @@ public final class PatternWorkbenchScreen extends Screen implements GenerationLi
         WorkbenchPreferences.save(dropTools, outputPolicy, ProcessingMultiplier.parse(multiplierText), groupingMode);
     }
     @Override public boolean isPauseScreen() { return false; }
-    private record DetailLine(Component text, StackSpec spec, int color, int side) {
-        DetailLine(Component text, StackSpec spec, int color) { this(text, spec, color, -1); }
+    private record DetailLine(Component text, StackSpec spec, int color, int side, IngredientPresentation presentation) {
+        DetailLine(Component text, StackSpec spec, int color) { this(text, spec, color, -1, IngredientPresentation.REGULAR); }
     }
-    private record IconHit(int x, int y, StackSpec spec, int side, Ingredient ingredient) {}
+    private record IconHit(int x, int y, StackSpec spec, int side, IngredientPresentation presentation, int size) {
+        IconHit(int x, int y, StackSpec spec, int side, IngredientPresentation presentation) { this(x, y, spec, side, presentation, 16); }
+    }
     private void choose(Action anchor, String prefix, int count, int selectedIndex, IntConsumer select) {
         List<Component> labels = new ArrayList<>();
         for (int i = 0; i < count; i++) labels.add(tr(prefix + i));
@@ -656,18 +723,21 @@ public final class PatternWorkbenchScreen extends Screen implements GenerationLi
     private final class Action extends AbstractButton {
         private final Runnable click;
         private BooleanSupplier state;
+        private String helpKey;
         Action(int x, int y, int w, Runnable click) { super(x, y, w, 19, Component.empty()); this.click = click; }
         Action toggle(BooleanSupplier state) { this.state = state; return this; }
+        Action help(String key) { helpKey = key; return this; }
         @Override public void onPress() { click.run(); }
         @Override protected void renderWidget(GuiGraphics g, int mx, int my, float partial) {
             boolean primary = this == generate, hovered = isHoveredOrFocused() && active;
-            int color = primary && active ? (hovered ? 0xFFD6D6D6 : ACCENT) : hovered ? WorkbenchTheme.HOVER : SURFACE;
-            WorkbenchTheme.rounded(g, getX(), getY(), getWidth(), getHeight(), color);
-            int textColor = !active ? 0xFF707070 : primary ? BG : TEXT;
+            int color = primary && active ? (hovered ? WorkbenchTheme.PRIMARY_HOVER : WorkbenchTheme.PRIMARY) : hovered ? WorkbenchTheme.HOVER : SURFACE;
+            int border = primary && active ? 0xFF686868 : hovered ? 0xFF494949 : color;
+            WorkbenchTheme.control(g, getX(), getY(), getWidth(), getHeight(), color, border);
+            int textColor = !active ? 0xFF707070 : TEXT;
             int reserve = state == null ? 10 : 25;
             String label = getMessage().getString();
             String value = font.width(label) <= getWidth() - reserve ? label : font.plainSubstrByWidth(label, Math.max(0, getWidth() - reserve - 6)) + "…";
-            if (state == null) g.drawCenteredString(font, value, getX() + getWidth() / 2, getY() + 5, textColor);
+            if (state == null) g.drawString(font, value, getX() + (getWidth() - font.width(value)) / 2, getY() + 5, textColor, false);
             else {
                 g.drawString(font, value, getX() + 6, getY() + 5, textColor, false);
                 boolean on = state.getAsBoolean();

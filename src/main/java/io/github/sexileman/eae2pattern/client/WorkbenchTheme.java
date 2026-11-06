@@ -12,6 +12,10 @@ public final class WorkbenchTheme {
     public static final int DIM = 0xFFA0A0A0;
     public static final int ACCENT = 0xFFF0F0F0;
     public static final int WARNING = 0xFFE5B87E;
+    public static final int PLACEHOLDER = 0xFF858585;
+    public static final int INPUT = 0xFF1C1C1C;
+    public static final int PRIMARY = 0xFF363636;
+    public static final int PRIMARY_HOVER = 0xFF424242;
     private WorkbenchTheme() {}
 
     public static void rounded(GuiGraphics g, int x, int y, int w, int h, int color) {
@@ -19,5 +23,16 @@ public final class WorkbenchTheme {
         g.fill(x + 3, y, x + w - 3, y + h, color);
         g.fill(x + 1, y + 1, x + w - 1, y + h - 1, color);
         g.fill(x, y + 3, x + w, y + h - 3, color);
+    }
+
+    public static void control(GuiGraphics g, int x, int y, int w, int h, int fill, int border) {
+        rounded(g, x, y, w, h, border);
+        rounded(g, x + 1, y + 1, w - 2, h - 2, fill);
+    }
+    public static void slot(GuiGraphics g, int x, int y, IngredientPresentation presentation) {
+        g.fill(x, y, x + 24, y + 24, LINE);
+        g.fill(x + 1, y + 1, x + 23, y + 23, INPUT);
+        if (presentation.kind() != IngredientPresentation.Kind.REGULAR)
+            g.fill(x + 1, y + 22, x + 23, y + 23, presentation.color());
     }
 }

@@ -7,6 +7,8 @@ import io.github.sexileman.eae2pattern.client.RecipeFilters;
 import io.github.sexileman.eae2pattern.client.ProcessingMultiplier;
 import io.github.sexileman.eae2pattern.client.RecipeGroups;
 import io.github.sexileman.eae2pattern.client.RecipeDiagnostics;
+import io.github.sexileman.eae2pattern.client.IngredientPresentation;
+import io.github.sexileman.eae2pattern.client.DetailRowLayout;
 import io.github.sexileman.eae2pattern.net.S2CInspectionPacket;
 import io.github.sexileman.eae2pattern.net.C2SGeneratePatternsPacket;
 import io.github.sexileman.eae2pattern.compat.jei.GtChanceReader;
@@ -25,7 +27,7 @@ import java.util.List;
 public final class RegressionChecks {
     private static int checks;
     public static void main(String[] args) throws Exception {
-        policies(); wireFormat(); searches(); gtVersions(); layoutAndGrid(); manualMultiplier(); grouping(); inspectionPackets();
+        policies(); wireFormat(); searches(); gtVersions(); layoutAndGrid(); manualMultiplier(); grouping(); inspectionPackets(); slotPresentation();
         System.out.println("Passed " + checks + " regression checks");
     }
     private static void check(boolean condition, String message) {
@@ -105,11 +107,14 @@ public final class RegressionChecks {
     public static final class OldContent { public int chance = 2500, maxChance = 10000; }
     public record NewContent(int chance, int maxChance) {}
     private static void layoutAndGrid() {
-        for (int[] size : List.of(new int[]{320, 180}, new int[]{480, 270}, new int[]{640, 360}, new int[]{1920, 1080})) {
+        for (int[] size : List.of(new int[]{320, 180}, new int[]{480, 241}, new int[]{480, 242}, new int[]{480, 270},
+                new int[]{480, 271}, new int[]{480, 272}, new int[]{640, 331}, new int[]{640, 332}, new int[]{640, 360}, new int[]{1920, 1080})) {
             var l = io.github.sexileman.eae2pattern.client.WorkbenchLayout.measure(size[0], size[1]);
-            check(l.bodyBottom() - l.bodyTop() >= 38, "at least one full multi-icon row at " + size[0]);
+            check(l.bodyBottom() - l.bodyTop() >= 38, "at least one full multi-icon row at " + size[0] + "x" + size[1]);
             check(l.top() + l.toolbarY() + 19 < l.bodyTop(), "toolbar does not overlap list");
-            check(l.bodyBottom() < l.top() + l.height() - 45, "footer does not overlap list");
+            check(l.footerTop() - l.bodyBottom() >= 5, "generation section has an explicit gap below the list");
+            check(l.footerControlsY() >= l.footerTop() && l.footerControlsY() + 19 <= l.footerTop() + l.footerHeight(), "generation controls stay inside footer card");
+            check(l.footerTop() + l.footerHeight() < l.statsY() && l.statsY() + 9 < l.top() + l.height(), "footer card and status summary do not overlap");
             check(l.left() >= 0 && l.left() + l.width() <= size[0], "panel stays on screen");
         }
         check(CraftingGrid.slot(2, 2) == 3 && CraftingGrid.slot(3, 2) == 4, "2x2 recipe row stride");
@@ -199,5 +204,30 @@ public final class RegressionChecks {
             check(b.readUnsignedByte() == 1 && b.readVarInt() == 8, "read-only inspection operation is explicit on the wire");
             check(b.readVarInt() == 0 && b.readVarInt() == 1 && b.readVarInt() == 1 && PatternSpec.read(b).equals(spec), "inspection request preserves the full pattern specification");
         } finally { b.release(); }
+    }
+
+    private static void slotPresentation() {
+        StackSpec material = stack("test:tool", 1);
+        var nc = IngredientPresentation.of(Ingredient.notConsumed(material), 0);
+        check(nc.kind() == IngredientPresentation.Kind.NOT_CONSUMED && nc.chance().isEmpty(), "non-consumed slot is not described as 0% consumption");
+        check(nc.badge().equals("∞"), "non-consumed slot has a compact visual badge");
+        var chanceInput = IngredientPresentation.of(Ingredient.consumed(material, .25f), 0);
+        check(chanceInput.kind() == IngredientPresentation.Kind.CHANCE_INPUT && chanceInput.chance().equals("25%"), "chance input tooltip preserves exact chance");
+        var chanceOutput = IngredientPresentation.of(Ingredient.produced(material, .125f), 1);
+        check(chanceOutput.kind() == IngredientPresentation.Kind.CHANCE_OUTPUT && chanceOutput.chance().equals("12.5%"), "output probability uses production semantics");
+        check(IngredientPresentation.of(Ingredient.produced(material, 0), 1).kind() == IngredientPresentation.Kind.CHANCE_OUTPUT, "zero-chance output is not a non-consumed input");
+        check(IngredientPresentation.of(Ingredient.consumed(material), 0).equals(IngredientPresentation.REGULAR), "regular input does not get a probability badge");
+        RecipePlan.Entry mixed = entry(List.of(Ingredient.notConsumed(material), Ingredient.consumed(material)), List.of(), List.of(Ingredient.produced(stack("test:out", 1), 1)));
+        check(IngredientPresentation.encoded(mixed, material.withAmount(64), 0, true).equals(IngredientPresentation.REGULAR), "excluded tool cannot mislabel the remaining encoded material");
+        check(IngredientPresentation.encoded(mixed, material.withAmount(65), 0, false).kind() == IngredientPresentation.Kind.MIXED, "merged consumption rules are identified instead of inventing a chance");
+        RecipePlan.Entry tools = entry(List.of(), List.of(Ingredient.notConsumed(material)), List.of(Ingredient.produced(stack("test:out", 1), 1)));
+        check(IngredientPresentation.encoded(tools, material, 0, false).kind() == IngredientPresentation.Kind.NOT_CONSUMED, "separate catalyst metadata survives encoded preview rendering");
+
+        var rows = DetailRowLayout.of(List.of(false, true, false, true), Boolean::booleanValue);
+        check(rows.height() == 96 && rows.top(1) == 18 && rows.top(2) == 48 && rows.top(3) == 66, "detail rows reserve full slot height without overlapping text");
+        check(rows.indexAt(17.9) == 0 && rows.indexAt(18) == 1 && rows.indexAt(47.9) == 1 && rows.indexAt(48) == 2 && rows.indexAt(66) == 3, "detail tooltip hit tests follow the same offsets as rendering");
+        check(rows.indexAt(-1) == -1 && rows.indexAt(96) == -1, "detail border and outside points do not select a row");
+        var empty = DetailRowLayout.of(List.of(), ignored -> false);
+        check(empty.height() == 0 && empty.indexAt(0) == -1, "empty details have no stale tooltip targets");
     }
 }
