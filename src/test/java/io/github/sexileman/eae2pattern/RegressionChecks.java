@@ -4,6 +4,7 @@ import io.github.sexileman.eae2pattern.client.Ingredient;
 import io.github.sexileman.eae2pattern.client.ItemSearchQuery;
 import io.github.sexileman.eae2pattern.client.RecipePlan;
 import io.github.sexileman.eae2pattern.client.RecipeFilters;
+import io.github.sexileman.eae2pattern.client.ProcessingMultiplier;
 import io.github.sexileman.eae2pattern.compat.jei.GtChanceReader;
 import io.github.sexileman.eae2pattern.pattern.*;
 import io.netty.buffer.Unpooled;
@@ -20,7 +21,7 @@ import java.util.List;
 public final class RegressionChecks {
     private static int checks;
     public static void main(String[] args) throws Exception {
-        policies(); wireFormat(); searches(); gtVersions(); layoutAndGrid();
+        policies(); wireFormat(); searches(); gtVersions(); layoutAndGrid(); manualMultiplier();
         System.out.println("Passed " + checks + " regression checks");
     }
     private static void check(boolean condition, String message) {
@@ -116,5 +117,18 @@ public final class RegressionChecks {
         check((float) chance.invoke(null, new OldContent()) == .25f, "GT legacy public fields");
         check((float) chance.invoke(null, new NewContent(2500, 10000)) == .25f, "GT record accessors");
         check((float) chance.invoke(null, new NewContent(0, 10000)) == 0, "GT non-consumed chance");
+    }
+
+    private static void manualMultiplier() {
+        check(ProcessingMultiplier.parse("1") == ProcessingMultiplier.DEFAULT, "default multiplier is one");
+        check(ProcessingMultiplier.parse("100") == 100, "manual non-preset multiplier");
+        check(ProcessingMultiplier.parse("65536") == ProcessingMultiplier.MAX, "maximum manual multiplier");
+        for (String invalid : List.of("", "0", "65537", "9999999999999", "-1", "1.5", "x", " 2", "２"))
+            check(ProcessingMultiplier.parse(invalid) == 0, "invalid multiplier disables generation: " + invalid);
+        check(ProcessingMultiplier.acceptsText(""), "allow clearing field while editing");
+        check(!ProcessingMultiplier.acceptsText("-1") && !ProcessingMultiplier.acceptsText("100000"), "field rejects non-numeric or overlong text");
+        RecipePlan.Entry e = entry(List.of(Ingredient.consumed(stack("test:input", 2))), List.of(), List.of(Ingredient.produced(stack("test:output", 3), 1)));
+        PatternSpec scaled = e.specForPolicy(ProcessingMultiplier.parse("100"), 0, true);
+        check(scaled.inputs().get(0).amount() == 200 && scaled.outputs().get(0).amount() == 300, "manual multiplier reaches generation specification");
     }
 }
