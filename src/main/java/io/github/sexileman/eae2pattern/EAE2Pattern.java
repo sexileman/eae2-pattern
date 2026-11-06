@@ -26,6 +26,8 @@ public final class EAE2Pattern {
     public EAE2Pattern() {
         IEventBus modBus = FMLJavaModLoadingContext.get().getModEventBus();
         ModLoadingContext.get().registerConfig(ModConfig.Type.SERVER, EAE2PatternConfig.SPEC, "eae2_pattern-server.toml");
+        ModLoadingContext.get().registerConfig(ModConfig.Type.CLIENT,
+                io.github.sexileman.eae2pattern.config.WorkbenchPreferences.SPEC, "eae2_pattern-client.toml");
         modBus.addListener(EAE2Pattern::commonSetup);
     }
 

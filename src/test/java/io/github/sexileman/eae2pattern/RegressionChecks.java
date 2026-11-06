@@ -5,6 +5,10 @@ import io.github.sexileman.eae2pattern.client.ItemSearchQuery;
 import io.github.sexileman.eae2pattern.client.RecipePlan;
 import io.github.sexileman.eae2pattern.client.RecipeFilters;
 import io.github.sexileman.eae2pattern.client.ProcessingMultiplier;
+import io.github.sexileman.eae2pattern.client.RecipeGroups;
+import io.github.sexileman.eae2pattern.client.RecipeDiagnostics;
+import io.github.sexileman.eae2pattern.net.S2CInspectionPacket;
+import io.github.sexileman.eae2pattern.net.C2SGeneratePatternsPacket;
 import io.github.sexileman.eae2pattern.compat.jei.GtChanceReader;
 import io.github.sexileman.eae2pattern.pattern.*;
 import io.netty.buffer.Unpooled;
@@ -21,7 +25,7 @@ import java.util.List;
 public final class RegressionChecks {
     private static int checks;
     public static void main(String[] args) throws Exception {
-        policies(); wireFormat(); searches(); gtVersions(); layoutAndGrid(); manualMultiplier();
+        policies(); wireFormat(); searches(); gtVersions(); layoutAndGrid(); manualMultiplier(); grouping(); inspectionPackets();
         System.out.println("Passed " + checks + " regression checks");
     }
     private static void check(boolean condition, String message) {
@@ -103,7 +107,7 @@ public final class RegressionChecks {
     private static void layoutAndGrid() {
         for (int[] size : List.of(new int[]{320, 180}, new int[]{480, 270}, new int[]{640, 360}, new int[]{1920, 1080})) {
             var l = io.github.sexileman.eae2pattern.client.WorkbenchLayout.measure(size[0], size[1]);
-            check(l.bodyBottom() - l.bodyTop() >= 28, "at least one row at " + size[0]);
+            check(l.bodyBottom() - l.bodyTop() >= 38, "at least one full multi-icon row at " + size[0]);
             check(l.top() + l.toolbarY() + 19 < l.bodyTop(), "toolbar does not overlap list");
             check(l.bodyBottom() < l.top() + l.height() - 45, "footer does not overlap list");
             check(l.left() >= 0 && l.left() + l.width() <= size[0], "panel stays on screen");
@@ -111,6 +115,13 @@ public final class RegressionChecks {
         check(CraftingGrid.slot(2, 2) == 3 && CraftingGrid.slot(3, 2) == 4, "2x2 recipe row stride");
         check(CraftingGrid.slot(1, 1) == 3 && CraftingGrid.slot(2, 1) == 6, "1x3 recipe row stride");
         check(CraftingGrid.slot(8, 3) == 8, "full 3x3 grid");
+        for (int count = 1; count <= 8; count++) {
+            var popup = io.github.sexileman.eae2pattern.client.PopupLayout.measure(280, 150, 40, 19, 180, count, 320, 180);
+            check(popup.x() >= 6 && popup.x() + popup.width() <= 314 && popup.y() >= 6 && popup.y() + popup.height() <= 174,
+                    "popup stays inside minimum GUI canvas with " + count + " choices");
+            check(popup.indexAt(popup.x() + 5, popup.y() + popup.height() - 4) == count - 1, "popup last row hit test");
+            check(popup.indexAt(popup.x() - 1, popup.y() + 5) == -1 && popup.indexAt(popup.x() + 5, popup.y()) == -1, "popup border and outside click do not select");
+        }
     }
     private static void gtVersions() throws Exception {
         Method chance = GtChanceReader.class.getDeclaredMethod("chanceOf", Object.class); chance.setAccessible(true);
@@ -130,5 +141,63 @@ public final class RegressionChecks {
         RecipePlan.Entry e = entry(List.of(Ingredient.consumed(stack("test:input", 2))), List.of(), List.of(Ingredient.produced(stack("test:output", 3), 1)));
         PatternSpec scaled = e.specForPolicy(ProcessingMultiplier.parse("100"), 0, true);
         check(scaled.inputs().get(0).amount() == 200 && scaled.outputs().get(0).amount() == 300, "manual multiplier reaches generation specification");
+    }
+
+    private static void grouping() throws Exception {
+        RecipePlan.Entry a = entry(List.of(Ingredient.consumed(stack("test:ingot", 1))), List.of(), List.of(Ingredient.produced(stack("test:plate", 1), 1)));
+        RecipePlan.Entry b = entry(List.of(Ingredient.consumed(stack("test:block", 1))), List.of(), List.of(Ingredient.produced(stack("test:plate", 9), 1)));
+        check(RecipeGroups.keys(a, 1).get(0).id().equals(RecipeGroups.keys(b, 1).get(0).id()), "same-output grouping ignores route and amount");
+        var ctor = RecipePlan.Haystack.class.getDeclaredConstructor(List.class, List.class, List.class, List.class); ctor.setAccessible(true);
+        var tags = RecipePlan.Haystack.class.getDeclaredField("tags"); tags.setAccessible(true);
+        var outputs = RecipePlan.Entry.class.getDeclaredField("outputHaystack"); outputs.setAccessible(true);
+        var inputs = RecipePlan.Entry.class.getDeclaredField("inputHaystack"); inputs.setAccessible(true);
+        var outA = ctor.newInstance(List.of(), List.of(), List.of(), List.of()); tags.set(outA, List.of("forge:plates", "forge:plates/iron", "forge:plates")); outputs.set(a, outA);
+        var outB = ctor.newInstance(List.of(), List.of(), List.of(), List.of()); tags.set(outB, List.of("forge:plates")); outputs.set(b, outB);
+        var inA = ctor.newInstance(List.of(), List.of(), List.of(), List.of()); tags.set(inA, List.of("forge:ingots")); inputs.set(a, inA);
+        check(RecipeGroups.keys(a, 2).size() == 2, "preserve all distinct output tags");
+        check(RecipeGroups.keys(a, 3).get(0).id().equals("tag:forge:ingots"), "input tag grouping uses the input side");
+        RecipeGroups.Builder builder = new RecipeGroups.Builder(List.of(a, b), 2);
+        while (!builder.step()) { }
+        var groups = builder.finish();
+        check(groups.size() == 2, "one material may appear in multiple tag groups");
+        var plateGroup = groups.stream().filter(g -> g.key().id().equals("tag:forge:plates")).findFirst().orElseThrow();
+        check(plateGroup.entries().size() == 2, "tag group contains all matching routes without duplicate membership");
+        var rows = RecipeGroups.rows(List.of(a, b), groups, java.util.Set.of("tag:forge:plates", "tag:forge:plates/iron"), 2);
+        check(rows.stream().filter(r -> r.entry() == a).count() == 2, "recipe is visible under both matching tags");
+        a.setSelected(false);
+        check(rows.stream().filter(r -> r.entry() == a).noneMatch(r -> r.entry().isSelected()), "selection is shared across tags");
+        RecipePlan plan = new RecipePlan(new ResourceLocation("test:machine"), Component.literal("machine"), PatternKind.PROCESSING, List.of(a, b));
+        check(plan.selectedSpecs(1, false, true).size() == 1, "generation uses unique source entries, not repeated group rows");
+        check(plan.selectedSpecs(List.of(a), 1, false, true).isEmpty() && plan.selectedCount() == 1, "hidden selected recipes are not generated by a filtered subset");
+        check(RecipeGroups.rows(List.of(a, b), groups, java.util.Set.of(), 2).size() == 2, "collapsed groups retain headers only");
+        check(RecipeGroups.rows(List.of(a, b), groups, java.util.Set.of(), 0).size() == 2, "ungrouped view shows every source recipe once");
+        var empty = ctor.newInstance(List.of(), List.of(), List.of(), List.of()); tags.set(empty, List.of()); outputs.set(b, empty);
+        check(RecipeGroups.keys(b, 2).get(0).id().equals("untagged"), "untagged recipes are retained");
+        RecipeGroups.Builder sliced = new RecipeGroups.Builder(java.util.Collections.nCopies(3000, b), 1);
+        int steps = 1; while (!sliced.step()) steps++;
+        check(steps >= 3 && sliced.finish().get(0).entries().size() == 3000, "group construction is time-sliced");
+        CompoundTag c24 = new CompoundTag(); c24.putInt("Configuration", 24);
+        CompoundTag c0 = new CompoundTag(); c0.putInt("Configuration", 0);
+        StackSpec first = new StackSpec(StackType.ITEM, new ResourceLocation("test:circuit"), c24, 1);
+        StackSpec second = new StackSpec(StackType.ITEM, new ResourceLocation("test:circuit"), c0, 1);
+        check(!RecipeDiagnostics.sameMaterial(first, second), "click filtering distinguishes circuit NBT");
+        var circuitA = entry(List.of(Ingredient.consumed(stack("test:in", 1))), List.of(), List.of(Ingredient.produced(first, 1)));
+        var circuitB = entry(List.of(Ingredient.consumed(stack("test:in", 1))), List.of(), List.of(Ingredient.produced(second, 1)));
+        check(!RecipeGroups.keys(circuitA, 1).get(0).id().equals(RecipeGroups.keys(circuitB, 1).get(0).id()), "same-output groups distinguish NBT");
+        check(RecipeDiagnostics.sameMaterial(first, first.withAmount(64)), "click filtering ignores display count");
+        RecipePlan.Entry chance = entry(List.of(Ingredient.consumed(stack("test:in", 1))), List.of(), List.of(Ingredient.produced(stack("test:out", 1), .5f)));
+        check(RecipeDiagnostics.skipReason(chance, 1, true).equals("skip_no_guaranteed"), "explain all-chance output exclusion");
+    }
+
+    private static void inspectionPackets() {
+        PatternSpec spec = PatternSpec.processing(new ResourceLocation("test:preview"), List.of(stack("test:in", 8)), List.of(stack("test:out", 16)));
+        S2CInspectionPacket original = new S2CInspectionPacket(7, 2, true, 1, 0, List.of(), List.of(spec), List.of("preview"));
+        FriendlyByteBuf b = new FriendlyByteBuf(Unpooled.buffer());
+        try {
+            original.encode(b); check(S2CInspectionPacket.decode(b).equals(original), "canonical server preview packet round trip");
+            b.clear(); new C2SGeneratePatternsPacket(8, 0, 1, List.of(spec), 1).encode(b);
+            check(b.readUnsignedByte() == 1 && b.readVarInt() == 8, "read-only inspection operation is explicit on the wire");
+            check(b.readVarInt() == 0 && b.readVarInt() == 1 && b.readVarInt() == 1 && PatternSpec.read(b).equals(spec), "inspection request preserves the full pattern specification");
+        } finally { b.release(); }
     }
 }

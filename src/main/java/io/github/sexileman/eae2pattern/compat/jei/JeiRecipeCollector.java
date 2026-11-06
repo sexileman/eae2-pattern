@@ -155,9 +155,18 @@ public final class JeiRecipeCollector {
                 skip(recipe, "too many inputs or outputs for one pattern");
                 return;
             }
-            ItemStack icon = outputs.get(0).spec().toItemStack();
+            int primary = 0;
+            for (int i = 0; i < outputs.size(); i++) if (outputs.get(i).guaranteedOutput()) { primary = i; break; }
+            ItemStack icon = outputs.get(primary).spec().toItemStack();
             Component label = icon.isEmpty() ? Component.literal(recipeId.toString()) : icon.getHoverName();
-            entries.add(new RecipePlan.Entry(kind, recipeId, label, icon, inputs, catalysts, outputs, true));
+            if (!outputs.get(primary).spec().isItem()) {
+                var spec = outputs.get(primary).spec();
+                var fluid = net.minecraftforge.registries.ForgeRegistries.FLUIDS.getValue(spec.id());
+                if (fluid != null) label = new FluidStack(fluid, 1, spec.tag()).getDisplayName();
+            }
+            RecipePlan.Entry entry = new RecipePlan.Entry(kind, recipeId, label, icon, inputs, catalysts, outputs, true);
+            entry.setJeiRecipe(recipe);
+            entries.add(entry);
             kindCounts[kind.ordinal()]++;
         }
 
@@ -174,7 +183,9 @@ public final class JeiRecipeCollector {
         public RecipePlan finish() {
             EAE2Pattern.LOGGER.info("Collected {} of {} recipes from category '{}' ({}), skipped {}",
                     entries.size(), recipes.size(), category.getTitle().getString(), type.getUid(), skipped);
-            return new RecipePlan(type.getUid(), category.getTitle(), dominantKind(kindCounts), entries);
+            RecipePlan plan = new RecipePlan(type.getUid(), category.getTitle(), dominantKind(kindCounts), entries);
+            plan.setJeiCategory(category);
+            return plan;
         }
     }
 

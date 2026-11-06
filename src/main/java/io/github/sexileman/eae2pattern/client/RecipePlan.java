@@ -36,6 +36,9 @@ public final class RecipePlan {
     private final Component machineName;
     private final PatternKind preferredKind;
     private final List<Entry> entries;
+    private mezz.jei.api.recipe.category.IRecipeCategory<?> jeiCategory;
+    public mezz.jei.api.recipe.category.IRecipeCategory<?> jeiCategory() { return jeiCategory; }
+    public void setJeiCategory(mezz.jei.api.recipe.category.IRecipeCategory<?> category) { jeiCategory = category; }
 
     public RecipePlan(ResourceLocation machineId, Component machineName, PatternKind preferredKind, List<Entry> entries) {
         this.machineId = machineId;
@@ -125,6 +128,9 @@ public final class RecipePlan {
         private final List<Ingredient> catalysts;
         private final List<Ingredient> outputs;
         private boolean selected;
+        private Object jeiRecipe;
+        public Object jeiRecipe() { return jeiRecipe; }
+        public void setJeiRecipe(Object recipe) { jeiRecipe = recipe; }
 
         /** Search haystacks, built on first use because most sessions never type in a search box. */
         @Nullable
@@ -271,7 +277,7 @@ public final class RecipePlan {
             if (outputs.isEmpty()) {
                 return recipeId.toString();
             }
-            StackSpec first = outputs.get(0).spec();
+            StackSpec first = outputs.get(Math.max(0, mainOutputIndex())).spec();
             return first.type().name() + '|' + first.id() + '|' + (first.hasTag() ? "" + first.tag() : "");
         }
 

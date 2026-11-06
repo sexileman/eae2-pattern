@@ -17,9 +17,10 @@ import java.util.function.Supplier;
  * by {@link #requestId} and only starts working once {@link #chunkCount} chunks have arrived, which keeps a
  * partially transmitted request from producing a half-generated network.</p>
  */
-public record C2SGeneratePatternsPacket(int requestId, int chunkIndex, int chunkCount, List<PatternSpec> specs) {
+public record C2SGeneratePatternsPacket(int requestId, int chunkIndex, int chunkCount, List<PatternSpec> specs, int operation) {
 
     public void encode(FriendlyByteBuf buf) {
+        buf.writeByte(operation);
         buf.writeVarInt(requestId);
         buf.writeVarInt(chunkIndex);
         buf.writeVarInt(chunkCount);
@@ -32,6 +33,8 @@ public record C2SGeneratePatternsPacket(int requestId, int chunkIndex, int chunk
     public static C2SGeneratePatternsPacket decode(FriendlyByteBuf buf) {
         if (buf.readableBytes() > io.github.sexileman.eae2pattern.config.EAE2PatternConfig.MAX_REQUEST_BYTES.get())
             throw new IllegalArgumentException("Pattern packet exceeds byte limit");
+        int operation = buf.readUnsignedByte();
+        if (operation > 3) throw new IllegalArgumentException("Unknown pattern operation");
         int requestId = buf.readVarInt();
         int chunkIndex = buf.readVarInt();
         int chunkCount = buf.readVarInt();
@@ -42,7 +45,7 @@ public record C2SGeneratePatternsPacket(int requestId, int chunkIndex, int chunk
         for (int i = 0; i < size; i++) {
             specs.add(PatternSpec.read(buf));
         }
-        return new C2SGeneratePatternsPacket(requestId, chunkIndex, chunkCount, specs);
+        return new C2SGeneratePatternsPacket(requestId, chunkIndex, chunkCount, specs, operation);
     }
 
     public void handle(Supplier<NetworkEvent.Context> contextSupplier) {
@@ -50,7 +53,7 @@ public record C2SGeneratePatternsPacket(int requestId, int chunkIndex, int chunk
         ServerPlayer sender = context.getSender();
         context.enqueueWork(() -> {
             if (sender != null) {
-                BatchRequestManager.acceptChunk(sender, requestId, chunkIndex, chunkCount, specs);
+                BatchRequestManager.acceptChunk(sender, requestId, chunkIndex, chunkCount, specs, operation);
             }
         });
         context.setPacketHandled(true);

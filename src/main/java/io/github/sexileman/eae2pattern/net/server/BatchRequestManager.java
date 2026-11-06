@@ -39,8 +39,22 @@ public final class BatchRequestManager {
     private BatchRequestManager() {
     }
 
-    public static void acceptChunk(ServerPlayer player, int requestId, int chunkIndex, int chunkCount, List<PatternSpec> specs) {
-        if (PatternWriter.busy(player.getUUID())) return;
+    public static void acceptChunk(ServerPlayer player, int requestId, int chunkIndex, int chunkCount, List<PatternSpec> specs, int operation) {
+        if (operation == 3) {
+            if (specs.isEmpty() && chunkIndex == 0 && chunkCount == 1) {
+                PatternInspection.cancel(player.getUUID(), requestId);
+                PlayerState pending = STATES.get(player.getUUID());
+                if (pending != null && pending.requestId == requestId) STATES.remove(player.getUUID());
+            }
+            return;
+        }
+        if ((PatternWriter.busy(player.getUUID()) || PatternInspection.busy(player.getUUID())) && operation != 2) {
+            if (operation == 1) PacketHandler.sendToPlayer(player, new io.github.sexileman.eae2pattern.net.S2CInspectionPacket(
+                    requestId, operation, false, 0, 0, List.of(), List.of(), List.of("Another pattern job is running")));
+            else PacketHandler.sendToPlayer(player, new S2CGenerationResultPacket(
+                    new GenerationReport(0, 0, 0, 0, 0, GenerationReport.StopReason.ENCODE_FAILED, List.of("Another pattern job is running"))));
+            return;
+        }
         if (chunkCount <= 0 || chunkCount > MAX_CHUNKS || chunkIndex < 0 || chunkIndex >= chunkCount) {
             EAE2Pattern.LOGGER.warn("Dropping malformed pattern request from {}: chunk {}/{}",
                     player.getGameProfile().getName(), chunkIndex, chunkCount);
@@ -48,18 +62,23 @@ public final class BatchRequestManager {
         }
 
         PlayerState state = STATES.computeIfAbsent(player.getUUID(), uuid -> new PlayerState());
+        if (state.requestId == requestId && state.operation != operation) return;
+        state.operation = operation;
         List<PatternSpec> complete;
         try { complete = state.addChunk(requestId, chunkIndex, chunkCount, specs); }
         catch (IllegalArgumentException e) {
             STATES.remove(player.getUUID());
-            PacketHandler.sendToPlayer(player, new S2CGenerationResultPacket(
+            if (operation == 0) PacketHandler.sendToPlayer(player, new S2CGenerationResultPacket(
                     new GenerationReport(specs.size(), 0, 0, 0, 0, GenerationReport.StopReason.TOO_MANY_PATTERNS, List.of(e.getMessage()))));
+            else PacketHandler.sendToPlayer(player, new io.github.sexileman.eae2pattern.net.S2CInspectionPacket(
+                    requestId, operation, false, 0, 0, List.of(), List.of(), List.of(e.getMessage())));
             return;
         }
         if (complete == null) {
             return;
         }
-        execute(player, complete);
+        if (operation == 0) execute(player, complete);
+        else if (!complete.isEmpty()) PatternInspection.start(player, complete, requestId, operation);
     }
 
     public static void sendNetworkStatus(ServerPlayer player, int requestId) {
@@ -88,6 +107,7 @@ public final class BatchRequestManager {
     public static void forget(UUID playerId) {
         STATES.remove(playerId);
         PatternWriter.forget(playerId);
+        PatternInspection.forget(playerId);
     }
 
     @SubscribeEvent public static void expire(TickEvent.ServerTickEvent event) {
@@ -99,6 +119,7 @@ public final class BatchRequestManager {
     /** One in-flight request for one player. */
     private static final class PlayerState {
         private int requestId = -1;
+        private int operation;
         private int chunkCount;
         private int totalSpecs;
         private long totalBytes;
