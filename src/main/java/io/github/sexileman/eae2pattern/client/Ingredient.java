@@ -7,8 +7,8 @@ import io.github.sexileman.eae2pattern.pattern.StackSpec;
  *
  * <p>Three things a plain {@link StackSpec} cannot express and the preview needs:</p>
  * <ul>
- *   <li>{@code consumed} - JEI's {@code CATALYST} role means "required, but not used up". A pattern must not list
- *       those as inputs: AE2 would consume them on every craft.</li>
+ *   <li>{@code consumed} - JEI's {@code CATALYST} role means "required, but not used up". Excluded by default;
+ *       users can explicitly retain them in a processing pattern.</li>
  *   <li>{@code chance} - a GregTech machine can consume an input with a probability, or produce a by-product with
  *       one. AE2 patterns are deterministic, so the preview has to show which rows are affected before the player
  *       encodes them.</li>
@@ -18,8 +18,8 @@ import io.github.sexileman.eae2pattern.pattern.StackSpec;
  */
 public record Ingredient(StackSpec spec, float chance, boolean consumed) {
 
-    /** Anything at or above this counts as guaranteed; tooltip percentages rarely reach exactly 1.0f. */
-    public static final float CERTAIN = 0.999F;
+    /** Only 100% is guaranteed; 99.99% remains probabilistic. */
+    public static final float CERTAIN = 1.0F;
 
     public Ingredient {
         chance = Math.max(0.0F, Math.min(1.0F, chance));
@@ -70,6 +70,7 @@ public record Ingredient(StackSpec spec, float chance, boolean consumed) {
         if (chance >= CERTAIN) {
             return "100%";
         }
-        return Math.round(chance * 100.0F) + "%";
+        return new java.math.BigDecimal(Float.toString(chance)).movePointRight(2)
+                .stripTrailingZeros().toPlainString() + "%";
     }
 }

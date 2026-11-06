@@ -11,6 +11,7 @@ import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.crafting.CraftingRecipe;
 import net.minecraft.world.item.crafting.Ingredient;
 import net.minecraft.world.item.crafting.Recipe;
+import net.minecraft.world.item.crafting.ShapedRecipe;
 import net.minecraft.world.item.crafting.SmithingRecipe;
 import net.minecraft.world.item.crafting.StonecutterRecipe;
 import net.minecraft.world.level.Level;
@@ -111,16 +112,17 @@ public final class PatternEncoder {
             throw new EncodingException("crafting recipe has " + ingredients.size() + " slots, a grid holds 9: " + recipeId);
         }
         ItemStack[] grid = new ItemStack[9];
-        int slot = 0;
+        int index = 0;
+        int recipeWidth = recipe instanceof ShapedRecipe shaped ? shaped.getWidth() : 3;
         for (Ingredient ingredient : ingredients) {
+            int slot = recipe instanceof ShapedRecipe ? CraftingGrid.slot(index, recipeWidth) : index;
+            index++;
             if (ingredient.isEmpty()) {
                 // An empty slot in a shaped pattern still occupies its position, so the index advances.
-                slot++;
                 continue;
             }
             ItemStack[] options = ingredient.getItems();
             if (options.length == 0) {
-                slot++;
                 continue;
             }
             ItemStack stack = options[0].copy();
@@ -128,7 +130,6 @@ public final class PatternEncoder {
             if (slot < 9) {
                 grid[slot] = stack;
             }
-            slot++;
         }
         return grid;
     }
@@ -305,6 +306,6 @@ public final class PatternEncoder {
             return stack.isEmpty() ? null : AEItemKey.of(stack);
         }
         Fluid fluid = ForgeRegistries.FLUIDS.getValue(spec.id());
-        return fluid == null ? null : AEFluidKey.of(fluid);
+        return fluid == null ? null : AEFluidKey.of(new net.minecraftforge.fluids.FluidStack(fluid, 1, spec.tag()));
     }
 }

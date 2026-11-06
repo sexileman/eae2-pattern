@@ -137,7 +137,8 @@ public final class JeiRecipeCollector {
             List<IRecipeSlotView> outputSlots = slots.getSlotViews(RecipeIngredientRole.OUTPUT);
             List<Ingredient> inputs = toIngredients(inputSlots, true,
                     GtChanceReader.cursor(recipe, true, itemSlots(inputSlots), fluidSlots(inputSlots)));
-            List<Ingredient> catalysts = toIngredients(slots.getSlotViews(RecipeIngredientRole.CATALYST), false, null);
+            List<Ingredient> catalysts = toIngredients(slots.getSlotViews(RecipeIngredientRole.CATALYST), true, null)
+                    .stream().map(i -> Ingredient.notConsumed(i.spec())).toList();
             List<Ingredient> outputs = toIngredients(outputSlots, false,
                     GtChanceReader.cursor(recipe, false, itemSlots(outputSlots), fluidSlots(outputSlots)));
             if (outputs.isEmpty()) {

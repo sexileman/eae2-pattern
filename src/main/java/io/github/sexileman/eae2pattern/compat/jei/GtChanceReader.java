@@ -6,6 +6,9 @@ import org.jetbrains.annotations.Nullable;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.util.List;
+import java.util.HashMap;
+import java.util.Map;
+import java.lang.reflect.AccessibleObject;
 
 /**
  * Reads GregTech CEu's per-content chances, which JEI does not model at all.
@@ -28,6 +31,19 @@ public final class GtChanceReader {
 
     private static boolean probed;
     private static boolean available;
+    private static final ClassValue<Map<String, AccessibleObject>> MEMBERS = new ClassValue<>() {
+        @Override protected Map<String, AccessibleObject> computeValue(Class<?> type) {
+            Map<String, AccessibleObject> accessors = new HashMap<>();
+            for (String name : List.of("recipe", "chance", "maxChance")) {
+                try { accessors.put(name, type.getField(name)); }
+                catch (NoSuchFieldException e) {
+                    try { accessors.put(name, type.getMethod(name)); }
+                    catch (NoSuchMethodException ignored) { }
+                }
+            }
+            return accessors;
+        }
+    };
 
     private GtChanceReader() {
     }
@@ -88,7 +104,6 @@ public final class GtChanceReader {
         if (!probed) {
             probed = true;
             try {
-                Class.forName(WRAPPER);
                 Class.forName(RECIPE);
                 available = true;
             } catch (ClassNotFoundException e) {
@@ -99,11 +114,11 @@ public final class GtChanceReader {
     }
 
     private static Object recipeOf(Object jeiRecipe) throws ReflectiveOperationException {
+        if (jeiRecipe.getClass().getName().equals(RECIPE)) return jeiRecipe;
         if (!jeiRecipe.getClass().getName().equals(WRAPPER)) {
             return null;
         }
-        Field field = jeiRecipe.getClass().getField("recipe");
-        return field.get(jeiRecipe);
+        return member(jeiRecipe, "recipe");
     }
 
     private static float[] chances(Object recipe, boolean inputs, String capabilityClass)
@@ -128,9 +143,8 @@ public final class GtChanceReader {
         if (content == null) {
             return 1.0F;
         }
-        Class<?> type = content.getClass();
-        int chance = type.getField("chance").getInt(content);
-        int maxChance = type.getField("maxChance").getInt(content);
+        int chance = ((Number) member(content, "chance")).intValue();
+        int maxChance = ((Number) member(content, "maxChance")).intValue();
         if (maxChance <= 0) {
             return 1.0F;
         }
@@ -138,5 +152,13 @@ public final class GtChanceReader {
             return 0.0F;
         }
         return Math.min(1.0F, (float) chance / (float) maxChance);
+    }
+
+    /** Both older public-field Content and newer record Content are used by 1.20.1 packs. */
+    private static Object member(Object target, String name) throws ReflectiveOperationException {
+        AccessibleObject accessor = MEMBERS.get(target.getClass()).get(name);
+        if (accessor instanceof Field field) return field.get(target);
+        if (accessor instanceof Method method) return method.invoke(target);
+        throw new NoSuchFieldException(target.getClass().getName() + "." + name);
     }
 }

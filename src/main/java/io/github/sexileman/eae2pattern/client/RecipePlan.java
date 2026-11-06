@@ -198,12 +198,50 @@ public final class RecipePlan {
 
         /** A probabilistic product other than the main one. */
         public boolean hasProbabilisticByproduct() {
-            for (int i = 1; i < outputs.size(); i++) {
+            for (int i = 0; i < outputs.size(); i++) {
+                if (i == mainOutputIndex()) continue;
                 if (!outputs.get(i).guaranteedOutput()) {
                     return true;
                 }
             }
             return false;
+        }
+
+        /** JEI has no main/byproduct role. The first guaranteed output is the display convention. */
+        public int mainOutputIndex() {
+            for (int i = 0; i < outputs.size(); i++) if (outputs.get(i).guaranteedOutput()) return i;
+            return -1;
+        }
+
+        public boolean hasByproduct() { return outputs.size() > (mainOutputIndex() < 0 ? 0 : 1); }
+        public boolean allOutputsProbabilistic() { return !outputs.isEmpty() && mainOutputIndex() < 0; }
+
+        public boolean canEncode(int outputPolicy, boolean dropTools) {
+            boolean hasOutput = outputPolicy == 0 ? !outputs.isEmpty() : mainOutputIndex() >= 0;
+            if (!hasOutput) return false;
+            if (kind != PatternKind.PROCESSING) return true;
+            int count = dropTools ? 0 : catalysts.size();
+            for (Ingredient i : inputs) if (!dropTools || !i.neverConsumed()) count++;
+            return count > 0 && count <= PatternSpec.MAX_INPUTS && outputs.size() <= PatternSpec.MAX_OUTPUTS;
+        }
+
+        /** Policy: 0 all outputs, 1 guaranteed outputs, 2 first guaranteed (main) output only. */
+        @Nullable
+        public PatternSpec specForPolicy(int multiplier, int outputPolicy, boolean dropTools) {
+            if (!canEncode(outputPolicy, dropTools)) return null;
+            int scale = kind == PatternKind.PROCESSING ? Math.max(1, multiplier) : 1;
+            List<StackSpec> in = new ArrayList<>();
+            for (Ingredient i : inputs) if (!dropTools || !i.neverConsumed())
+                in.add(scaled(i.spec(), i.neverConsumed() ? 1 : scale));
+            if (!dropTools) for (Ingredient i : catalysts) in.add(i.spec());
+            List<StackSpec> out = new ArrayList<>();
+            for (int n = 0; n < outputs.size(); n++) {
+                Ingredient i = outputs.get(n);
+                if (outputPolicy == 1 && !i.guaranteedOutput()) continue;
+                if (outputPolicy == 2 && n != mainOutputIndex()) continue;
+                out.add(scaled(i.spec(), scale));
+            }
+            return new PatternSpec(kind, recipeId, in, out);
         }
 
         /** Everything the recipe consumes or merely requires, as searchable strings. */
@@ -243,28 +281,7 @@ public final class RecipePlan {
          */
         @Nullable
         public PatternSpec specFor(int multiplier, boolean dropChanceOutputs, boolean dropNeverConsumed) {
-            int scale = kind == PatternKind.PROCESSING ? Math.max(1, multiplier) : 1;
-
-            List<StackSpec> patternInputs = new ArrayList<>(inputs.size());
-            for (Ingredient input : inputs) {
-                if (dropNeverConsumed && input.neverConsumed()) {
-                    continue;
-                }
-                patternInputs.add(scaled(input.spec(), scale));
-            }
-
-            List<StackSpec> patternOutputs = new ArrayList<>(outputs.size());
-            for (Ingredient output : outputs) {
-                if (dropChanceOutputs && !output.guaranteedOutput()) {
-                    continue;
-                }
-                patternOutputs.add(scaled(output.spec(), scale));
-            }
-
-            if (patternOutputs.isEmpty()) {
-                return null;
-            }
-            return new PatternSpec(kind, recipeId, patternInputs, patternOutputs);
+            return specForPolicy(multiplier, dropChanceOutputs ? 1 : 0, dropNeverConsumed);
         }
 
         private static StackSpec scaled(StackSpec spec, int scale) {
@@ -306,7 +323,7 @@ public final class RecipePlan {
      * really is involved, not when a name happens to contain that text.</p>
      */
     public static final class Haystack {
-        private final List<ItemStack> stacks;
+        private final List<StackSpec> stacks;
         private final List<String> names;
         private final List<String> ids;
         private final List<String> mods;
@@ -318,8 +335,11 @@ public final class RecipePlan {
         private List<String> tooltips;
         @Nullable
         private List<String> tabs;
+        @Nullable
+        private List<String> colors;
+        private final List<net.minecraftforge.fluids.FluidStack> fluids = new ArrayList<>();
 
-        private Haystack(List<ItemStack> stacks, List<String> names, List<String> ids, List<String> mods) {
+        private Haystack(List<StackSpec> stacks, List<String> names, List<String> ids, List<String> mods) {
             this.stacks = stacks;
             this.names = names;
             this.ids = ids;
@@ -328,7 +348,7 @@ public final class RecipePlan {
 
         @SafeVarargs
         static Haystack of(List<Ingredient>... groups) {
-            List<ItemStack> stacks = new ArrayList<>();
+            List<StackSpec> stacks = new ArrayList<>();
             Set<String> names = new LinkedHashSet<>();
             Set<String> ids = new LinkedHashSet<>();
             Set<String> mods = new LinkedHashSet<>();
@@ -343,13 +363,21 @@ public final class RecipePlan {
 
                     ItemStack stack = spec.toItemStack();
                     if (!stack.isEmpty()) {
-                        stacks.add(stack);
+                        stacks.add(spec);
                         names.add(stack.getHoverName().getString());
+                    } else if (!spec.isItem()) {
+                        var fluid = net.minecraftforge.registries.ForgeRegistries.FLUIDS.getValue(spec.id());
+                        if (fluid != null) names.add(new net.minecraftforge.fluids.FluidStack(fluid, 1, spec.tag()).getDisplayName().getString());
                     }
                 }
             }
 
-            return new Haystack(List.copyOf(stacks), List.copyOf(names), List.copyOf(ids), List.copyOf(mods));
+            Haystack haystack = new Haystack(List.copyOf(stacks), List.copyOf(names), List.copyOf(ids), List.copyOf(mods));
+            for (List<Ingredient> group : groups) for (Ingredient i : group) if (!i.spec().isItem()) {
+                var fluid = net.minecraftforge.registries.ForgeRegistries.FLUIDS.getValue(i.spec().id());
+                if (fluid != null) haystack.fluids.add(new net.minecraftforge.fluids.FluidStack(fluid, 1, i.spec().tag()));
+            }
+            return haystack;
         }
 
         public List<String> names() {
@@ -367,9 +395,13 @@ public final class RecipePlan {
         public List<String> tags() {
             if (this.tags == null) {
                 Set<String> set = new LinkedHashSet<>();
-                for (ItemStack stack : this.stacks) {
-                    set.addAll(tagsOf(stack.getItem()));
+                for (StackSpec stack : this.stacks) {
+                    set.addAll(tagsOf(stack.toItemStack().getItem()));
                 }
+                var runtime = io.github.sexileman.eae2pattern.compat.jei.JeiRuntimeHolder.get();
+                if (runtime != null) for (var fluid : fluids) runtime.getIngredientManager()
+                        .getIngredientHelper(mezz.jei.api.forge.ForgeTypes.FLUID_STACK).getTagStream(fluid)
+                        .map(ResourceLocation::toString).forEach(set::add);
                 this.tags = List.copyOf(set);
             }
             return this.tags;
@@ -378,9 +410,10 @@ public final class RecipePlan {
         public List<String> tooltips() {
             if (this.tooltips == null) {
                 Set<String> set = new LinkedHashSet<>();
-                for (ItemStack stack : this.stacks) {
-                    set.addAll(tooltipsOf(stack));
+                for (StackSpec stack : this.stacks) {
+                    set.addAll(tooltipsOf(stack.toItemStack()));
                 }
+                for (var fluid : fluids) set.add(fluid.getDisplayName().getString());
                 this.tooltips = List.copyOf(set);
             }
             return this.tooltips;
@@ -389,12 +422,29 @@ public final class RecipePlan {
         public List<String> tabs() {
             if (this.tabs == null) {
                 Set<String> set = new LinkedHashSet<>();
-                for (ItemStack stack : this.stacks) {
-                    set.addAll(tabsOf(stack.getItem()));
+                for (StackSpec stack : this.stacks) {
+                    set.addAll(tabsOf(stack.toItemStack().getItem()));
                 }
                 this.tabs = List.copyOf(set);
             }
             return this.tabs;
+        }
+
+        public List<String> colors() {
+            if (colors == null) {
+                Set<String> result = new LinkedHashSet<>();
+                var runtime = io.github.sexileman.eae2pattern.compat.jei.JeiRuntimeHolder.get();
+                if (runtime != null) {
+                    var manager = runtime.getIngredientManager();
+                    var colorHelper = runtime.getJeiHelpers().getColorHelper();
+                    for (StackSpec stack : stacks) for (int color : manager.getIngredientHelper(mezz.jei.api.constants.VanillaTypes.ITEM_STACK).getColors(stack.toItemStack()))
+                        result.add(colorHelper.getClosestColorName(color));
+                    for (var fluid : fluids) for (int color : manager.getIngredientHelper(mezz.jei.api.forge.ForgeTypes.FLUID_STACK).getColors(fluid))
+                        result.add(colorHelper.getClosestColorName(color));
+                }
+                colors = List.copyOf(result);
+            }
+            return colors;
         }
     }
 
@@ -465,11 +515,6 @@ public final class RecipePlan {
      * per item and reused by every row that mentions it.
      */
     private static List<String> tooltipsOf(ItemStack stack) {
-        Item item = stack.getItem();
-        List<String> cached = TOOLTIP_CACHE.get(item);
-        if (cached != null) {
-            return cached;
-        }
         List<String> lines = new ArrayList<>();
         try {
             for (Component line : stack.getTooltipLines(Minecraft.getInstance().player, TooltipFlag.Default.NORMAL)) {
@@ -479,9 +524,6 @@ public final class RecipePlan {
             // A broken tooltip provider must not take the preview down with it; that item just gets no # text.
         }
         List<String> result = List.copyOf(lines);
-        if (TOOLTIP_CACHE.size() < CACHE_LIMIT) {
-            TOOLTIP_CACHE.put(item, result);
-        }
         return result;
     }
 
@@ -514,8 +556,11 @@ public final class RecipePlan {
     private static final int CACHE_LIMIT = 8192;
 
     private static final Map<Item, List<String>> TAG_CACHE = new HashMap<>();
-    private static final Map<Item, List<String>> TOOLTIP_CACHE = new HashMap<>();
     private static final Map<String, List<String>> MOD_CACHE = new HashMap<>();
     @Nullable
     private static Map<Item, List<String>> CREATIVE_TABS;
+
+    public static void clearSearchCaches() {
+        TAG_CACHE.clear(); MOD_CACHE.clear(); CREATIVE_TABS = null;
+    }
 }

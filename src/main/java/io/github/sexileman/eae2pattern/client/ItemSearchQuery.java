@@ -5,7 +5,6 @@ import org.jetbrains.annotations.Nullable;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
-import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 /**
@@ -24,18 +23,17 @@ import java.util.regex.Pattern;
  *   <tr><td>{@code $}</td><td>tags</td><td>item tags</td></tr>
  *   <tr><td>{@code &}</td><td>resource location</td><td>item id</td></tr>
  *   <tr><td>{@code %}</td><td>creative tabs</td><td>creative tabs</td></tr>
+ *   <tr><td>{@code ^}</td><td>colours</td><td>JEI colour names</td></tr>
  *   <tr><td>{@code -}</td><td>exclude</td><td>exclude</td></tr>
  * </table>
  *
- * <p>{@code *} and {@code ?} are accepted as wildcards, which JEI does not have, and {@code ^} (colour) is not
- * supported - both are documented in the README.</p>
+ * <p>{@code *} and {@code ?} are accepted as additional wildcards.</p>
  */
 public final class ItemSearchQuery {
 
     private static final ItemSearchQuery EMPTY = new ItemSearchQuery("", List.of());
 
     /** {@code -?"quoted term"|bareWord} - the same shape JEI's own filter uses. */
-    private static final Pattern TERM_PATTERN = Pattern.compile("(-?\".*?(?:\"|$)|\\S+)");
     private static final Pattern QUOTES = Pattern.compile("\"");
 
     private final String raw;
@@ -56,7 +54,7 @@ public final class ItemSearchQuery {
         }
 
         List<Alternative> parsed = new ArrayList<>();
-        for (String group : raw.split("\\|")) {
+        for (String group : splitOutsideQuotes(raw, true)) {
             Alternative alternative = parseAlternative(group);
             if (!alternative.isEmpty()) {
                 parsed.add(alternative);
@@ -69,9 +67,8 @@ public final class ItemSearchQuery {
         List<Term> positive = new ArrayList<>();
         List<Term> negative = new ArrayList<>();
 
-        Matcher matcher = TERM_PATTERN.matcher(group);
-        while (matcher.find()) {
-            String token = matcher.group(1);
+        for (String part : splitOutsideQuotes(group, false)) {
+            String token = part;
             boolean exclude = token.length() > 1 && token.startsWith("-");
             if (exclude) {
                 token = token.substring(1);
@@ -84,6 +81,21 @@ public final class ItemSearchQuery {
             (exclude ? negative : positive).add(term);
         }
         return new Alternative(List.copyOf(positive), List.copyOf(negative));
+    }
+
+    private static List<String> splitOutsideQuotes(String text, boolean alternatives) {
+        List<String> result = new ArrayList<>();
+        StringBuilder part = new StringBuilder();
+        boolean quoted = false;
+        for (int i = 0; i < text.length(); i++) {
+            char c = text.charAt(i);
+            if (c == '"') quoted = !quoted;
+            if (!quoted && (alternatives ? c == '|' : Character.isWhitespace(c))) {
+                if (part.length() > 0) { result.add(part.toString()); part.setLength(0); }
+            } else part.append(c);
+        }
+        if (part.length() > 0) result.add(part.toString());
+        return result;
     }
 
     public boolean isEmpty() {
@@ -141,7 +153,8 @@ public final class ItemSearchQuery {
         TOOLTIP,
         TAG,
         ID,
-        TAB
+        TAB,
+        COLOR
     }
 
     private record Term(Kind kind, String literal, @Nullable Pattern glob) {
@@ -156,9 +169,7 @@ public final class ItemSearchQuery {
                     case '$' -> Kind.TAG;
                     case '&' -> Kind.ID;
                     case '%' -> Kind.TAB;
-                    // '^' is JEI's colour search. Colours are not modelled here, so the rest of the term is
-                    // searched as text rather than silently matching nothing.
-                    case '^' -> Kind.NAME;
+                    case '^' -> Kind.COLOR;
                     default -> Kind.NAME;
                 };
                 if (kind != Kind.NAME || first == '^') {
@@ -204,6 +215,7 @@ public final class ItemSearchQuery {
                 case TAG -> haystack.tags();
                 case ID -> haystack.ids();
                 case TAB -> haystack.tabs();
+                case COLOR -> haystack.colors();
             };
             if (this.literal.isEmpty()) {
                 return false;

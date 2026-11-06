@@ -38,11 +38,3 @@ description='''${mod_description}'''
     versionRange="${jei_version_range}"
     ordering="AFTER"
     side="CLIENT"
-
-[[dependencies.${mod_id}]]
-    modId="modularui"
-    mandatory=true
-    versionRange="${modularui_version_range}"
-    ordering="AFTER"
-    side="CLIENT"
-    reason="ModularUI draws the preview screen; it is bundled in this jar."

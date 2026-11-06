@@ -18,6 +18,7 @@
 /run/
 /run-data/
 /runs/
+/logs/
 
 # Local toolchain (JDK / Gradle downloaded for this workspace)
 /.tools/

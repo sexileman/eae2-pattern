@@ -30,10 +30,14 @@ public record C2SGeneratePatternsPacket(int requestId, int chunkIndex, int chunk
     }
 
     public static C2SGeneratePatternsPacket decode(FriendlyByteBuf buf) {
+        if (buf.readableBytes() > io.github.sexileman.eae2pattern.config.EAE2PatternConfig.MAX_REQUEST_BYTES.get())
+            throw new IllegalArgumentException("Pattern packet exceeds byte limit");
         int requestId = buf.readVarInt();
         int chunkIndex = buf.readVarInt();
         int chunkCount = buf.readVarInt();
         int size = buf.readVarInt();
+        if (size < 0 || size > io.github.sexileman.eae2pattern.config.EAE2PatternConfig.MAX_PATTERNS_PER_REQUEST.get())
+            throw new IllegalArgumentException("Invalid pattern count");
         List<PatternSpec> specs = new ArrayList<>(size);
         for (int i = 0; i < size; i++) {
             specs.add(PatternSpec.read(buf));

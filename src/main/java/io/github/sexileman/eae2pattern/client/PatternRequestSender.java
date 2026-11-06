@@ -5,22 +5,20 @@ import io.github.sexileman.eae2pattern.config.EAE2PatternConfig;
 import io.github.sexileman.eae2pattern.net.C2SGeneratePatternsPacket;
 import io.github.sexileman.eae2pattern.net.PacketHandler;
 import io.github.sexileman.eae2pattern.pattern.PatternSpec;
-import io.github.sexileman.eae2pattern.pattern.StackSpec;
 
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
+import io.netty.buffer.Unpooled;
+import net.minecraft.network.FriendlyByteBuf;
 
 /**
  * Splits a selection into chunks that fit a packet and ships them.
  *
- * <p>The byte estimate is deliberately pessimistic: a spec is charged a fixed overhead plus its serialized
- * stacks, which is enough to keep a 400-recipe machine under the packet cap without measuring the real buffer.</p>
+ * <p>Measures the actual wire size, including item/fluid NBT, with a small allowance for packet headers.</p>
  */
 public final class PatternRequestSender {
 
-    private static final int BYTES_PER_SPEC_OVERHEAD = 24;
-    private static final int BYTES_PER_STACK = 24;
     private static final int DEFAULT_CHUNK_BYTES = 48_000;
 
     private static final AtomicInteger REQUEST_IDS = new AtomicInteger();
@@ -33,17 +31,20 @@ public final class PatternRequestSender {
             return -1;
         }
         int requestId = REQUEST_IDS.incrementAndGet();
+        if (specs.size() > EAE2PatternConfig.MAX_PATTERNS_PER_REQUEST.get())
+            throw new IllegalArgumentException("Too many patterns in one request: " + specs.size());
         int maxBytes = Math.max(4096, Math.min(EAE2PatternConfig.MAX_REQUEST_BYTES.get(), DEFAULT_CHUNK_BYTES));
 
         List<List<PatternSpec>> chunks = new ArrayList<>();
         List<PatternSpec> current = new ArrayList<>();
-        int currentBytes = 0;
+        int currentBytes = 32;
         for (PatternSpec spec : specs) {
-            int specBytes = estimate(spec);
+            int specBytes = serializedSize(spec);
+            if (specBytes + 32 > maxBytes) throw new IllegalArgumentException("Recipe NBT exceeds packet limit: " + spec.recipeId());
             if (!current.isEmpty() && currentBytes + specBytes > maxBytes) {
                 chunks.add(current);
                 current = new ArrayList<>();
-                currentBytes = 0;
+                currentBytes = 32;
             }
             current.add(spec);
             currentBytes += specBytes;
@@ -52,6 +53,7 @@ public final class PatternRequestSender {
             chunks.add(current);
         }
 
+        if (chunks.size() > 256) throw new IllegalArgumentException("Pattern request needs more than 256 chunks");
         for (int i = 0; i < chunks.size(); i++) {
             PacketHandler.sendToServer(new C2SGeneratePatternsPacket(requestId, i, chunks.size(), chunks.get(i)));
         }
@@ -60,16 +62,9 @@ public final class PatternRequestSender {
         return requestId;
     }
 
-    private static int estimate(PatternSpec spec) {
-        int bytes = BYTES_PER_SPEC_OVERHEAD;
-        bytes += spec.recipeId().toString().length();
-        bytes += (spec.inputs().size() + spec.outputs().size()) * BYTES_PER_STACK;
-        for (StackSpec stack : spec.inputs()) {
-            bytes += stack.id().toString().length();
-        }
-        for (StackSpec stack : spec.outputs()) {
-            bytes += stack.id().toString().length();
-        }
-        return bytes;
+    private static int serializedSize(PatternSpec spec) {
+        FriendlyByteBuf buffer = new FriendlyByteBuf(Unpooled.buffer());
+        try { spec.write(buffer); return buffer.readableBytes(); }
+        finally { buffer.release(); }
     }
 }

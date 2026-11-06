@@ -125,6 +125,8 @@ public final class NetworkAccess {
         return grid.getStorageService().getInventory();
     }
 
+    public boolean sameNetwork(NetworkAccess other) { return grid == other.grid; }
+
     /** Exact count of blank patterns; the cached inventory is refreshed by AE2 at most once per tick. */
     public long blankPatterns() {
         return grid.getStorageService().getCachedInventory().get(blankPatternKey());

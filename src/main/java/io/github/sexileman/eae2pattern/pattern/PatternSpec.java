@@ -74,11 +74,13 @@ public record PatternSpec(
         PatternKind kind = PatternKind.byOrdinal(buf.readByte());
         ResourceLocation recipeId = buf.readResourceLocation();
         int inputCount = buf.readVarInt();
+        if (inputCount < 0 || inputCount > MAX_INPUTS) throw new IllegalArgumentException("Invalid pattern input count");
         List<StackSpec> inputs = new ArrayList<>(inputCount);
         for (int i = 0; i < inputCount; i++) {
             inputs.add(StackSpec.read(buf));
         }
         int outputCount = buf.readVarInt();
+        if (outputCount < 1 || outputCount > MAX_OUTPUTS) throw new IllegalArgumentException("Invalid pattern output count");
         List<StackSpec> outputs = new ArrayList<>(outputCount);
         for (int i = 0; i < outputCount; i++) {
             outputs.add(StackSpec.read(buf));

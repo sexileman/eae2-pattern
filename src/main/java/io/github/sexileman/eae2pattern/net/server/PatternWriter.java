@@ -6,153 +6,125 @@ import appeng.api.stacks.AEItemKey;
 import appeng.api.storage.MEStorage;
 import io.github.sexileman.eae2pattern.EAE2Pattern;
 import io.github.sexileman.eae2pattern.pattern.GenerationReport;
+import io.github.sexileman.eae2pattern.pattern.GenerationReport.StopReason;
 import io.github.sexileman.eae2pattern.pattern.PatternEncoder;
 import io.github.sexileman.eae2pattern.pattern.PatternSpec;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.item.ItemStack;
-import org.jetbrains.annotations.Nullable;
-
+import net.minecraftforge.event.TickEvent;
+import net.minecraftforge.event.server.ServerStoppedEvent;
+import net.minecraftforge.eventbus.api.SubscribeEvent;
+import net.minecraftforge.fml.common.Mod;
+import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.UUID;
+import java.util.function.Consumer;
 
-/**
- * The transaction. This is the only place that touches the ME network, and it is deliberately sequential.
- *
- * <p>The order per pattern is: encode first (pure, no side effects), then take one blank pattern, then insert the
- * encoded one. Encoding before extraction means a recipe AE2 refuses to encode costs the player nothing. If the
- * insert is refused, the blank pattern goes straight back, so a failed run never eats items.</p>
- *
- * <p>Requirement #4 says "stop if the network has no room for the patterns". AE2 offers no cheap "how much can you
- * take" query, so we treat the first refused insert as the stop signal rather than predicting it. That is both
- * cheaper and more accurate than an estimate, because cells can report room and still reject on commit.</p>
- *
- * <p>A recipe that cannot be encoded is <em>skipped</em>, not fatal: a modded machine with 800 recipes almost always
- * has a few layouts AE2 cannot express (hidden outputs, fluid-only results, more than 81 input slots), and aborting
- * the whole run on the first one would leave the player with nothing. Recipes are only skipped before any item is
- * spent, so skipping never costs anything.</p>
- */
+/** Server-thread jobs, round-robin, with a global 4ms / 64 recipe budget per tick. */
+@Mod.EventBusSubscriber(modid = EAE2Pattern.MOD_ID)
 public final class PatternWriter {
+    private static final ArrayDeque<Job> JOBS = new ArrayDeque<>();
+    private PatternWriter() {}
 
-    /** How many per-recipe failure lines travel back to the client; the rest go to the log only. */
-    private static final int MAX_DETAILS_SENT = 5;
-
-    private PatternWriter() {
-    }
-
-    @Nullable
-    public static NetworkAccess resolve(ServerPlayer player) {
-        return NetworkAccess.resolve(player);
-    }
-
+    public static boolean busy(UUID player) { return JOBS.stream().anyMatch(j -> j.player.getUUID().equals(player)); }
+    public static void forget(UUID player) { JOBS.removeIf(j -> j.player.getUUID().equals(player)); }
     public static long countBlankPatterns(ServerPlayer player) {
         NetworkAccess network = NetworkAccess.resolve(player);
-        return network == null ? 0L : network.blankPatterns();
+        return network == null ? 0 : network.blankPatterns();
     }
+    public static boolean hasNetwork(ServerPlayer player) { return NetworkAccess.resolve(player) != null; }
 
-    public static boolean hasNetwork(ServerPlayer player) {
-        return NetworkAccess.resolve(player) != null;
-    }
-
-    public static GenerationReport write(ServerPlayer player, List<PatternSpec> specs) {
-        String who = player.getGameProfile().getName();
-        if (specs.isEmpty()) {
-            return GenerationReport.nothingToDo();
-        }
-
+    public static void start(ServerPlayer player, List<PatternSpec> specs, Consumer<GenerationReport> callback) {
+        if (busy(player.getUUID())) return;
         NetworkAccess network = NetworkAccess.resolve(player);
+        if (specs.isEmpty()) { callback.accept(GenerationReport.nothingToDo()); return; }
         if (network == null) {
-            EAE2Pattern.LOGGER.warn("Generation for {} aborted: no AE2 network reachable", who);
-            return new GenerationReport(specs.size(), 0, 0, 0, 0, GenerationReport.StopReason.NO_NETWORK,
-                    List.of("no AE2 network reachable (open an ME terminal or hold a linked wireless terminal)"));
+            callback.accept(new GenerationReport(specs.size(), 0, 0, 0, 0, StopReason.NO_NETWORK, List.of())); return;
         }
-
-        MEStorage storage = network.storage();
-        IActionSource source = network.actionSource(player);
-        AEItemKey blankKey = NetworkAccess.blankPatternKey();
-
         long available = network.blankPatterns();
-        EAE2Pattern.LOGGER.info("Generation for {}: {} patterns requested, {} blank patterns available",
-                who, specs.size(), available);
         if (available < specs.size()) {
-            // Requirement #3: refuse before spending anything rather than running out halfway through.
-            EAE2Pattern.LOGGER.warn("Generation for {} refused: need {} blank patterns, network has {}",
-                    who, specs.size(), available);
-            return new GenerationReport(specs.size(), 0, 0, 0, 0,
-                    GenerationReport.StopReason.NOT_ENOUGH_BLANK_PATTERNS,
-                    List.of("need " + specs.size() + " blank patterns, network has " + available));
+            callback.accept(new GenerationReport(specs.size(), 0, 0, 0, 0, StopReason.NOT_ENOUGH_BLANK_PATTERNS,
+                    List.of("need " + specs.size() + " blank patterns, network has " + available))); return;
         }
+        JOBS.add(new Job(player, List.copyOf(specs), network, callback));
+    }
 
-        int encoded = 0;
-        int inserted = 0;
-        int skipped = 0;
-        int used = 0;
-        List<String> failures = new ArrayList<>();
+    @SubscribeEvent public static void tick(TickEvent.ServerTickEvent event) {
+        if (event.phase != TickEvent.Phase.END) return;
+        long deadline = System.nanoTime() + 4_000_000L;
+        int work = 0;
+        while (!JOBS.isEmpty() && work++ < 64 && System.nanoTime() < deadline) {
+            Job job = JOBS.removeFirst();
+            if (job.player.hasDisconnected()) continue;
+            boolean done;
+            try { done = job.step(); }
+            catch (RuntimeException e) {
+                EAE2Pattern.LOGGER.error("Pattern job failed for {}", job.player.getUUID(), e);
+                job.detail(e.toString()); job.finish(StopReason.ENCODE_FAILED); done = true;
+            }
+            if (!done) JOBS.addLast(job);
+        }
+    }
+    @SubscribeEvent public static void stopped(ServerStoppedEvent event) { JOBS.clear(); }
 
-        for (PatternSpec spec : specs) {
+    private static final class Job {
+        final ServerPlayer player;
+        final List<PatternSpec> specs;
+        final NetworkAccess network;
+        final Consumer<GenerationReport> callback;
+        final List<String> details = new ArrayList<>();
+        int cursor, encoded, inserted, skipped;
+        Job(ServerPlayer player, List<PatternSpec> specs, NetworkAccess network, Consumer<GenerationReport> callback) {
+            this.player = player; this.specs = specs; this.network = network; this.callback = callback;
+        }
+        void detail(String message) { if (details.size() < 5) details.add(message); }
+        void finish(StopReason reason) {
+            EAE2Pattern.LOGGER.info("Generation for {}: requested={} inserted={} skipped={} reason={}", player.getUUID(), specs.size(), inserted, skipped, reason);
+            callback.accept(new GenerationReport(specs.size(), encoded, inserted, skipped, inserted, reason, details));
+        }
+        boolean step() {
+            NetworkAccess current = NetworkAccess.resolve(player);
+            if (current == null || !network.sameNetwork(current)) { finish(StopReason.NO_NETWORK); return true; }
+            PatternSpec spec = specs.get(cursor++);
             ItemStack pattern;
-            try {
-                pattern = PatternEncoder.encode(player.serverLevel(), spec);
-                if (pattern.isEmpty()) {
-                    throw new PatternEncoder.EncodingException("encoder produced an empty stack");
-                }
-            } catch (PatternEncoder.EncodingException | RuntimeException e) {
-                // Nothing has been spent yet for this recipe, so skipping it is free.
-                skipped++;
-                String detail = spec.recipeId() + " [" + spec.kind() + "]: " + describe(e);
-                EAE2Pattern.LOGGER.warn("Skipping recipe {} for {}: {}", spec.recipeId(), who, describe(e));
-                if (failures.size() < MAX_DETAILS_SENT) {
-                    failures.add(detail);
-                }
-                continue;
+            try { pattern = PatternEncoder.encode(player.serverLevel(), spec); }
+            catch (PatternEncoder.EncodingException | RuntimeException e) {
+                skipped++; detail(spec.recipeId() + ": " + e.getMessage());
+                EAE2Pattern.LOGGER.debug("Skipping {}", spec.recipeId(), e);
+                return endIfFinished();
             }
-
-            long taken = storage.extract(blankKey, 1, Actionable.MODULATE, source);
-            if (taken < 1) {
-                // Someone drained the blanks between our count and now.
-                EAE2Pattern.LOGGER.warn("Generation for {} stopped: blank pattern vanished after {} of {}",
-                        who, inserted, specs.size());
-                return new GenerationReport(specs.size(), encoded, inserted, skipped, used,
-                        GenerationReport.StopReason.NOT_ENOUGH_BLANK_PATTERNS,
-                        append(failures, "blank pattern disappeared from the network"));
+            MEStorage storage = current.storage();
+            IActionSource source = current.actionSource(player);
+            AEItemKey blank = NetworkAccess.blankPatternKey();
+            if (storage.extract(blank, 1, Actionable.MODULATE, source) < 1) {
+                finish(StopReason.NOT_ENOUGH_BLANK_PATTERNS); return true;
             }
-            used++;
             encoded++;
-
-            AEItemKey encodedKey = AEItemKey.of(pattern);
-            long accepted = encodedKey == null ? 0 : storage.insert(encodedKey, 1, Actionable.MODULATE, source);
-            if (accepted < 1) {
-                // Requirement #4: put the blank back and stop. The player keeps every item they brought.
-                storage.insert(blankKey, 1, Actionable.MODULATE, source);
-                used--;
-                EAE2Pattern.LOGGER.warn("Generation for {} stopped: network refused {} after {} inserts",
-                        who, spec.recipeId(), inserted);
-                return new GenerationReport(specs.size(), encoded, inserted, skipped, used,
-                        GenerationReport.StopReason.STORAGE_FULL,
-                        append(failures, "network refused " + spec.recipeId()));
+            // Every exit after extraction refunds the blank if the encoded item was not inserted.
+            boolean accepted = false;
+            try {
+                AEItemKey key = AEItemKey.of(pattern);
+                accepted = key != null && storage.insert(key, 1, Actionable.MODULATE, source) == 1;
+            } finally {
+                if (!accepted) refund(storage, blank, source);
             }
+            if (!accepted) { finish(StopReason.STORAGE_FULL); return true; }
             inserted++;
+            return endIfFinished();
         }
-
-        if (inserted == 0 && skipped > 0) {
-            EAE2Pattern.LOGGER.warn("Generation for {} failed: all {} recipes were unencodable", who, skipped);
-            return new GenerationReport(specs.size(), encoded, inserted, skipped, used,
-                    GenerationReport.StopReason.ENCODE_FAILED, failures);
+        void refund(MEStorage storage, AEItemKey blank, IActionSource source) {
+            long returned = 0;
+            try { returned = storage.insert(blank, 1, Actionable.MODULATE, source); }
+            catch (RuntimeException e) { EAE2Pattern.LOGGER.warn("Network rejected blank refund", e); }
+            if (returned < 1) {
+                ItemStack refund = blank.toStack(1);
+                if (!player.getInventory().add(refund)) player.drop(refund, false);
+            }
         }
-
-        EAE2Pattern.LOGGER.info("Generation for {} finished: requested={} encoded={} inserted={} skipped={} blanksUsed={}",
-                who, specs.size(), encoded, inserted, skipped, used);
-        return new GenerationReport(specs.size(), encoded, inserted, skipped, used,
-                GenerationReport.StopReason.COMPLETED, failures);
-    }
-
-    private static List<String> append(List<String> details, String extra) {
-        List<String> copy = new ArrayList<>(details);
-        copy.add(extra);
-        return copy;
-    }
-
-    private static String describe(Throwable e) {
-        String message = e.getMessage();
-        return message == null || message.isBlank() ? e.getClass().getSimpleName() : message;
+        boolean endIfFinished() {
+            if (cursor < specs.size()) return false;
+            finish(inserted == 0 && skipped > 0 ? StopReason.ENCODE_FAILED : StopReason.COMPLETED); return true;
+        }
     }
 }

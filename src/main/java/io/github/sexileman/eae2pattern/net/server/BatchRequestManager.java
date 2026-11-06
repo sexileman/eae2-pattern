@@ -15,6 +15,11 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
+import net.minecraftforge.event.TickEvent;
+import net.minecraftforge.event.server.ServerStoppedEvent;
+import net.minecraftforge.event.entity.player.PlayerEvent;
+import net.minecraftforge.eventbus.api.SubscribeEvent;
+import net.minecraftforge.fml.common.Mod;
 
 /**
  * Reassembles chunked generation requests per player and runs them once the last chunk arrives.
@@ -23,6 +28,7 @@ import java.util.concurrent.ConcurrentHashMap;
  * inputs; that does not fit in one packet. Reassembly exists so a dropped chunk can never cause a partial
  * run: nothing is encoded until every chunk is present.</p>
  */
+@Mod.EventBusSubscriber(modid = EAE2Pattern.MOD_ID)
 public final class BatchRequestManager {
 
     private static final long TIMEOUT_MS = 10_000L;
@@ -34,6 +40,7 @@ public final class BatchRequestManager {
     }
 
     public static void acceptChunk(ServerPlayer player, int requestId, int chunkIndex, int chunkCount, List<PatternSpec> specs) {
+        if (PatternWriter.busy(player.getUUID())) return;
         if (chunkCount <= 0 || chunkCount > MAX_CHUNKS || chunkIndex < 0 || chunkIndex >= chunkCount) {
             EAE2Pattern.LOGGER.warn("Dropping malformed pattern request from {}: chunk {}/{}",
                     player.getGameProfile().getName(), chunkIndex, chunkCount);
@@ -41,7 +48,14 @@ public final class BatchRequestManager {
         }
 
         PlayerState state = STATES.computeIfAbsent(player.getUUID(), uuid -> new PlayerState());
-        List<PatternSpec> complete = state.addChunk(requestId, chunkIndex, chunkCount, specs);
+        List<PatternSpec> complete;
+        try { complete = state.addChunk(requestId, chunkIndex, chunkCount, specs); }
+        catch (IllegalArgumentException e) {
+            STATES.remove(player.getUUID());
+            PacketHandler.sendToPlayer(player, new S2CGenerationResultPacket(
+                    new GenerationReport(specs.size(), 0, 0, 0, 0, GenerationReport.StopReason.TOO_MANY_PATTERNS, List.of(e.getMessage()))));
+            return;
+        }
         if (complete == null) {
             return;
         }
@@ -67,26 +81,27 @@ public final class BatchRequestManager {
             return;
         }
 
-        GenerationReport report;
-        try {
-            report = PatternWriter.write(player, specs);
-        } catch (RuntimeException e) {
-            EAE2Pattern.LOGGER.error("Pattern generation failed for {}", who, e);
-            report = new GenerationReport(specs.size(), 0, 0, 0, 0, GenerationReport.StopReason.ENCODE_FAILED,
-                    List.of(e.getClass().getSimpleName() + ": " + e.getMessage()));
-        }
-        PacketHandler.sendToPlayer(player, new S2CGenerationResultPacket(report));
+        PatternWriter.start(player, specs, report -> PacketHandler.sendToPlayer(player, new S2CGenerationResultPacket(report)));
     }
 
     /** Called when a player disconnects so a half-transmitted request cannot leak. */
     public static void forget(UUID playerId) {
         STATES.remove(playerId);
+        PatternWriter.forget(playerId);
     }
+
+    @SubscribeEvent public static void expire(TickEvent.ServerTickEvent event) {
+        if (event.phase == TickEvent.Phase.END) STATES.entrySet().removeIf(e -> System.currentTimeMillis() - e.getValue().lastTouched > TIMEOUT_MS);
+    }
+    @SubscribeEvent public static void stopped(ServerStoppedEvent event) { STATES.clear(); }
+    @SubscribeEvent public static void loggedOut(PlayerEvent.PlayerLoggedOutEvent event) { forget(event.getEntity().getUUID()); }
 
     /** One in-flight request for one player. */
     private static final class PlayerState {
         private int requestId = -1;
         private int chunkCount;
+        private int totalSpecs;
+        private long totalBytes;
         private final Map<Integer, List<PatternSpec>> chunks = new HashMap<>();
         private long lastTouched = System.currentTimeMillis();
 
@@ -96,13 +111,24 @@ public final class BatchRequestManager {
                 this.requestId = requestId;
                 this.chunkCount = chunkCount;
                 this.chunks.clear();
+                this.totalSpecs = 0;
+                this.totalBytes = 0;
             }
+            if (this.chunkCount != chunkCount) return null;
             this.lastTouched = now;
             this.chunkCount = chunkCount;
 
             if (chunks.putIfAbsent(chunkIndex, specs) != null) {
                 EAE2Pattern.LOGGER.warn("Duplicate chunk {} for request {}", chunkIndex, requestId);
                 return null;
+            }
+            totalSpecs += specs.size();
+            net.minecraft.network.FriendlyByteBuf buffer = new net.minecraft.network.FriendlyByteBuf(io.netty.buffer.Unpooled.buffer());
+            try { for (PatternSpec spec : specs) spec.write(buffer); totalBytes += buffer.readableBytes(); }
+            finally { buffer.release(); }
+            if (totalSpecs > EAE2PatternConfig.MAX_PATTERNS_PER_REQUEST.get() || totalBytes > 16_000_000L) {
+                chunks.clear(); this.requestId = -1; totalSpecs = 0; totalBytes = 0;
+                throw new IllegalArgumentException("Request exceeds recipe or 16 MB assembly limit");
             }
             if (chunks.size() < chunkCount) {
                 return null;
