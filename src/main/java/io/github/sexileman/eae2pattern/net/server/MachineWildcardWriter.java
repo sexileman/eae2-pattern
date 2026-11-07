@@ -25,11 +25,14 @@ public final class MachineWildcardWriter {
     public static boolean busy(UUID id) { return JOBS.stream().anyMatch(j -> j.player.getUUID().equals(id)); }
     public static void forget(UUID id) { JOBS.removeIf(j -> j.player.getUUID().equals(id)); }
     public static void start(ServerPlayer player, List<PatternSpec> specs, Consumer<GenerationReport> callback) {
-        if (!MachineWildcard.available()) { callback.accept(failed(specs.size(), "Install Wildcard Pattern on both client and server")); return; }
+        start(player, specs, new CompoundTag(), callback);
+    }
+    public static void start(ServerPlayer player, List<PatternSpec> specs, CompoundTag rules, Consumer<GenerationReport> callback) {
+        if (!MachineWildcard.available()) { callback.accept(failed(specs.size(), "Machine wildcard item is unavailable")); return; }
         if (specs.isEmpty()) { callback.accept(GenerationReport.nothingToDo()); return; }
         NetworkAccess network = NetworkAccess.resolve(player);
         if (network == null) { callback.accept(failed(specs.size(), "ME network unavailable")); return; }
-        JOBS.add(new Job(player, List.copyOf(specs), network, callback));
+        JOBS.add(new Job(player, List.copyOf(specs), network, WildcardEditorState.clean(rules), callback));
     }
     private static GenerationReport failed(int n, String message) {
         return new GenerationReport(n, 0, 0, 0, 0, GenerationReport.StopReason.ENCODE_FAILED, List.of(message));
@@ -56,15 +59,26 @@ public final class MachineWildcardWriter {
         final Consumer<GenerationReport> callback;
         final List<ItemStack> prepared = new ArrayList<>();
         final List<CompoundTag> rows = new ArrayList<>();
+        final CompoundTag rules;
         ResourceLocation machine;
         int cursor, bytes, totalBytes;
-        Job(ServerPlayer player, List<PatternSpec> specs, NetworkAccess network, Consumer<GenerationReport> callback) {
-            this.player = player; this.specs = specs; this.network = network; this.callback = callback;
+        Job(ServerPlayer player, List<PatternSpec> specs, NetworkAccess network, CompoundTag rules, Consumer<GenerationReport> callback) {
+            this.player = player; this.specs = specs; this.network = network; this.rules = rules; this.callback = callback;
         }
         void flush() {
             if (rows.isEmpty()) return;
-            prepared.add(MachineWildcard.item(machine, rows, player.getGameProfile().getName()));
+            emit(rows);
             rows.clear(); bytes = 0;
+        }
+        void emit(List<CompoundTag> entries) {
+            try {
+                var item = MachineWildcard.item(machine, entries, player.getGameProfile().getName());
+                item.getOrCreateTag().put("editor", rules.copy()); prepared.add(item);
+            } catch (MachineWildcardData.CapacityException tooLarge) {
+                if (entries.size() < 2) throw tooLarge;
+                int middle = entries.size() / 2;
+                emit(entries.subList(0, middle)); emit(entries.subList(middle, entries.size()));
+            }
         }
         boolean step() throws Exception {
             NetworkAccess current = NetworkAccess.resolve(player);
@@ -79,10 +93,10 @@ public final class MachineWildcardWriter {
             row.putString("recipe", spec.recipeId().toString()); row.putByteArray("fingerprint", MachineWildcard.fingerprint(recipe));
             row.put("pattern", PatternEncoder.encode(player, spec).save(new CompoundTag()));
             int size = MachineWildcardData.bytes(row);
-            if (size > MachineWildcardData.MAX_BYTES - 1024) throw new IllegalArgumentException("A source pattern is too large for a wildcard: " + spec.recipeId());
+            if (size > MachineWildcardData.MAX_RAW_BYTES - 4096) throw new IllegalArgumentException("A source pattern is too large for a wildcard: " + spec.recipeId());
             totalBytes += size;
             if (totalBytes > 16_000_000) throw new IllegalArgumentException("Machine wildcard preparation exceeds 16 MB");
-            if (!type.equals(machine) || rows.size() == MachineWildcardData.MAX_RECIPES || bytes + size > MachineWildcardData.MAX_BYTES - 1024) flush();
+            if (!type.equals(machine) || rows.size() == MachineWildcardData.MAX_RECIPES || bytes + size > MachineWildcardData.MAX_RAW_BYTES - 4096) flush();
             machine = type; rows.add(row); bytes += size;
             if (cursor < specs.size()) return false;
             flush();

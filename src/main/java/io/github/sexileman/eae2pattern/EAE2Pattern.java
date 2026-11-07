@@ -25,6 +25,7 @@ public final class EAE2Pattern {
 
     public EAE2Pattern() {
         IEventBus modBus = FMLJavaModLoadingContext.get().getModEventBus();
+        io.github.sexileman.eae2pattern.wildcard.WildcardItems.ITEMS.register(modBus);
         ModLoadingContext.get().registerConfig(ModConfig.Type.SERVER, EAE2PatternConfig.SPEC, "eae2_pattern-server.toml");
         ModLoadingContext.get().registerConfig(ModConfig.Type.CLIENT,
                 io.github.sexileman.eae2pattern.config.WorkbenchPreferences.SPEC, "eae2_pattern-client.toml");
@@ -33,6 +34,7 @@ public final class EAE2Pattern {
 
     private static void commonSetup(FMLCommonSetupEvent event) {
         event.enqueueWork(PacketHandler::register);
+        event.enqueueWork(() -> appeng.api.crafting.PatternDetailsHelper.registerDecoder(new io.github.sexileman.eae2pattern.wildcard.MachineWildcardDecoder()));
         ModList.get().getModContainerById(MOD_ID).ifPresent(container ->
                 LOGGER.info("EAE2 Pattern {} loaded", container.getModInfo().getVersion()));
     }

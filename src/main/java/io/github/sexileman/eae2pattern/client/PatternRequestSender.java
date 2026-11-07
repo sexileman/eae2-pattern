@@ -31,6 +31,9 @@ public final class PatternRequestSender {
     }
 
     public static int send(List<PatternSpec> specs, int operation) {
+        return send(specs, operation, new net.minecraft.nbt.CompoundTag());
+    }
+    public static int send(List<PatternSpec> specs, int operation, net.minecraft.nbt.CompoundTag rules) {
         if (specs.isEmpty()) {
             return -1;
         }
@@ -59,7 +62,7 @@ public final class PatternRequestSender {
 
         if (chunks.size() > 256) throw new IllegalArgumentException("Pattern request needs more than 256 chunks");
         for (int i = 0; i < chunks.size(); i++) {
-            PacketHandler.sendToServer(new C2SGeneratePatternsPacket(requestId, i, chunks.size(), chunks.get(i), operation));
+            PacketHandler.sendToServer(new C2SGeneratePatternsPacket(requestId, i, chunks.size(), chunks.get(i), operation, rules));
         }
         if (operation == 0 || operation == 4) EAE2Pattern.LOGGER.info("Sent {} pattern specs in {} chunk(s) (request {}, {} bytes max per chunk)",
                 specs.size(), chunks.size(), requestId, maxBytes);

@@ -1,45 +1,76 @@
 package io.github.sexileman.eae2pattern.wildcard;
 
-import net.minecraft.nbt.CompoundTag;
-import net.minecraft.nbt.ListTag;
-import net.minecraft.nbt.NbtIo;
+import net.minecraft.nbt.*;
 import net.minecraft.resources.ResourceLocation;
-import java.io.ByteArrayOutputStream;
-import java.io.DataOutputStream;
-import java.io.IOException;
-import java.util.HashSet;
-import java.util.List;
+import java.io.*;
+import java.util.*;
+import java.util.zip.GZIPInputStream;
 
-/** Bounded, versioned container. Every child is tied to a real source recipe, never a material guess. */
+/** Independent v2 format: up to 2048 real recipes, compressed with bounded decoding. */
 public final class MachineWildcardData {
     public static final String KEY = "eae2_machine_wildcard";
-    public static final int MAX_RECIPES = 32, MAX_BYTES = 24_000;
+    public static final int MAX_RECIPES = 2048, MAX_BYTES = 512_000, MAX_RAW_BYTES = 4_000_000;
+    public static final class CapacityException extends IllegalArgumentException {
+        public CapacityException(String message) { super(message); }
+    }
     private MachineWildcardData() {}
     public static boolean matches(ResourceLocation bound, ResourceLocation actual, byte[] stored, byte[] current) {
         return bound != null && bound.equals(actual) && stored != null && stored.length == 32
-                && current != null && java.util.Arrays.equals(stored, current);
+                && current != null && Arrays.equals(stored, current);
     }
     public static int bytes(CompoundTag tag) {
         try {
-            var out = new ByteArrayOutputStream();
-            NbtIo.write(tag, new DataOutputStream(out));
-            return out.size();
+            var out = new ByteArrayOutputStream(); NbtIo.write(tag, new DataOutputStream(out)); return out.size();
         } catch (IOException e) { throw new IllegalArgumentException("Invalid wildcard NBT", e); }
     }
+    public static int count(CompoundTag data) {
+        return data.getInt("version") == 2 ? data.getInt("count") : data.getList("recipes", 10).size();
+    }
     public static CompoundTag create(ResourceLocation type, List<CompoundTag> entries) {
-        CompoundTag data = new CompoundTag();
-        data.putInt("version", 1); data.putString("machine", type.toString());
-        ListTag rows = new ListTag(); entries.forEach(row -> rows.add(row.copy())); data.put("recipes", rows);
-        validate(data);
-        return data;
+        ListTag rows = new ListTag(); entries.forEach(row -> rows.add(row.copy()));
+        validateRows(rows);
+        CompoundTag payload = new CompoundTag(); payload.put("recipes", rows);
+        if (bytes(payload) > MAX_RAW_BYTES) throw new CapacityException("Wildcard decoded payload exceeds 4 MB");
+        try {
+            var out = new ByteArrayOutputStream(); NbtIo.writeCompressed(payload, out);
+            if (out.size() > MAX_BYTES) throw new CapacityException("Wildcard compressed payload exceeds 512 KB");
+            CompoundTag data = new CompoundTag(); data.putInt("version", 2); data.putString("machine", type.toString());
+            data.putInt("count", entries.size()); data.putByteArray("payload", out.toByteArray());
+            // A generated item must also pass the reader's allocation accounting; otherwise split
+            // before spending blanks rather than creating an item which cannot later be expanded.
+            try { readRecipes(data); }
+            catch (RuntimeException allocation) { throw new CapacityException("Wildcard exceeds decoded NBT allocation budget"); }
+            return data;
+        } catch (IOException e) { throw new IllegalArgumentException("Cannot compress wildcard", e); }
     }
     public static ResourceLocation validate(CompoundTag data) {
-        if (data.getInt("version") != 1 || bytes(data) > MAX_BYTES)
-            throw new IllegalArgumentException("Unsupported or oversized machine wildcard");
         ResourceLocation machine = ResourceLocation.tryParse(data.getString("machine"));
-        ListTag rows = data.getList("recipes", 10);
-        if (machine == null || rows.isEmpty() || rows.size() > MAX_RECIPES)
-            throw new IllegalArgumentException("Invalid machine wildcard entries");
+        if (machine == null) throw new IllegalArgumentException("Invalid machine type");
+        readRecipes(data); return machine;
+    }
+    public static ListTag readRecipes(CompoundTag data) {
+        int version = data.getInt("version");
+        ListTag rows;
+        if (version == 1) {
+            if (bytes(data) > MAX_RAW_BYTES) throw new IllegalArgumentException("Oversized legacy wildcard");
+            rows = data.getList("recipes", 10);
+        } else if (version == 2) {
+            byte[] compressed = data.getByteArray("payload");
+            if (compressed.length == 0 || compressed.length > MAX_BYTES || count(data) < 1 || count(data) > MAX_RECIPES)
+                throw new IllegalArgumentException("Invalid wildcard size or count");
+            try (var gzip = new GZIPInputStream(new ByteArrayInputStream(compressed))) {
+                // Limit decompressed bytes before parsing, and separately bound NBT allocation accounting.
+                byte[] raw = gzip.readNBytes(MAX_RAW_BYTES + 1);
+                if (raw.length > MAX_RAW_BYTES) throw new IllegalArgumentException("Wildcard decompression exceeds 4 MB");
+                var payload = NbtIo.read(new DataInputStream(new ByteArrayInputStream(raw)), new NbtAccounter(16_000_000L));
+                rows = payload.getList("recipes", 10);
+                if (rows.size() != count(data)) throw new IllegalArgumentException("Wildcard count mismatch");
+            } catch (IOException e) { throw new IllegalArgumentException("Invalid compressed wildcard", e); }
+        } else throw new IllegalArgumentException("Unsupported wildcard version");
+        validateRows(rows); return rows;
+    }
+    private static void validateRows(ListTag rows) {
+        if (rows.isEmpty() || rows.size() > MAX_RECIPES) throw new IllegalArgumentException("Wildcard requires 1-2048 recipes");
         var seen = new HashSet<ResourceLocation>();
         for (int i = 0; i < rows.size(); i++) {
             CompoundTag row = rows.getCompound(i);
@@ -47,6 +78,5 @@ public final class MachineWildcardData {
             if (id == null || !seen.add(id) || row.getByteArray("fingerprint").length != 32 || !row.contains("pattern", 10))
                 throw new IllegalArgumentException("Invalid or duplicate source recipe");
         }
-        return machine;
     }
 }

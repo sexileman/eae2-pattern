@@ -112,6 +112,9 @@ public final class ItemSearchQuery {
      */
     public boolean matches(RecipePlan.Entry entry, Side side) {
         RecipePlan.Haystack haystack = side == Side.INPUT ? entry.inputHaystack() : entry.outputHaystack();
+        return matches(haystack);
+    }
+    public boolean matches(RecipePlan.Haystack haystack) {
         for (Alternative alternative : this.alternatives) {
             if (alternative.matches(haystack)) {
                 return true;

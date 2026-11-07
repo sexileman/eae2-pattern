@@ -34,6 +34,15 @@ public final class RegressionChecks {
         checks++; if (!condition) throw new AssertionError(message);
     }
     private static void machineWildcards() {
+        java.util.function.Predicate<List<String>> iron = list -> list.contains("iron");
+        java.util.function.Predicate<List<String>> rubber = list -> list.contains("rubber");
+        check(io.github.sexileman.eae2pattern.client.WildcardRules.evaluate(List.of("iron", "circuit"), false, iron, rubber), "whole-side include permits other recipe ingredients");
+        check(!io.github.sexileman.eae2pattern.client.WildcardRules.evaluate(List.of("iron", "rubber"), false, iron, rubber), "exclude wins without deleting a recipe ingredient");
+        check(!io.github.sexileman.eae2pattern.client.WildcardRules.evaluate(List.of("iron", "circuit"), true, iron, null), "every-slot mode differs from whole-side mode");
+        check(io.github.sexileman.eae2pattern.client.WildcardRules.evaluate(List.of("iron", "iron"), true, iron, null), "all scoped ingredients may satisfy the include rule");
+        check(!io.github.sexileman.eae2pattern.client.WildcardRules.evaluate(List.of(), false, iron, null), "empty search scope cannot satisfy positive rules");
+        check(io.github.sexileman.eae2pattern.client.WildcardRules.evaluate(List.of(), false, null, rubber), "exclude-only rules accept an empty search scope");
+        check(!io.github.sexileman.eae2pattern.client.WildcardRules.evaluate(List.of(), false, null, rubber.negate()), "negative-only exclusions also apply to an empty search scope");
         var jsonA = com.google.gson.JsonParser.parseString("{\"out\":[2,1],\"input\":{\"b\":2,\"a\":1}}");
         var jsonB = com.google.gson.JsonParser.parseString("{\"input\":{\"a\":1,\"b\":2},\"out\":[2,1]}");
         check(io.github.sexileman.eae2pattern.wildcard.CanonicalRecipeJson.encode(jsonA).equals(io.github.sexileman.eae2pattern.wildcard.CanonicalRecipeJson.encode(jsonB)), "GT capability map order cannot change fingerprint after restart");
@@ -51,31 +60,58 @@ public final class RegressionChecks {
         var data = io.github.sexileman.eae2pattern.wildcard.MachineWildcardData.create(a, List.of(row));
         check(io.github.sexileman.eae2pattern.wildcard.MachineWildcardData.validate(data).equals(a), "machine wildcard schema round trip");
         row.putString("recipe", "test:mutated");
-        check(data.getList("recipes", 10).getCompound(0).getString("recipe").equals("test:iron_plate"), "wildcard owns its entry NBT");
-        for (int bad = 0; bad < 5; bad++) {
+        check(io.github.sexileman.eae2pattern.wildcard.MachineWildcardData.readRecipes(data).getCompound(0).getString("recipe").equals("test:iron_plate"), "wildcard owns its compressed entry NBT");
+        for (int bad = 0; bad < 4; bad++) {
             CompoundTag invalid = data.copy();
-            if (bad == 0) invalid.putInt("version", 2);
+            if (bad == 0) invalid.putInt("version", 99);
             if (bad == 1) invalid.putString("machine", "INVALID ID");
-            if (bad == 2) invalid.getList("recipes", 10).add(invalid.getList("recipes", 10).getCompound(0).copy());
-            if (bad == 3) invalid.getList("recipes", 10).getCompound(0).putByteArray("fingerprint", new byte[1]);
-            if (bad == 4) invalid.putByteArray("oversized", new byte[24001]);
+            if (bad == 2) invalid.putInt("count", 2);
+            if (bad == 3) invalid.putByteArray("payload", new byte[]{1,2,3});
             boolean rejected = false;
             try { io.github.sexileman.eae2pattern.wildcard.MachineWildcardData.validate(invalid); }
             catch (IllegalArgumentException expected) { rejected = true; }
-            check(rejected, "reject malformed wildcard payload " + bad);
+            check(rejected, "reject malformed compressed wildcard " + bad);
         }
         var maxRows = new java.util.ArrayList<CompoundTag>();
-        for (int i = 0; i < 33; i++) { var next = row.copy(); next.putString("recipe", "test:recipe_" + i); maxRows.add(next); }
-        check(io.github.sexileman.eae2pattern.wildcard.MachineWildcardData.create(a, maxRows.subList(0, 32)).getList("recipes", 10).size() == 32, "full wildcard shard supports 32 real recipes");
+        for (int i = 0; i < 2049; i++) { var next = row.copy(); next.putString("recipe", "test:recipe_" + i); maxRows.add(next); }
+        var full = io.github.sexileman.eae2pattern.wildcard.MachineWildcardData.create(a, maxRows.subList(0, 2048));
+        check(io.github.sexileman.eae2pattern.wildcard.MachineWildcardData.readRecipes(full).size() == 2048, "one independent item supports 2048 real recipes");
+        check(io.github.sexileman.eae2pattern.wildcard.MachineWildcardData.bytes(full) < 100000, "2048 simple recipes compress to a bounded item payload");
         boolean rejected = false;
         try { io.github.sexileman.eae2pattern.wildcard.MachineWildcardData.create(a, maxRows); }
         catch (IllegalArgumentException expected) { rejected = true; }
-        check(rejected, "oversized recipe count requires another shard");
+        check(rejected, "2049 recipes require another item");
+        rejected = false;
+        try { io.github.sexileman.eae2pattern.wildcard.MachineWildcardData.create(a, List.of(row, row)); }
+        catch (IllegalArgumentException expected) { rejected = true; }
+        check(rejected, "duplicate source IDs are rejected before compression");
+        var legacy = new CompoundTag(); legacy.putInt("version", 1); legacy.putString("machine", a.toString());
+        var legacyRows = new net.minecraft.nbt.ListTag(); legacyRows.add(row.copy()); legacy.put("recipes", legacyRows);
+        check(io.github.sexileman.eae2pattern.wildcard.MachineWildcardData.readRecipes(legacy).size() == 1, "v1 bound item payload can still be read");
+        var state = new CompoundTag(); state.putString("in_include", "$forge:ingots"); state.putString("out_exclude", "rubber"); state.putInt("multiplier", 8);
+        var clean = io.github.sexileman.eae2pattern.wildcard.WildcardEditorState.clean(state);
+        check(clean.getString("out_exclude").equals("rubber") && clean.getInt("multiplier") == 8, "independent input/output rules persist");
+        state.putString("in_include", "x".repeat(257)); rejected = false;
+        try { io.github.sexileman.eae2pattern.wildcard.WildcardEditorState.clean(state); } catch (IllegalArgumentException expected) { rejected = true; }
+        check(rejected, "oversized editor rules are rejected");
+        var oversized = data.copy(); oversized.putByteArray("payload", new byte[512001]); rejected = false;
+        try { io.github.sexileman.eae2pattern.wildcard.MachineWildcardData.readRecipes(oversized); } catch (IllegalArgumentException expected) { rejected = true; }
+        check(rejected, "compressed-size guard runs before decompression");
+        try {
+            var out = new java.io.ByteArrayOutputStream();
+            try (var gzip = new java.util.zip.GZIPOutputStream(out)) {
+                byte[] zeroes = new byte[10000]; for (int i = 0; i < 401; i++) gzip.write(zeroes);
+            }
+            var bomb = data.copy(); bomb.putByteArray("payload", out.toByteArray()); rejected = false;
+            try { io.github.sexileman.eae2pattern.wildcard.MachineWildcardData.readRecipes(bomb); } catch (IllegalArgumentException expected) { rejected = true; }
+            check(rejected, "small compressed input cannot expand beyond the 4 MB raw bound");
+        } catch (java.io.IOException unexpected) { throw new AssertionError(unexpected); }
         FriendlyByteBuf wire = new FriendlyByteBuf(Unpooled.buffer());
         try {
             io.github.sexileman.eae2pattern.config.EAE2PatternConfig.SPEC.setConfig(com.electronwill.nightconfig.core.CommentedConfig.inMemory());
-            new C2SGeneratePatternsPacket(8, 0, 1, List.of(), 4).encode(wire);
-            check(C2SGeneratePatternsPacket.decode(wire).operation() == 4, "wildcard generation operation survives packet round trip");
+            new C2SGeneratePatternsPacket(8, 0, 1, List.of(), 4, clean).encode(wire);
+            var packet = C2SGeneratePatternsPacket.decode(wire);
+            check(packet.operation() == 4 && packet.rules().getString("out_exclude").equals("rubber"), "wildcard editor rules survive packet round trip");
         } finally { wire.release(); }
     }
     private static void amountLabels() {

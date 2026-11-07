@@ -40,6 +40,9 @@ public final class BatchRequestManager {
     }
 
     public static void acceptChunk(ServerPlayer player, int requestId, int chunkIndex, int chunkCount, List<PatternSpec> specs, int operation) {
+        acceptChunk(player, requestId, chunkIndex, chunkCount, specs, operation, new net.minecraft.nbt.CompoundTag());
+    }
+    public static void acceptChunk(ServerPlayer player, int requestId, int chunkIndex, int chunkCount, List<PatternSpec> specs, int operation, net.minecraft.nbt.CompoundTag rules) {
         if (operation == 3) {
             if (specs.isEmpty() && chunkIndex == 0 && chunkCount == 1) {
                 PatternInspection.cancel(player.getUUID(), requestId);
@@ -63,6 +66,8 @@ public final class BatchRequestManager {
 
         PlayerState state = STATES.computeIfAbsent(player.getUUID(), uuid -> new PlayerState());
         if (state.requestId == requestId && state.operation != operation) return;
+        if (state.requestId == requestId && !state.rules.equals(rules)) return;
+        state.rules = rules.copy();
         state.operation = operation;
         List<PatternSpec> complete;
         try { complete = state.addChunk(requestId, chunkIndex, chunkCount, specs); }
@@ -77,7 +82,7 @@ public final class BatchRequestManager {
         if (complete == null) {
             return;
         }
-        if (operation == 4) MachineWildcardWriter.start(player, complete,
+        if (operation == 4) MachineWildcardWriter.start(player, complete, state.rules,
                 report -> PacketHandler.sendToPlayer(player, new S2CGenerationResultPacket(report)));
         else if (operation == 0) execute(player, complete);
         else if (!complete.isEmpty()) PatternInspection.start(player, complete, requestId, operation);
@@ -122,6 +127,7 @@ public final class BatchRequestManager {
     private static final class PlayerState {
         private int requestId = -1;
         private int operation;
+        private net.minecraft.nbt.CompoundTag rules = new net.minecraft.nbt.CompoundTag();
         private int chunkCount;
         private int totalSpecs;
         private long totalBytes;

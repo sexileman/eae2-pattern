@@ -36,6 +36,11 @@ public final class CollectingScreen extends Screen {
     private int panelTop;
     private int panelWidth;
     private int panelHeight;
+    private java.util.function.Consumer<RecipePlan> destination;
+
+    public CollectingScreen(IRecipeCategory<?> category, Screen returnTo, java.util.function.Consumer<RecipePlan> destination) {
+        this(category, returnTo); this.destination = destination;
+    }
 
     public CollectingScreen(IRecipeCategory<?> category, @Nullable Screen returnTo) {
         super(Component.translatable("eae2_pattern.collecting.title", category.getTitle()));
@@ -86,7 +91,8 @@ public final class CollectingScreen extends Screen {
             this.minecraft.setScreen(this.returnTo);
             return;
         }
-        PreviewGui.open(plan, this.returnTo);
+        if (destination != null) destination.accept(plan);
+        else PreviewGui.open(plan, this.returnTo);
     }
 
     @Override

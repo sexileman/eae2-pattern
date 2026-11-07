@@ -17,7 +17,10 @@ import java.util.function.Supplier;
  * by {@link #requestId} and only starts working once {@link #chunkCount} chunks have arrived, which keeps a
  * partially transmitted request from producing a half-generated network.</p>
  */
-public record C2SGeneratePatternsPacket(int requestId, int chunkIndex, int chunkCount, List<PatternSpec> specs, int operation) {
+public record C2SGeneratePatternsPacket(int requestId, int chunkIndex, int chunkCount, List<PatternSpec> specs, int operation, net.minecraft.nbt.CompoundTag rules) {
+    public C2SGeneratePatternsPacket(int requestId, int chunkIndex, int chunkCount, List<PatternSpec> specs, int operation) {
+        this(requestId, chunkIndex, chunkCount, specs, operation, new net.minecraft.nbt.CompoundTag());
+    }
 
     public void encode(FriendlyByteBuf buf) {
         buf.writeByte(operation);
@@ -28,6 +31,7 @@ public record C2SGeneratePatternsPacket(int requestId, int chunkIndex, int chunk
         for (PatternSpec spec : specs) {
             spec.write(buf);
         }
+        if (operation == 4) buf.writeNbt(io.github.sexileman.eae2pattern.wildcard.WildcardEditorState.clean(rules));
     }
 
     public static C2SGeneratePatternsPacket decode(FriendlyByteBuf buf) {
@@ -45,7 +49,8 @@ public record C2SGeneratePatternsPacket(int requestId, int chunkIndex, int chunk
         for (int i = 0; i < size; i++) {
             specs.add(PatternSpec.read(buf));
         }
-        return new C2SGeneratePatternsPacket(requestId, chunkIndex, chunkCount, specs, operation);
+        var rules = operation == 4 ? io.github.sexileman.eae2pattern.wildcard.WildcardEditorState.clean(buf.readNbt()) : new net.minecraft.nbt.CompoundTag();
+        return new C2SGeneratePatternsPacket(requestId, chunkIndex, chunkCount, specs, operation, rules);
     }
 
     public void handle(Supplier<NetworkEvent.Context> contextSupplier) {
@@ -53,7 +58,7 @@ public record C2SGeneratePatternsPacket(int requestId, int chunkIndex, int chunk
         ServerPlayer sender = context.getSender();
         context.enqueueWork(() -> {
             if (sender != null) {
-                BatchRequestManager.acceptChunk(sender, requestId, chunkIndex, chunkCount, specs, operation);
+                BatchRequestManager.acceptChunk(sender, requestId, chunkIndex, chunkCount, specs, operation, rules);
             }
         });
         context.setPacketHandled(true);

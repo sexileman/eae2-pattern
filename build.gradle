@@ -118,6 +118,7 @@ tasks.named('processResources', ProcessResources).configure {
 }
 
 tasks.named('jar', Jar).configure {
+    exclude 'org/gtlcore/gtlcore/integration/wildcard/eae2/**'
     manifest {
         attributes([
                 'Specification-Title'    : mod_id,
@@ -168,44 +169,29 @@ tasks.register('compatibilityTest', JavaExec) {
     args(project.findProperty('compatModsDir') ?: '../others/mods')
 }
 
-// Standalone pack distribution: Forge discovers the legacy-compatible module from Jar-in-Jar.
-// Keep the normal artifact usable without GT; the GTL classifier includes the exact pack-compatible
-// module so removing the external Wildcard Pattern jar does not remove its registry IDs or APIs.
-def wildcardCompat = layout.projectDirectory.file('third_party/wildcard-pattern-gtl/wildcard-pattern-compat-0.1.2.jar')
-def nestedWildcardPath = 'META-INF/jarjar/wildcard-pattern-compat-0.1.2.jar'
-tasks.register('standaloneGtlMetadata') {
-    def output = layout.buildDirectory.file('standalone-gtl/metadata.json')
-    outputs.file(output)
-    doLast {
-        def target = output.get().asFile
-        target.parentFile.mkdirs()
-        target.text = groovy.json.JsonOutput.prettyPrint(groovy.json.JsonOutput.toJson([
-            jars: [[identifier: [group: 'org.leodreamer', artifact: 'wildcard-pattern-gtl-compat'],
-                    version: [range: '[0.1.2,0.1.3)', artifactVersion: '0.1.2'], path: nestedWildcardPath]]
-        ]))
-    }
+tasks.register('gtlPatchSupportJar', Jar) {
+    archiveClassifier = 'gtl-patch-support'
+    from(sourceSets.main.output) { include 'org/gtlcore/gtlcore/integration/wildcard/eae2/**' }
 }
-tasks.register('standaloneGtlJar', Jar) {
-    dependsOn 'reobfJar', 'standaloneGtlMetadata'
-    archiveClassifier = 'standalone-gtl'
-    from({ zipTree(tasks.named('jar', Jar).get().archiveFile.get().asFile) }) {
-        exclude 'META-INF/MANIFEST.MF'
-    }
-    manifest.from(tasks.named('jar', Jar).get().manifest)
-    from(wildcardCompat) { into 'META-INF/jarjar' }
-    from(layout.buildDirectory.file('standalone-gtl/metadata.json')) { into 'META-INF/jarjar' }
-    from('third_party/wildcard-pattern-gtl/LICENSE.txt') {
-        into 'META-INF/licenses'
-        rename { 'Wildcard-Pattern-MIT.txt' }
-    }
-    from('third_party/wildcard-pattern-gtl/README.md') { into 'META-INF/wildcard-compat' }
-}
-tasks.register('standaloneContractTest', JavaExec) {
-    dependsOn testClasses, 'standaloneGtlJar'
+reobf { gtlPatchSupportJar {} }
+tasks.register('patchGtlCore', JavaExec) {
+    dependsOn testClasses, 'reobfGtlPatchSupportJar'
     classpath = sourceSets.test.runtimeClasspath
-    mainClass = 'io.github.sexileman.eae2pattern.StandaloneDistributionContracts'
+    mainClass = 'io.github.sexileman.eae2pattern.GtlCorePatcher'
     doFirst {
-        args(tasks.named('standaloneGtlJar', Jar).get().archiveFile.get().asFile.absolutePath,
-                project.findProperty('compatModsDir') ?: '../others/mods')
+        args(project.findProperty('compatModsDir') ?: '../others/mods',
+             tasks.named('gtlPatchSupportJar', Jar).get().archiveFile.get().asFile.absolutePath,
+             layout.buildDirectory.file('libs/gtlcore-1.2.3.0-fix9-eae2-wildcard.jar').get().asFile.absolutePath,
+             projectDir.absolutePath)
+    }
+}
+tasks.register('independentWildcardTest', JavaExec) {
+    dependsOn testClasses, 'reobfJar', 'patchGtlCore'
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = 'io.github.sexileman.eae2pattern.IndependentWildcardContracts'
+    doFirst {
+        args(tasks.named('jar', Jar).get().archiveFile.get().asFile.absolutePath,
+             layout.buildDirectory.file('libs/gtlcore-1.2.3.0-fix9-eae2-wildcard.jar').get().asFile.absolutePath,
+             project.findProperty('compatModsDir') ?: '../others/mods')
     }
 }

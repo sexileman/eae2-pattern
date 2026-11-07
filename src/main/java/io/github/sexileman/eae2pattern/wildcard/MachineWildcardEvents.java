@@ -19,18 +19,30 @@ public final class MachineWildcardEvents {
         MachineWildcard.clearFingerprints();
     }
     @SubscribeEvent public static void tooltip(ItemTooltipEvent event) {
+        if (MachineWildcard.isOwnItem(event.getItemStack()) && !MachineWildcard.isBound(event.getItemStack())) {
+            event.getToolTip().add(Component.translatable("eae2_pattern.editor.legacy_help").withStyle(ChatFormatting.GOLD)); return;
+        }
         if (!MachineWildcard.isBound(event.getItemStack())) return;
         var data = event.getItemStack().getTag().getCompound(MachineWildcardData.KEY);
         event.getToolTip().add(Component.translatable("eae2_pattern.wildcard.machine", data.getString("machine")).withStyle(ChatFormatting.AQUA));
-        event.getToolTip().add(Component.translatable("eae2_pattern.wildcard.recipes", data.getList("recipes", 10).size()).withStyle(ChatFormatting.GRAY));
+        event.getToolTip().add(Component.translatable("eae2_pattern.wildcard.recipes", MachineWildcardData.count(data)).withStyle(ChatFormatting.GRAY));
+        String encoder = event.getItemStack().getTag().getString("encodePlayer");
+        if (!encoder.isEmpty()) event.getToolTip().add(Component.translatable("eae2_pattern.wildcard.encoder", encoder).withStyle(ChatFormatting.GRAY));
         event.getToolTip().add(Component.translatable("eae2_pattern.wildcard.bound_help").withStyle(ChatFormatting.GOLD));
     }
     @SubscribeEvent public static void use(PlayerInteractEvent.RightClickItem event) {
-        if (!MachineWildcard.isBound(event.getEntity().getItemInHand(event.getHand()))) return;
+        var stack = event.getEntity().getItemInHand(event.getHand());
+        if (!MachineWildcard.isOwnItem(stack) && !MachineWildcard.isBound(stack)) return;
         // The upstream material editor does not understand bound recipes. Do not silently let it
         // modify the generic components while the machine whitelist remains unchanged.
         event.setCancellationResult(InteractionResult.SUCCESS); event.setCanceled(true);
-        if (!event.getLevel().isClientSide)
-            event.getEntity().sendSystemMessage(Component.translatable("eae2_pattern.wildcard.edit_help"));
+        if (event.getLevel().isClientSide)
+            net.minecraftforge.fml.DistExecutor.unsafeRunWhenOn(net.minecraftforge.api.distmarker.Dist.CLIENT,
+                    () -> () -> io.github.sexileman.eae2pattern.client.WildcardEditorScreen.openStored(stack.copy()));
+    }
+    @SubscribeEvent public static void missing(net.minecraftforge.registries.MissingMappingsEvent event) {
+        if (net.minecraftforge.fml.ModList.get().isLoaded("wildcard_pattern")) return;
+        for (var mapping : event.getMappings(net.minecraftforge.registries.ForgeRegistries.Keys.ITEMS, "wildcard_pattern"))
+            if (mapping.getKey().getPath().equals("wildcard_pattern")) mapping.remap(WildcardItems.MACHINE_PATTERN.get());
     }
 }

@@ -23,12 +23,13 @@ import java.util.stream.Stream;
 
 /** Optional adapter for both upstream branches and GTLCore's native expansion entry point. */
 public final class MachineWildcard {
-    public static final ResourceLocation ITEM = new ResourceLocation("wildcard_pattern", "wildcard_pattern");
+    public static final ResourceLocation ITEM = new ResourceLocation("eae2_pattern", "machine_wildcard_pattern");
     private record Fingerprint(java.lang.ref.WeakReference<Recipe<?>> owner, byte[] hash) {}
     private static final Map<Recipe<?>, Fingerprint> FINGERPRINTS = new WeakHashMap<>();
     private MachineWildcard() {}
     public static synchronized void clearFingerprints() { FINGERPRINTS.clear(); }
-    public static boolean available() { return ModList.get().isLoaded("wildcard_pattern") && ForgeRegistries.ITEMS.containsKey(ITEM); }
+    public static boolean available() { return ForgeRegistries.ITEMS.containsKey(ITEM); }
+    public static boolean isOwnItem(ItemStack stack) { return !stack.isEmpty() && BuiltInRegistries.ITEM.getKey(stack.getItem()).equals(ITEM); }
     public static boolean isBound(ItemStack stack) { return stack.getTag() != null && stack.getTag().contains(MachineWildcardData.KEY, 10); }
     public static ResourceLocation type(Recipe<?> recipe) { return BuiltInRegistries.RECIPE_TYPE.getKey(recipe.getType()); }
     @SuppressWarnings({"rawtypes", "unchecked"})
@@ -57,7 +58,7 @@ public final class MachineWildcard {
         finally { buf.release(); }
     }
     public static ItemStack item(ResourceLocation type, List<CompoundTag> entries, String player) {
-        if (!available()) throw new IllegalStateException("Wildcard Pattern is not installed");
+        if (!available()) throw new IllegalStateException("Independent machine wildcard item is not registered");
         ItemStack stack = new ItemStack(ForgeRegistries.ITEMS.getValue(ITEM));
         stack.getOrCreateTag().put(MachineWildcardData.KEY, MachineWildcardData.create(type, entries));
         var ids = new net.minecraft.nbt.ListTag(); ids.add(net.minecraft.nbt.StringTag.valueOf(type.toString()));
@@ -72,8 +73,9 @@ public final class MachineWildcard {
         if (level == null || level.isClientSide) return Stream.empty();
         try {
             CompoundTag data = stack.getTag().getCompound(MachineWildcardData.KEY);
-            ResourceLocation machine = MachineWildcardData.validate(data);
-            var rows = data.getList("recipes", 10);
+            ResourceLocation machine = ResourceLocation.tryParse(data.getString("machine"));
+            if (machine == null) return Stream.empty();
+            var rows = MachineWildcardData.readRecipes(data);
             var result = new ArrayList<IPatternDetails>(rows.size());
             for (int i = 0; i < rows.size(); i++) {
                 CompoundTag row = rows.getCompound(i);
