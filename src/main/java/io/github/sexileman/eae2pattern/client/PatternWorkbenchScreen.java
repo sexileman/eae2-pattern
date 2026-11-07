@@ -109,8 +109,7 @@ public final class PatternWorkbenchScreen extends AeToolScreen implements Genera
         action(left + 18 + w * 3, top + toolbarY, w, () -> { if (filtering || checking) return; visible.forEach(e -> e.setSelected(false)); refresh(); }).help("selection_help").setMessage(tr("none"));
         more = action(left + 22 + w * 4, top + toolbarY, w, this::moreMenu);
         detailMode = action(split + 10, top + toolbarY, Math.max(35, left + panelWidth - split - 65), () -> {
-            choice = new Choice(detailMode, List.of(tr("final_view"), tr("source_view")), sourceView ? 1 : 0,
-                    index -> { sourceView = index == 1; rebuildDetails(); });
+            sourceView = !sourceView; detailScroll = 0; rebuildDetails(); updateButtons();
         });
         action(left + panelWidth - 50, top + toolbarY, 40, () -> {
             if (focused != null && focused.jeiRecipe() != null) {
@@ -505,15 +504,11 @@ public final class PatternWorkbenchScreen extends AeToolScreen implements Genera
             int flagWidth = flag.isEmpty() ? 0 : font.width(flag) + 5;
             text(g, e.label(), x + 19, y + 3, right - x - 23 - flagWidth, e.isSelected() ? TEXT : DIM);
             if (!flag.isEmpty()) g.drawString(font, flag, right - flagWidth, y + 3, DIM, false);
-            int inputMax = right - x >= 220 ? 3 : right-x>=170 ? 2 : 1, outputMax = right - x >= 220 ? 2 : 1;
+            var columns = RecipeStripLayout.measure(right - x - 23);
             List<Ingredient> inputs = new ArrayList<>(e.inputs()); inputs.addAll(e.catalysts());
-            while (ingredientStripWidth(inputs.size(), inputMax) + ingredientStripWidth(e.outputs().size(), outputMax) + 24 > right - x - 19
-                    && (inputMax > 1 || outputMax > 1)) {
-                if (inputMax > 1) inputMax--; else outputMax--;
-            }
-            int iconX = drawIngredients(g, inputs, x + 19, y + 17, inputMax, 0);
-            g.drawString(font, ">", iconX + 6, y + 22, DIM, false);
-            drawIngredients(g, e.outputs(), iconX + 24, y + 17, outputMax, 1);
+            drawIngredients(g, inputs, x + 19, y + 17, columns.inputMax(), 0);
+            g.drawString(font, "→", x + 19 + columns.arrowX(), y + 22, DIM, false);
+            drawIngredients(g, e.outputs(), x + 19 + columns.outputX(), y + 17, columns.outputMax(), 1);
         }
         if (visible.isEmpty()) text(g, tr("empty"), x + 6, bodyTop + 12, right - x - 12, DIM);
         g.disableScissor(); scrollbar(g, split - 10, listScroll, rows.size() * ROW);
@@ -522,9 +517,6 @@ public final class PatternWorkbenchScreen extends AeToolScreen implements Genera
         g.fill(x, y, x + 9, y + 9, checked ? 0xFF777777 : LINE);
         g.fill(x + 1, y + 1, x + 8, y + 8, checked ? WorkbenchTheme.PRIMARY : BG);
         if (checked) { g.fill(x + 2, y + 4, x + 4, y + 6, TEXT); g.fill(x + 4, y + 2, x + 6, y + 6, TEXT); }
-    }
-    private int ingredientStripWidth(int count, int max) {
-        return Math.min(count, max) * 22 + (count > max ? font.width("+" + (count - max)) + 8 : 0);
     }
     private int drawIngredients(GuiGraphics g, List<Ingredient> ingredients, int x, int y, int max, int side) {
         for (int i = 0; i < Math.min(max, ingredients.size()); i++) {

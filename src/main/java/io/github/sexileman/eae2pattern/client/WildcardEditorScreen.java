@@ -316,11 +316,11 @@ public final class WildcardEditorScreen extends AeToolScreen implements Generati
             if (e == focus) g.fill(x + 10, ry, split - 8, ry + ROW - 2, WorkbenchTheme.HOVER);
             g.fill(x + 14, ry + 12, x + 22, ry + 20, selected.contains(e.recipeId()) ? WorkbenchTheme.TEXT : WorkbenchTheme.LINE);
             label(g, e.label(), x + 29, ry + 2, split - x - 47, TEXT, 1);
-            var in = new ArrayList<>(e.inputs()); in.addAll(e.catalysts()); int ix = x + 29;
-            int maxIn = split - x > 230 ? 3 : split-x>185 ? 2 : 1;
-            ix = strip(g, in, ix, ry + 18, maxIn, 0);
-            label(g, Component.literal("→"), ix + 4, ry + 22, 14, DIM, 1);
-            strip(g, e.outputs(), ix + 26, ry + 18, 1, 1);
+            var in = new ArrayList<>(e.inputs()); in.addAll(e.catalysts());
+            var columns = RecipeStripLayout.measure(split - x - 41);
+            strip(g, in, x + 29, ry + 18, columns.inputMax(), 0);
+            label(g, Component.literal("→"), x + 29 + columns.arrowX(), ry + 22, 14, DIM, 1);
+            strip(g, e.outputs(), x + 29 + columns.outputX(), ry + 18, columns.outputMax(), 1);
         }
         g.disableScissor();
         scrollbar(g, split - 7, listTop, listBottom, scroll, matches.size() * ROW);
@@ -346,7 +346,7 @@ public final class WildcardEditorScreen extends AeToolScreen implements Generati
             visuals.draw(g, item.spec(), px, py); visuals.drawRule(g, presentation, px, py);
             hits.add(new Hit(px, py, item.spec(), presentation, side)); px += 22;
         }
-        if (slots.size() > max) { String n = "+" + (slots.size() - max); label(g, Component.literal(n), px + 3, py + 5, 35, DIM, .8f); px += font.width(n) + 8; }
+        if (slots.size() > max) { String n = "+" + (slots.size() - max); label(g, Component.literal(n), px + 3, py + 5, 27, DIM, 1); px += font.width(n) + 8; }
         return px;
     }
     private int materialRows(GuiGraphics g, List<Ingredient> ingredients, int dx, int dy, int room, int side) {

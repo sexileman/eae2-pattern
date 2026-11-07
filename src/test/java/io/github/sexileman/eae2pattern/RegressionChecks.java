@@ -27,11 +27,19 @@ import java.util.List;
 public final class RegressionChecks {
     private static int checks;
     public static void main(String[] args) throws Exception {
-        policies(); wireFormat(); searches(); gtVersions(); layoutAndGrid(); manualMultiplier(); grouping(); inspectionPackets(); slotPresentation(); patternMetadata(); amountLabels(); machineWildcards(); heldWildcardWrites(); dynamicRules(); stackedCarriers(); wildcardTooltip(); materialPicker(); aeToolScreens(); encodingMessages();
+        policies(); wireFormat(); searches(); gtVersions(); layoutAndGrid(); manualMultiplier(); grouping(); inspectionPackets(); slotPresentation(); patternMetadata(); amountLabels(); machineWildcards(); heldWildcardWrites(); dynamicRules(); stackedCarriers(); wildcardTooltip(); materialPicker(); aeToolScreens(); encodingMessages(); recipeStripColumns();
         System.out.println("Passed " + checks + " regression checks");
     }
     private static void check(boolean condition, String message) {
         checks++; if (!condition) throw new AssertionError(message);
+    }
+    private static void recipeStripColumns() {
+        for (int width : new int[]{136,170,220,280}) {
+            var columns=io.github.sexileman.eae2pattern.client.RecipeStripLayout.measure(width);
+            check(columns.inputMax()*22+30<=columns.arrowX(), "input icons and overflow stay before the arrow");
+            check(columns.outputX()+columns.outputMax()*22+30<=width, "output icons and overflow stay within the row");
+            check(columns.outputX()>columns.arrowX()+9, "arrow has a separate gutter before outputs");
+        }
     }
     private static void encodingMessages() {
         String raw="gtceu:macerator/macerate_titanium_buzzsaw: pattern has no ingredients after filtering: gtceu:macerator/macerate_titanium_buzzsaw";
