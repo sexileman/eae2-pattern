@@ -86,6 +86,7 @@ dependencies {
     // Applied Energistics 2 (compile against the full jar: we also use menu/logic classes that are not in the -api jar)
     compileOnly fg.deobf("appeng:appliedenergistics2-forge:${ae2_version}")
     runtimeOnly fg.deobf("appeng:appliedenergistics2-forge:${ae2_version}")
+    testImplementation fg.deobf("appeng:appliedenergistics2-forge:${ae2_version}")
 
     // JEI (optional at runtime, but needed to compile the client plugin)
     compileOnly fg.deobf("mezz.jei:jei-${minecraft_version}-forge:${jei_version}")

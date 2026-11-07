@@ -24,6 +24,10 @@ public final class UniversalWildcardContracts {
         byte[] bridge;
         try (var app = new ZipFile(own.toFile())) {
             check(Collections.list(app.entries()).stream().noneMatch(e -> e.getName().endsWith(".jar") || e.getName().startsWith("org/leodreamer/") || e.getName().startsWith("org/gtlcore/")), "universal jar embeds neither original wildcard nor GTL classes");
+            for(String asset:List.of("assets/eae2_pattern/ae2guide/index.md","assets/eae2_pattern/ae2guide/wildcard-patterns.md","assets/eae2_pattern/ae2guide/batch-encoding.md","assets/eae2_pattern/textures/item/machine_wildcard_pattern.png","assets/eae2_pattern/textures/item/machine_wildcard_pattern_encoded.png"))check(app.getEntry(asset)!=null,"native guide and original icon packaged: "+asset);
+            var itemModel=com.google.gson.JsonParser.parseString(new String(bytes(app,"assets/eae2_pattern/models/item/machine_wildcard_pattern.json"),java.nio.charset.StandardCharsets.UTF_8)).getAsJsonObject();
+            check(itemModel.getAsJsonObject("textures").get("layer0").getAsString().startsWith("eae2_pattern:"),"carrier uses its own icon namespace");
+            check(itemModel.getAsJsonArray("overrides").get(0).getAsJsonObject().getAsJsonObject("predicate").has("eae2_pattern:encoded"),"encoded appearance has its own model predicate");
             bridge = bytes(app, BRIDGE + ".class");
             check(app.getEntry("io/github/sexileman/eae2pattern/api/MachineWildcardApi.class") != null, "own independent API shipped");
             String config = new String(bytes(app, "eae2_pattern.mixins.json"), java.nio.charset.StandardCharsets.UTF_8);

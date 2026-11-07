@@ -27,11 +27,24 @@ import java.util.List;
 public final class RegressionChecks {
     private static int checks;
     public static void main(String[] args) throws Exception {
-        policies(); wireFormat(); searches(); gtVersions(); layoutAndGrid(); manualMultiplier(); grouping(); inspectionPackets(); slotPresentation(); patternMetadata(); amountLabels(); machineWildcards(); heldWildcardWrites(); dynamicRules(); stackedCarriers(); wildcardTooltip(); materialPicker(); aeToolScreens(); encodingMessages(); recipeStripColumns(); searchDebounce(); wildcardStockStatus();
+        policies(); wireFormat(); searches(); gtVersions(); layoutAndGrid(); manualMultiplier(); grouping(); inspectionPackets(); slotPresentation(); patternMetadata(); amountLabels(); machineWildcards(); heldWildcardWrites(); dynamicRules(); stackedCarriers(); wildcardTooltip(); materialPicker(); aeToolScreens(); encodingMessages(); recipeStripColumns(); searchDebounce(); wildcardStockStatus(); guidePages();
         System.out.println("Passed " + checks + " regression checks");
     }
     private static void check(boolean condition, String message) {
         checks++; if (!condition) throw new AssertionError(message);
+    }
+    private static void guidePages() throws Exception {
+        var pages=new java.util.ArrayList<appeng.client.guidebook.compiler.ParsedGuidePage>();
+        for(String file:List.of("index.md","wildcard-patterns.md","batch-encoding.md")) {
+            String path="assets/eae2_pattern/ae2guide/"+file;
+            try(var stream=RegressionChecks.class.getClassLoader().getResourceAsStream(path)) {
+                check(stream!=null,"native AE2 guide resource exists: "+file);
+                var page=appeng.client.guidebook.compiler.PageCompiler.parse("eae2_pattern",new ResourceLocation("eae2_pattern",file),stream);
+                check(page.getFrontmatter().navigationEntry()!=null,"native AE2 parser accepts page navigation: "+file);
+                pages.add(page);
+            }
+        }
+        check(pages.get(1).getFrontmatter().additionalProperties().get("item_ids") instanceof List<?> items && items.equals(List.of("eae2_pattern:machine_wildcard_pattern")),"native AE2 parser retains the item target shared by blank and encoded carriers");
     }
     private static void wildcardStockStatus() {
         var buffer=new FriendlyByteBuf(Unpooled.buffer());

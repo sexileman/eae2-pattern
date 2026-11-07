@@ -37,7 +37,11 @@ public final class WildcardTooltip {
     @Mod.EventBusSubscriber(modid=EAE2Pattern.MOD_ID,value=Dist.CLIENT,bus=Mod.EventBusSubscriber.Bus.MOD)
     public static final class Setup {
         @SubscribeEvent public static void setup(net.minecraftforge.fml.event.lifecycle.FMLClientSetupEvent event) {
-            event.enqueueWork(() -> WildcardTooltipText.setTypeNames(WildcardTooltip::typeName));
+            event.enqueueWork(() -> {
+                WildcardTooltipText.setTypeNames(WildcardTooltip::typeName);
+                net.minecraft.client.renderer.item.ItemProperties.register(WildcardItems.MACHINE_PATTERN.get(),
+                        EAE2Pattern.id("encoded"),(stack,level,entity,seed)->MachineWildcard.isBound(stack)?1:0);
+            });
         }
     }
     private static Component typeName(String machine,String category) {
