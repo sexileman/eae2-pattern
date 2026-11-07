@@ -1,8 +1,8 @@
-# 4.1.0 验证记录与游戏内验收
+# 4.1.1 验证记录与游戏内验收
 
 ## 构建及自动检查
 
-最终构建通过：221 项领域回归、50 项通用产物/可选接口/提供方分流检查、6 项原包字节码契约核对。没有执行实际游戏启动或世界内验收。
+最终构建通过：221 项领域回归、59 项通用产物/可选接口/提供方分流检查、6 项原包字节码契约核对。没有执行实际游戏启动或世界内验收。
 
 Java 17 / Forge 1.20.1。工作区使用缓存 Gradle 8.8 和本地离线依赖完成构建；普通环境可运行：
 
@@ -10,7 +10,7 @@ Java 17 / Forge 1.20.1。工作区使用缓存 Gradle 8.8 和本地离线依赖�
 .\gradlew.bat build universalCompatibilityTest -PcompatModsDir="D:/codex workspace/others/mods"
 ```
 
-只生成标准通用构件 `build/libs/eae2-pattern-4.1.0.jar`，不需要生成/安装修改版 GTLCore。
+只生成标准通用构件 `build/libs/eae2-pattern-4.1.1.jar`，不需要生成/安装修改版 GTLCore。
 
 自动验证范围：
 
@@ -22,9 +22,22 @@ Java 17 / Forge 1.20.1。工作区使用缓存 Gradle 8.8 和本地离线依赖�
 
 隔离 fixture 不是 Forge 游戏启动，也不验证真实机器的物品/流体能力。当前没有启动整合包或生成游戏截图，不宣称已完成以下实测。
 
+## 4.1.0 启动报告回归
+
+报告中的根因为 `ModLauncher service does not currently support retrieval of untransformed bytecode`，发生于兼容插件调用 `getClassNode(name, false)`，不是由移除原模组导致的缺类错误。
+
+使用实际 Mixin 0.8.5 的 `MixinLaunchPluginLegacy` 提供器，测试仅替换其 transformer-loader 回调，不启动游戏：
+
+- 旧的 false 参数会抛出与日志相同的 IllegalArgumentException。
+- 生产插件改用该提供器支持的单参数方法；目标缺失时返回跳过，目标存在时能读取接口。
+- 同样经过实际提供器验证 GTL 成对启用、缺失半侧后的稳定跳过，以及普通 AE2 路径不请求可选字节码。
+- 可选探测的 IO/参数/状态/链接异常将记录日志并跳过，不向 Mixin 准备阶段传播。
+
+这比单独检查 jar 的接口签名多覆盖了本次出错的提供器路径，但仍不代表整个整合包已经完整启动。
+
 ## 安装与自动启用
 
-1. 客户端和服务端仅替换旧 EAE2 包为通用 4.1.0；原 GTLCore、GTCEu、ExtendedAE 无需替换。不要同时安装同一模组的旧包或旧 standalone 包。
+1. 客户端和服务端仅替换旧 EAE2 包为通用 4.1.1；原 GTLCore、GTCEu、ExtendedAE 无需替换。不要同时安装同一模组的旧包或旧 standalone 包。
 2. 无 GTL/GT/原通配符模组时，确认基础 AE2+JEI 与独立通配编辑器正常，缺少类不会触发可选适配。
 3. 使用提供的原始 GTLCore 1.2.3.0-fix9、不装原通配符时，确认通配符总成仍注册，并接受 EAE2 新样板。
 4. 加装原通配符后，检查总成按物品分别展开两种样板，无重复展开；普通和 ExtendedAE 供应器也分别处理。

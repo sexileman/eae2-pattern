@@ -41,6 +41,8 @@ public final class UniversalWildcardContracts {
         try (var gtl = new ZipFile(original.toFile())) {
             var activation = node(bytes(gtl, prefix + "WildcardPatternCompat.class"));
             var expansion = node(bytes(gtl, prefix + "WildcardPatternCompatImpl.class"));
+            launcherProbe(Map.of((prefix + "WildcardPatternCompat").replace('/', '.'), bytes(gtl, prefix + "WildcardPatternCompat.class"),
+                    (prefix + "WildcardPatternCompatImpl").replace('/', '.'), bytes(gtl, prefix + "WildcardPatternCompatImpl.class")));
             check(UniversalMixinPlugin.supportedPair(activation, expansion), "unmodified pack GTL supports automatic adapters");
             check(!UniversalMixinPlugin.supportedPair(null, null), "absent GTL loads no GTL adapter");
             check(!UniversalMixinPlugin.supportedPair(activation, null), "missing expansion disables activation too");
@@ -66,6 +68,46 @@ public final class UniversalWildcardContracts {
         Path base = own.getParent().resolve("universal-contracts-" + UUID.randomUUID()); Files.createDirectories(base);
         for (boolean a : new boolean[]{false, true}) for (boolean b : new boolean[]{false, true}) scenario(base, bridge, a, b);
         System.out.println("Passed " + checks + " universal packaging, optional-interface and provider-routing checks. No actual Forge world was launched.");
+    }
+    private static void launcherProbe(Map<String, byte[]> input) throws Exception {
+        // Use the actual Mixin 0.8.5 ModLauncher provider which rejected false in the crash report.
+        // Only its transformer-loader callback is supplied by the test; no game or registry starts.
+        var provider = (org.spongepowered.asm.service.IClassBytecodeProvider) Class.forName("org.spongepowered.asm.launch.MixinLaunchPluginLegacy")
+                .getConstructor().newInstance();
+        var field = provider.getClass().getDeclaredField("transformerLoader"); field.setAccessible(true);
+        Map<String, byte[]> fixtures = new HashMap<>(input); int[] calls = {0};
+        Object transformer = java.lang.reflect.Proxy.newProxyInstance(field.getType().getClassLoader(), new Class<?>[]{field.getType()}, (proxy, method, args) -> {
+            if (method.getName().equals("buildTransformedClassNodeFor")) { calls[0]++; return fixtures.get((String) args[0]); }
+            if (method.getName().equals("toString")) return "FixtureTransformerLoader";
+            return null;
+        });
+        field.set(provider, transformer);
+        boolean reproduced = false;
+        try { provider.getClassNode("org.leodreamer.wildcard_pattern.wildcard.WildcardPatternLogic", false); }
+        catch (IllegalArgumentException expected) { reproduced = expected.getMessage().contains("untransformed bytecode"); }
+        check(reproduced, "actual ModLauncher provider reproduces the reported 4.1.0 failure");
+        var plugin = new UniversalMixinPlugin(() -> provider);
+        String legacy = "org.leodreamer.wildcard_pattern.wildcard.WildcardPatternLogic";
+        check(!plugin.shouldApplyMixin(legacy, "io.github.sexileman.eae2pattern.mixin.WildcardExpansionMixin"), "removed legacy mod is skipped through the actual supported launcher path");
+        ClassWriter writer = new ClassWriter(0);
+        writer.visit(Opcodes.V17, Opcodes.ACC_PUBLIC, legacy.replace('.', '/'), null, "java/lang/Object", null);
+        var method = writer.visitMethod(Opcodes.ACC_PUBLIC | Opcodes.ACC_STATIC, "decodePatterns",
+                "(Lnet/minecraft/world/item/ItemStack;Lnet/minecraft/world/level/Level;)Ljava/util/stream/Stream;", null, null);
+        method.visitCode(); method.visitInsn(Opcodes.ACONST_NULL); method.visitInsn(Opcodes.ARETURN); method.visitMaxs(1, 2); method.visitEnd(); writer.visitEnd();
+        fixtures.put(legacy, writer.toByteArray());
+        check(plugin.shouldApplyMixin(legacy, "io.github.sexileman.eae2pattern.mixin.WildcardExpansionMixin"), "present legacy interface is inspected through supported launcher path");
+        String activation = UniversalMixinPlugin.GTL + "WildcardPatternCompat", expansion = UniversalMixinPlugin.GTL + "WildcardPatternCompatImpl";
+        check(plugin.shouldApplyMixin(activation, "GtlWildcardActivationMixin"), "GTL activation survives actual launcher bytecode retrieval");
+        check(plugin.shouldApplyMixin(expansion, "GtlWildcardExpansionMixin"), "GTL expansion remains enabled as a pair");
+        check(calls[0] >= 4, "real provider used the transformer-loader callback rather than failing before class lookup");
+        int before = calls[0];
+        check(plugin.shouldApplyMixin("appeng.helpers.patternprovider.PatternProviderLogic", "MachineWildcardProviderMixin") && calls[0] == before,
+                "ordinary AE2 adapter does not request optional bytecode");
+        byte[] saved = fixtures.remove(expansion);
+        var missing = new UniversalMixinPlugin(() -> provider);
+        check(!missing.shouldApplyMixin(activation, "GtlWildcardActivationMixin"), "missing GTL half is nonfatal in actual launcher provider");
+        fixtures.put(expansion, saved);
+        check(!missing.shouldApplyMixin(expansion, "GtlWildcardExpansionMixin"), "a failed GTL probe keeps both halves consistently disabled");
     }
     private static void scenario(Path base, byte[] bridge, boolean own, boolean legacy) throws Exception {
         Path dir = base.resolve("own-" + own + "-legacy-" + legacy); Files.createDirectories(dir);

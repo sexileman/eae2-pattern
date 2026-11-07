@@ -8,13 +8,17 @@ import org.objectweb.asm.tree.TypeInsnNode;
 import org.spongepowered.asm.mixin.extensibility.IMixinConfigPlugin;
 import org.spongepowered.asm.mixin.extensibility.IMixinInfo;
 import org.spongepowered.asm.service.MixinService;
+import org.spongepowered.asm.service.IClassBytecodeProvider;
 import java.util.List;
 import java.util.Set;
 
 /** Probe bytecode only: Forge's ModList and registries are not ready during mixin discovery. */
 public final class UniversalMixinPlugin implements IMixinConfigPlugin {
     public static final String GTL = "org.gtlcore.gtlcore.integration.wildcard.";
+    private final java.util.function.Supplier<IClassBytecodeProvider> bytecode;
     private Boolean gtlSupported;
+    public UniversalMixinPlugin() { this(() -> MixinService.getService().getBytecodeProvider()); }
+    public UniversalMixinPlugin(java.util.function.Supplier<IClassBytecodeProvider> bytecode) { this.bytecode = bytecode; }
     public static boolean supportedPair(ClassNode activation, ClassNode expansion) {
         return supported("GtlWildcardActivationMixin", activation) && supported("GtlWildcardExpansionMixin", expansion)
                 && noUnadaptedLegacyLinks(activation, Set.of())
@@ -59,21 +63,26 @@ public final class UniversalMixinPlugin implements IMixinConfigPlugin {
     @Override public boolean shouldApplyMixin(String target, String mixin) {
         if (!target.startsWith(GTL) && !target.startsWith("org.leodreamer.wildcard_pattern.")) return true;
         try {
+            // ModLauncher's provider rejects runTransformers=false before checking whether a class
+            // exists. The supported single-argument overload requests its normal transformed view.
+            var provider = bytecode.get();
             if (target.startsWith(GTL)) {
                 if (gtlSupported == null) {
-                    var provider = MixinService.getService().getBytecodeProvider();
-                    gtlSupported = supportedPair(provider.getClassNode(GTL + "WildcardPatternCompat", false),
-                            provider.getClassNode(GTL + "WildcardPatternCompatImpl", false));
+                    gtlSupported = supportedPair(provider.getClassNode(GTL + "WildcardPatternCompat"),
+                            provider.getClassNode(GTL + "WildcardPatternCompatImpl"));
                     if (!gtlSupported) com.mojang.logging.LogUtils.getLogger().warn("EAE2 GTL adapters skipped together: unsupported integration interfaces");
                 }
                 return gtlSupported;
             }
-            ClassNode node = MixinService.getService().getBytecodeProvider().getClassNode(target, false);
+            ClassNode node = provider.getClassNode(target);
             boolean apply = supported(mixin, node);
             if (!apply) com.mojang.logging.LogUtils.getLogger().warn("EAE2 optional adapter skipped: unsupported interface {}", target);
             return apply;
-        } catch (ClassNotFoundException absent) { return false; }
-        catch (java.io.IOException unavailable) {
+        } catch (ClassNotFoundException absent) {
+            if (target.startsWith(GTL)) gtlSupported = false;
+            return false;
+        } catch (java.io.IOException | IllegalArgumentException | IllegalStateException | LinkageError unavailable) {
+            if (target.startsWith(GTL)) gtlSupported = false;
             com.mojang.logging.LogUtils.getLogger().warn("EAE2 optional adapter unavailable: {}", target, unavailable); return false;
         }
     }
