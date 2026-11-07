@@ -2,18 +2,21 @@
 
 为 Minecraft 大型整合包批量生成 AE2 样板。对 JEI 中的工作方块按 **U**，打开对应类别后，点击工作方块竖栏中的**空白样板 + 绿色加号**，采集该类别全部可见配方，筛选并编码到 ME 网络。
 
-当前版本 **4.0.0**，分支 `1.20.1`，网络协议 **4**。客户端和服务端须同步更新。
+当前版本 **4.1.0**，分支 `1.20.1`，网络协议 **4**。客户端和服务端须同步更新。
 
-## 独立通配样板与 GTLCore 双兼容
+## 单一通用 jar 与自动适配
 
-本版独立注册 `eae2_pattern:machine_wildcard_pattern`，自行实现界面、数据格式、AE2 解码识别及供应器展开；**不内嵌原 Wildcard Pattern，也不借用其 mod ID**。可以移除外部 `wildcard_pattern`；需要原模组的旧材料通配功能时，也可以让两者共存。
+只安装 **`eae2-pattern-4.1.0.jar`**（交付时也提供同内容的 `eae2-pattern.jar` 文件名）。客户端和服务端同步替换旧 EAE2 包，不分 GTL 专用包、独立包或其他整合包变体，也不需要替换 GTLCore。
 
-使用所提供的 GTLCore 整合包时，安装两份构件：
+- **AE2 + JEI**：提供普通批量样板、独立通配物品与编辑器。
+- **存在 GTCEu**：读取真实 GT 配方、概率、配置电路、模具和流体；不存在时基础功能仍可用。
+- **存在兼容的 GTLCore**：从本 jar 自动适配其原生通配符总成启用及展开接口，无需修改磁盘上的 GTLCore jar。
+- **存在 ExtendedAE**：通过共用 AE2 供应器逻辑支持块式和面板式扩展供应器。
+- **存在原 `wildcard_pattern`**：保留其物品与原接口，并与本模组独立样板分流；不存在时本模组不加载其 API。
 
-1. 用 `eae2-pattern-4.0.0.jar` 替换旧 EAE2（包括旧 `standalone-gtl` 版）。
-2. 用 `gtlcore-1.2.3.0-fix9-eae2-wildcard.jar` 替换原 GTLCore，不能同时保留原 jar。它保留原总成注册 ID 和已有修复，并分别调用 EAE2 新样板 API 或原 `wildcard_pattern` 的 API。
+GTL 与旧通配符适配在类加载前检查目标接口签名。缺少对应模组时跳过；GTL 启用和展开适配成对检查，接口不支持时两者都不启用，日志记录原因。已对照所提供的原 GTLCore 1.2.3.0-fix9，以及上一版修改构件核对接口；其他分支仍需实际验证。
 
-两个 jar 均须在客户端和服务端一致。没有 GTLCore 的 AE2 整合包只需第一个 jar；普通样板供应器、ExtendedAE 块式/面板式扩展供应器由本模组自身适配。GTL 修改版针对你提供的 `1.2.3.0-fix9 / GTCEu 1.4.4`，没有改写其他机器和配方代码。补丁源码、固定输入哈希和复现方法见 [GTLCore 补丁说明](docs/gtlcore-patch.md)。
+本模组注册自己的 `eae2_pattern:machine_wildcard_pattern`，不内嵌原模组，不借用 `wildcard_pattern` mod ID。原模组可移除，也可保留用于原来的材料通配功能。上一版 GTLCore 二进制补丁已停止作为安装要求；历史说明见 [归档](docs/gtlcore-patch.md)。
 
 ### 全新通配编辑器
 
@@ -182,8 +185,9 @@
 ```powershell
 .\gradlew.bat build
 .\gradlew.bat regressionTest
+.\gradlew.bat universalCompatibilityTest -PcompatModsDir="D:/codex workspace/others/mods"
 ```
 
-Java 17；产物为 `build/libs/eae2-pattern-4.0.0.jar`。`build` 包含领域回归检查以及 Forge 重混淆；测试不启动游戏，不能替代整合包实测。详见 [测试清单](docs/testing.md) 和 [变更记录](CHANGELOG.md)。
+Java 17；产物为 `build/libs/eae2-pattern-4.1.0.jar`。`build` 包含领域回归检查以及 Forge 重混淆；测试不启动游戏，不能替代整合包实测。详见 [测试清单](docs/testing.md) 和 [变更记录](CHANGELOG.md)。
 
 代码 MIT；图标运行时使用 AE2 的空白样板贴图，仓库 logo 为其衍生素材，遵循 AE2 LGPL-3.0。

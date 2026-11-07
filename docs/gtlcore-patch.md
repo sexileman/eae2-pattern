@@ -1,4 +1,8 @@
-# GTLCore dual wildcard bridge
+# 历史归档：4.0.0 的 GTLCore 二进制补丁
+
+**4.1.0 起无需执行本文步骤或替换 GTLCore。请使用通用 eae2-pattern.jar，适配代码已移入该 jar。**
+
+以下保留 4.0.0 的实现记录；相关构建工具已从当前版本移除。旧源码可在提交 [efd175e](https://github.com/sexileman/eae2-pattern/tree/efd175e) 查看。
 
 This patch targets the user's supplied GTLCore 1.2.3.0-fix9 jar, SHA-256 `81b52d5e0621c8eaa0dc55460d8c9be51619889ba6d29ea8bdbda92af96dea3c`. It preserves existing pack-specific fixes by modifying only two integration classes and optional dependency metadata, adding a small isolated bridge. Unsupported input hashes are rejected.
 

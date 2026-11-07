@@ -1,5 +1,6 @@
 package io.github.sexileman.eae2pattern;
 
+import io.github.sexileman.eae2pattern.mixin.UniversalMixinPlugin;
 import org.objectweb.asm.*;
 import org.objectweb.asm.tree.*;
 import java.net.URLClassLoader;
@@ -8,9 +9,10 @@ import java.util.*;
 import java.util.zip.ZipFile;
 import javax.tools.ToolProvider;
 
-/** Audit shipped jars and exercise the real SRG bridge with isolated optional-provider fixtures. */
-public final class IndependentWildcardContracts {
+/** Universal artifact/signature checks and isolated routing with optional providers absent/present. */
+public final class UniversalWildcardContracts {
     private static int checks;
+    private static final String BRIDGE = "io/github/sexileman/eae2pattern/compat/gtl/GtlWildcardBridge";
     private static void check(boolean value, String message) { if (!value) throw new AssertionError(message); checks++; }
     private static byte[] bytes(ZipFile zip, String path) throws Exception {
         var entry = zip.getEntry(path); if (entry == null) throw new AssertionError("Missing " + path);
@@ -18,37 +20,52 @@ public final class IndependentWildcardContracts {
     }
     private static ClassNode node(byte[] bytes) { var n = new ClassNode(); new ClassReader(bytes).accept(n, 0); return n; }
     public static void main(String[] args) throws Exception {
-        Path own = Path.of(args[0]), patched = Path.of(args[1]), mods = Path.of(args[2]);
+        Path own = Path.of(args[0]), mods = Path.of(args[1]);
+        byte[] bridge;
+        try (var app = new ZipFile(own.toFile())) {
+            check(Collections.list(app.entries()).stream().noneMatch(e -> e.getName().endsWith(".jar") || e.getName().startsWith("org/leodreamer/") || e.getName().startsWith("org/gtlcore/")), "universal jar embeds neither original wildcard nor GTL classes");
+            bridge = bytes(app, BRIDGE + ".class");
+            check(app.getEntry("io/github/sexileman/eae2pattern/api/MachineWildcardApi.class") != null, "own independent API shipped");
+            String config = new String(bytes(app, "eae2_pattern.mixins.json"), java.nio.charset.StandardCharsets.UTF_8);
+            check(config.contains("UniversalMixinPlugin") && config.contains("GtlWildcardActivationMixin") && config.contains("GtlWildcardExpansionMixin"), "optional GTL discovery and both adapters are configured");
+            check(app.getEntry("assets/eae2_pattern/models/item/machine_wildcard_pattern.json") != null, "independent item resources shipped");
+            for (String name : List.of("MachineWildcardProviderMixin", "GtlWildcardActivationMixin", "GtlWildcardExpansionMixin"))
+                check(app.getEntry("io/github/sexileman/eae2pattern/mixin/" + name + ".class") != null, "universal hook exists: " + name);
+            var expansion = node(bytes(app, "io/github/sexileman/eae2pattern/mixin/GtlWildcardExpansionMixin.class"));
+            check(expansion.methods.stream().anyMatch(m -> m.name.equals("isWildcardPattern") && m.desc.equals("(Lnet/minecraft/world/item/ItemStack;)Z")), "recognition overwrite uses native descriptor");
+            check(expansion.methods.stream().anyMatch(m -> m.name.equals("expandPatterns") && m.desc.equals("(Lnet/minecraft/world/item/ItemStack;Lnet/minecraft/world/level/Level;)Ljava/util/List;")), "expansion overwrite uses native descriptor");
+        }
         Path original;
         try (var files = Files.list(mods)) { original = files.filter(p -> p.toString().contains("gtlcore-1") && p.toString().endsWith(".jar")).findFirst().orElseThrow(); }
-        byte[] bridge;
-        try (var app = new ZipFile(own.toFile()); var out = new ZipFile(patched.toFile()); var in = new ZipFile(original.toFile())) {
-            check(Collections.list(app.entries()).stream().noneMatch(e -> e.getName().endsWith(".jar") || e.getName().startsWith("org/leodreamer/")), "independent jar embeds no original wildcard classes or module");
-            check(app.getEntry(GtlCorePatcher.BRIDGE + ".class") == null, "GTL bridge is not duplicated in EAE2 module");
-            check(app.getEntry("io/github/sexileman/eae2pattern/api/MachineWildcardApi.class") != null, "independent integration API shipped");
-            check(app.getEntry("io/github/sexileman/eae2pattern/mixin/MachineWildcardProviderMixin.class") != null, "independent AE2 provider expansion hook shipped");
-            check(app.getEntry("assets/eae2_pattern/models/item/machine_wildcard_pattern.json") != null, "own item model namespace shipped");
-            Set<String> allowed = Set.of(GtlCorePatcher.PREFIX + "WildcardPatternCompat.class", GtlCorePatcher.PREFIX + "WildcardPatternCompatImpl.class", "META-INF/mods.toml");
-            int unchanged = 0;
-            for (var entry : Collections.list(in.entries())) if (!entry.isDirectory() && !allowed.contains(entry.getName())) {
-                if (!Arrays.equals(bytes(in, entry.getName()), bytes(out, entry.getName()))) throw new AssertionError("Unrelated GTL data changed: " + entry.getName());
-                unchanged++;
+        String prefix = "org/gtlcore/gtlcore/integration/wildcard/";
+        try (var gtl = new ZipFile(original.toFile())) {
+            var activation = node(bytes(gtl, prefix + "WildcardPatternCompat.class"));
+            var expansion = node(bytes(gtl, prefix + "WildcardPatternCompatImpl.class"));
+            check(UniversalMixinPlugin.supportedPair(activation, expansion), "unmodified pack GTL supports automatic adapters");
+            check(!UniversalMixinPlugin.supportedPair(null, null), "absent GTL loads no GTL adapter");
+            check(!UniversalMixinPlugin.supportedPair(activation, null), "missing expansion disables activation too");
+            check(!UniversalMixinPlugin.supportedPair(null, expansion), "missing activation disables expansion too");
+            var changed = node(bytes(gtl, prefix + "WildcardPatternCompatImpl.class"));
+            changed.methods.removeIf(m -> m.name.equals("expandPatterns"));
+            check(!UniversalMixinPlugin.supportedPair(activation, changed), "unsupported GTL API disables the adapter pair safely");
+            var noAssignment = node(bytes(gtl, prefix + "WildcardPatternCompat.class"));
+            noAssignment.methods.stream().filter(m -> m.name.equals("<clinit>")).forEach(m -> m.instructions.clear());
+            check(!UniversalMixinPlugin.supportedPair(noAssignment, expansion), "activation requires its exact field assignment hook");
+            var hiddenLink = node(bytes(gtl, prefix + "WildcardPatternCompatImpl.class"));
+            var unsafe = new MethodNode(Opcodes.ACC_STATIC, "newUnadaptedLegacyDependency", "()V", null, null);
+            unsafe.instructions.add(new MethodInsnNode(Opcodes.INVOKESTATIC, "org/leodreamer/wildcard_pattern/OtherApi", "call", "()V", false));
+            unsafe.instructions.add(new InsnNode(Opcodes.RETURN)); hiddenLink.methods.add(unsafe);
+            check(!UniversalMixinPlugin.supportedPair(activation, hiddenLink), "unknown legacy-only dependency disables optional adapters");
+            unsafe.name = "expandPatterns";
+            check(!UniversalMixinPlugin.supportedPair(activation, hiddenLink), "an unadapted overload must not bypass the signature gate");
+            var previous = own.getParent().resolve("gtlcore-1.2.3.0-fix9-eae2-wildcard.jar");
+            if (Files.isRegularFile(previous)) try (var patched = new ZipFile(previous.toFile())) {
+                check(UniversalMixinPlugin.supportedPair(node(bytes(patched, prefix + "WildcardPatternCompat.class")), node(bytes(patched, prefix + "WildcardPatternCompatImpl.class"))), "previously supplied GTL patch also accepts the universal adapters");
             }
-            check(unchanged > 100, "all unrelated GTL class/resource bytes preserved (" + unchanged + ")");
-            for (String name : allowed) check(!Arrays.equals(bytes(in, name), bytes(out, name)), "intended GTL edit exists: " + name);
-            bridge = bytes(out, GtlCorePatcher.BRIDGE + ".class");
-            for (String path : List.of(GtlCorePatcher.PREFIX + "WildcardPatternCompat.class", GtlCorePatcher.PREFIX + "WildcardPatternCompatImpl.class", GtlCorePatcher.BRIDGE + ".class")) {
-                var cls = node(bytes(out, path));
-                for (var method : cls.methods) for (var insn : method.instructions) {
-                    if (insn instanceof MethodInsnNode call) check(!call.owner.startsWith("org/leodreamer/"), "no hard link to removed legacy method");
-                    if (insn instanceof FieldInsnNode field) check(!field.owner.startsWith("org/leodreamer/"), "no hard link to removed legacy field");
-                }
-            }
-            check(out.getEntry("META-INF/eae2-wildcard-patch/GtlCorePatcher.java") != null, "reproducible patch source included");
         }
-        Path base = own.getParent().resolve("independent-contracts-" + UUID.randomUUID()); Files.createDirectories(base);
+        Path base = own.getParent().resolve("universal-contracts-" + UUID.randomUUID()); Files.createDirectories(base);
         for (boolean a : new boolean[]{false, true}) for (boolean b : new boolean[]{false, true}) scenario(base, bridge, a, b);
-        System.out.println("Passed " + checks + " independent artifact, GTL preservation and four-provider-presence checks. Fixtures are not a Minecraft world test.");
+        System.out.println("Passed " + checks + " universal packaging, optional-interface and provider-routing checks. No actual Forge world was launched.");
     }
     private static void scenario(Path base, byte[] bridge, boolean own, boolean legacy) throws Exception {
         Path dir = base.resolve("own-" + own + "-legacy-" + legacy); Files.createDirectories(dir);
@@ -74,9 +91,9 @@ public final class IndependentWildcardContracts {
         }
         var compiler = ToolProvider.getSystemJavaCompiler();
         check(compiler != null && compiler.run(null, null, null, compilerArgs.toArray(String[]::new)) == 0, "isolated fixtures compile");
-        Path helper = dir.resolve(GtlCorePatcher.BRIDGE + ".class"); Files.createDirectories(helper.getParent()); Files.write(helper, bridge);
+        Path helper = dir.resolve(BRIDGE + ".class"); Files.createDirectories(helper.getParent()); Files.write(helper, bridge);
         try (var loader = new URLClassLoader(new java.net.URL[]{dir.toUri().toURL()}, ClassLoader.getPlatformClassLoader())) {
-            Class<?> api = loader.loadClass(GtlCorePatcher.BRIDGE.replace('/', '.'));
+            Class<?> api = loader.loadClass(BRIDGE.replace('/', '.'));
             Class<?> stack = loader.loadClass("net.minecraft.world.item.ItemStack"), level = loader.loadClass("net.minecraft.world.level.Level");
             check((Boolean) api.getMethod("available").invoke(null) == (own || legacy), "activation handles provider presence: " + own + "/" + legacy);
             var accepts = api.getMethod("accepts", stack); var expand = api.getMethod("expand", stack, level);

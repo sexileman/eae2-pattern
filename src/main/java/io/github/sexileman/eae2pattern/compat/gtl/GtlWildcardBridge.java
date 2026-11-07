@@ -1,4 +1,4 @@
-package org.gtlcore.gtlcore.integration.wildcard.eae2;
+package io.github.sexileman.eae2pattern.compat.gtl;
 
 import appeng.api.crafting.IPatternDetails;
 import net.minecraft.world.item.Item;
@@ -10,7 +10,7 @@ import java.lang.reflect.Method;
 import java.util.List;
 import java.util.stream.Stream;
 
-/** Ships in patched GTLCore only. Neither optional provider is linked directly in bytecode. */
+/** Ships in the universal EAE2 jar; GTL classes are never linked here. Neither optional provider is linked directly in bytecode. */
 public final class GtlWildcardBridge {
     private static Method ownIs, ownExpand, legacyExpand;
     private static Item legacyItem;

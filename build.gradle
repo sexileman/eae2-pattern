@@ -118,7 +118,6 @@ tasks.named('processResources', ProcessResources).configure {
 }
 
 tasks.named('jar', Jar).configure {
-    exclude 'org/gtlcore/gtlcore/integration/wildcard/eae2/**'
     manifest {
         attributes([
                 'Specification-Title'    : mod_id,
@@ -169,29 +168,12 @@ tasks.register('compatibilityTest', JavaExec) {
     args(project.findProperty('compatModsDir') ?: '../others/mods')
 }
 
-tasks.register('gtlPatchSupportJar', Jar) {
-    archiveClassifier = 'gtl-patch-support'
-    from(sourceSets.main.output) { include 'org/gtlcore/gtlcore/integration/wildcard/eae2/**' }
-}
-reobf { gtlPatchSupportJar {} }
-tasks.register('patchGtlCore', JavaExec) {
-    dependsOn testClasses, 'reobfGtlPatchSupportJar'
+tasks.register('universalCompatibilityTest', JavaExec) {
+    dependsOn testClasses, 'reobfJar'
     classpath = sourceSets.test.runtimeClasspath
-    mainClass = 'io.github.sexileman.eae2pattern.GtlCorePatcher'
-    doFirst {
-        args(project.findProperty('compatModsDir') ?: '../others/mods',
-             tasks.named('gtlPatchSupportJar', Jar).get().archiveFile.get().asFile.absolutePath,
-             layout.buildDirectory.file('libs/gtlcore-1.2.3.0-fix9-eae2-wildcard.jar').get().asFile.absolutePath,
-             projectDir.absolutePath)
-    }
-}
-tasks.register('independentWildcardTest', JavaExec) {
-    dependsOn testClasses, 'reobfJar', 'patchGtlCore'
-    classpath = sourceSets.test.runtimeClasspath
-    mainClass = 'io.github.sexileman.eae2pattern.IndependentWildcardContracts'
+    mainClass = 'io.github.sexileman.eae2pattern.UniversalWildcardContracts'
     doFirst {
         args(tasks.named('jar', Jar).get().archiveFile.get().asFile.absolutePath,
-             layout.buildDirectory.file('libs/gtlcore-1.2.3.0-fix9-eae2-wildcard.jar').get().asFile.absolutePath,
              project.findProperty('compatModsDir') ?: '../others/mods')
     }
 }
