@@ -71,7 +71,6 @@ public final class PatternWorkbenchScreen extends AeToolScreen implements Genera
     private int footerStatusX, footerStatusY, footerStatusWidth;
     private Component notice = Component.empty();
     private final SearchDebounce searchDebounce = new SearchDebounce();
-    private Action generationMode;
     private Action generate, inputFilter, outputFilter, tools, products, multiplier, halveMultiplier, doubleMultiplier, resetMultiplier, grouping, more, detailMode;
 
     public PatternWorkbenchScreen(RecipePlan plan, Screen parent) {
@@ -119,11 +118,6 @@ public final class PatternWorkbenchScreen extends AeToolScreen implements Genera
                 RecipeNavigation.show(plan, focused);
             }
         }).help("jei_help").setMessage(Component.literal("JEI ↗"));
-        generationMode = null;
-        if (layout.footerTitle()) {
-            generationMode = action(left + 18, layout.footerTop() + 4, panelWidth<420?96:128, this::toggleWildcard).help("wildcard_mode_help");
-            generationMode.setHeight(Math.max(9, Math.min(18, layout.footerControlsY() - layout.footerTop() - 8)));
-        }
         halveMultiplier = action(left + 18, layout.footerControlsY(), panelWidth<300?22:26,
                 () -> changeMultiplier(ProcessingMultiplier.halveAmount(ProcessingMultiplier.parse(multiplierText))))
                 .help("multiplier_halve_help");
@@ -209,23 +203,10 @@ public final class PatternWorkbenchScreen extends AeToolScreen implements Genera
         doubleMultiplier.active = !checking && !sending && ProcessingMultiplier.parse(multiplierText) < ProcessingMultiplier.MAX;
         resetMultiplier.active = !checking && !sending && ProcessingMultiplier.parse(multiplierText) != 1;
         more.active = !checking && !sending;
-        if (generationMode != null) {
-            generationMode.setMessage(tr("open_wildcard_editor"));
-            generationMode.active = !sending && !checking;
-        }
-        generate.setMessage(tr(sending ? "sending" : checking ? "checking" : filtering ? "filtering" : "generate_current", eligibleCount));
         generate.active = !sending && !checking && !filtering && !searchDebounce.pending() && ProcessingMultiplier.parse(multiplierText) > 0
                 && eligibleCount > 0 && ClientNetworkState.hasNetwork() && ClientNetworkState.blankPatterns() >= requiredBlanks();
     }
     private int requiredBlanks() { return eligibleCount; }
-    private void toggleWildcard() {
-        if (sending || checking) return;
-        var state = new net.minecraft.nbt.CompoundTag();
-        state.putString("in_include", inputBox.getValue()); state.putString("out_include", outputBox.getValue());
-        state.putInt("multiplier", ProcessingMultiplier.parse(multiplierText)); state.putInt("output_policy", outputPolicy);
-        state.putBoolean("drop_tools", dropTools); state.putBoolean("search_tools", true);
-        minecraft.setScreen(new WildcardEditorScreen(plan, this, state, null, false));
-    }
     private void generate() {
         if (!generate.active) return;
         List<PatternSpec> specs = selectedSpecs();
@@ -371,16 +352,15 @@ public final class PatternWorkbenchScreen extends AeToolScreen implements Genera
     }
     private void moreMenu() {
         if (checking || sending) return;
-        List<Component> labels = List.of(tr(selectedOnly ? "show_all" : "selected"), tr("invert"),
-                tr(pinned != null ? "unpin" : "pin"), tr("check_stored"),
-                tr("skip_summary"), tr("collapse"), tr("clear_search"), tr("reset_settings"), tr("switch_wildcard"));
+        var actions = WorkbenchMoreAction.values();
+        List<Component> labels = java.util.Arrays.stream(actions).map(action -> tr(action.labelKey(selectedOnly,pinned!=null))).toList();
         choice = new Choice(more, labels, -1, index -> {
-            switch (index) {
-                case 0 -> { selectedOnly = !selectedOnly; refresh(); }
-                case 1 -> { if (!filtering) { visible.forEach(RecipePlan.Entry::toggle); refresh(); } }
-                case 2 -> { pinned = pinned != null ? null : focused; sourceView = true; rebuildDetails(); }
-                case 3 -> checkExisting();
-                case 4 -> {
+            switch (actions[index]) {
+                case SELECTED_ONLY -> { selectedOnly = !selectedOnly; refresh(); }
+                case INVERT -> { if (!filtering) { visible.forEach(RecipePlan.Entry::toggle); refresh(); } }
+                case PIN -> { pinned = pinned != null ? null : focused; sourceView = true; rebuildDetails(); }
+                case CHECK_STORED -> checkExisting();
+                case SKIP_SUMMARY -> {
                     Map<String, Integer> reasons = new LinkedHashMap<>();
                     for (RecipePlan.Entry e : visible) if (e.isSelected()) {
                         String reason = skipReason(e);
@@ -389,10 +369,9 @@ public final class PatternWorkbenchScreen extends AeToolScreen implements Genera
                     notice = tr("skipped_count", skippedCount);
                     for (var reason : reasons.entrySet()) notice = notice.copy().append(" · ").append(tr(reason.getKey())).append(" ×" + reason.getValue());
                 }
-                case 5 -> { expanded.clear(); rebuildRows(); }
-                case 6 -> { inputBox.setValue(""); outputBox.setValue(""); }
-                case 8 -> toggleWildcard();
-                case 7 -> {
+                case COLLAPSE -> { expanded.clear(); rebuildRows(); }
+                case CLEAR_SEARCH -> { inputBox.setValue(""); outputBox.setValue(""); }
+                case RESET_SETTINGS -> {
                     dropTools = true; outputPolicy = inputMode = outputMode = groupingMode = 0;
                     selectedOnly = false; sourceView = false; pinned = null; expanded.clear(); changeMultiplier(1);
                     inputBox.setValue(""); outputBox.setValue(""); optionsChanged(); refresh();
@@ -455,10 +434,10 @@ public final class PatternWorkbenchScreen extends AeToolScreen implements Genera
         WorkbenchTheme.control(g, left + 8, layout.footerTop(), panelWidth - 16, layout.footerHeight(), WorkbenchTheme.BACKGROUND, LINE);
         boolean ready = ClientNetworkState.hasNetwork() && ClientNetworkState.blankPatterns() >= requiredBlanks()
                 && ProcessingMultiplier.parse(multiplierText) > 0;
-        footerStatusX = left + (panelWidth<420?130:168);
+        footerStatusX = left + (layout.footerTitle()?18:168);
         if (layout.footerTitle()) {
             footerStatusY = layout.footerTop() + (layout.footerHeight() >= 50 ? 9 : 4);
-            footerStatusWidth = panelWidth - (panelWidth<420?148:186);
+            footerStatusWidth = panelWidth - 36;
 
             int room = panelWidth - 314;
             if (room >= 70) text(g, tr("processing_only"), left + 168, layout.footerControlsY() + 5, room, DIM);

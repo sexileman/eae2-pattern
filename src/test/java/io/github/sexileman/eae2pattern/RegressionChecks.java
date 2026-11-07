@@ -27,11 +27,21 @@ import java.util.List;
 public final class RegressionChecks {
     private static int checks;
     public static void main(String[] args) throws Exception {
-        policies(); wireFormat(); searches(); gtVersions(); layoutAndGrid(); manualMultiplier(); grouping(); inspectionPackets(); slotPresentation(); patternMetadata(); amountLabels(); machineWildcards(); heldWildcardWrites(); dynamicRules(); stackedCarriers(); wildcardTooltip(); materialPicker(); aeToolScreens(); encodingMessages(); recipeStripColumns(); searchDebounce(); wildcardStockStatus(); guidePages();
+        policies(); wireFormat(); searches(); gtVersions(); layoutAndGrid(); manualMultiplier(); grouping(); inspectionPackets(); slotPresentation(); patternMetadata(); amountLabels(); machineWildcards(); heldWildcardWrites(); dynamicRules(); stackedCarriers(); wildcardTooltip(); materialPicker(); aeToolScreens(); encodingMessages(); recipeStripColumns(); searchDebounce(); wildcardStockStatus(); guidePages(); moreMenuLayout();
         System.out.println("Passed " + checks + " regression checks");
     }
     private static void check(boolean condition, String message) {
         checks++; if (!condition) throw new AssertionError(message);
+    }
+    private static void moreMenuLayout() {
+        var actions=io.github.sexileman.eae2pattern.client.WorkbenchMoreAction.values();
+        check(actions.length==8,"actual More menu has eight actions and no wildcard navigation");
+        for(int[] canvas:List.of(new int[]{320,180},new int[]{480,270},new int[]{640,360})) {
+            var popup=io.github.sexileman.eae2pattern.client.PopupLayout.measure(220,80,44,19,180,actions.length,canvas[0],canvas[1]);
+            check(popup.y()>=6&&popup.y()+popup.height()<=canvas[1]-6,"actual More menu fits compact and normal canvases without throwing");
+            for(int i=0;i<actions.length;i++)check(popup.indexAt(popup.x()+10,popup.y()+3+i*19+9)==i,"all actual More actions remain reachable");
+        }
+        check(actions[0].labelKey(true,false).equals("show_all")&&actions[2].labelKey(false,true).equals("unpin"),"contextual More labels retain their intended actions");
     }
     private static void guidePages() throws Exception {
         var pages=new java.util.ArrayList<appeng.client.guidebook.compiler.ParsedGuidePage>();
