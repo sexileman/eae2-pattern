@@ -7,6 +7,11 @@ public final class ProcessingMultiplier {
     public static final int[] PRESETS = {1, 2, 4, 8, 16, 32, 64};
     private ProcessingMultiplier() {}
 
+    /** Repeated button operations stay on integral powers of two, including legacy saved values. */
+    public static int normalize(int value) { return Integer.highestOneBit(Math.max(1, Math.min(MAX, value))); }
+    public static int doubleAmount(int value) { return Math.min(MAX, normalize(value) * 2); }
+    public static int halveAmount(int value) { return Math.max(DEFAULT, normalize(value) / 2); }
+
     public static boolean acceptsText(String value) {
         return value.length() <= 5 && value.chars().allMatch(c -> c >= '0' && c <= '9');
     }

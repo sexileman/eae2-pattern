@@ -245,9 +245,13 @@
   "eae2_pattern.workbench.multiplier_menu": "倍率 ▾",
   "eae2_pattern.workbench.multiplier_input": "处理倍率",
   "eae2_pattern.workbench.default_multiplier": "默认 ×1",
-  "eae2_pattern.workbench.multiplier_help": "默认 ×1。可选快捷档位，或直接输入 1–%s 的整数；只放大处理配方的消耗材料和产物。",
+  "eae2_pattern.workbench.multiplier_help": "默认 ×1；反复点击 ×2 或 ÷2 调整，范围 ×1–×%s。仅放大处理配方的消耗输入和产物，不消耗材料保持原数量。",
   "eae2_pattern.workbench.multiplier_invalid": "倍率需为 1–%s 的整数",
   "eae2_pattern.workbench.notice_warning": "编码注意事项",
   "eae2_pattern.workbench.notice_info": "说明",
-  "eae2_pattern.workbench.slot_overlay_not_consumed": "不消耗"
+  "eae2_pattern.workbench.slot_overlay_not_consumed": "不消耗",
+  "eae2_pattern.workbench.multiplier_reset": "重置",
+  "eae2_pattern.workbench.multiplier_halve_help": "将当前倍率减半，最低 ×1；同步更新预览与生成数量。",
+  "eae2_pattern.workbench.multiplier_double_help": "将当前倍率翻倍，最高 ×%s；同步更新预览与生成数量。",
+  "eae2_pattern.workbench.multiplier_reset_help": "将处理倍率恢复为 ×1。"
 }

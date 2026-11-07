@@ -58,7 +58,7 @@ public final class PatternWorkbenchScreen extends Screen implements GenerationLi
     private ItemSearchQuery input = ItemSearchQuery.empty(), output = ItemSearchQuery.empty();
     private RecipeFilters filters = RecipeFilters.none();
     private String inputText = "", outputText = "";
-    private EditBox inputBox, outputBox, multiplierBox;
+    private EditBox inputBox, outputBox;
     private String multiplierText = Integer.toString(ProcessingMultiplier.DEFAULT);
     private RecipePlan.Entry focused;
     private int inputMode, outputMode, outputPolicy;
@@ -70,12 +70,12 @@ public final class PatternWorkbenchScreen extends Screen implements GenerationLi
     private int selectedCount, eligibleCount, tickCount, searchDelay;
     private int footerStatusX, footerStatusY, footerStatusWidth;
     private Component notice = Component.empty();
-    private Action generate, inputFilter, outputFilter, tools, products, multiplier, grouping, more, detailMode;
+    private Action generate, inputFilter, outputFilter, tools, products, multiplier, halveMultiplier, doubleMultiplier, resetMultiplier, grouping, more, detailMode;
 
     public PatternWorkbenchScreen(RecipePlan plan, Screen parent) {
         super(tr("title")); this.plan = plan; this.parent = parent; jeiReturn = RecipeNavigation.capture(parent);
         dropTools = WorkbenchPreferences.DROP_TOOLS.get(); outputPolicy = WorkbenchPreferences.OUTPUT_POLICY.get();
-        groupingMode = WorkbenchPreferences.GROUPING.get(); multiplierText = "" + WorkbenchPreferences.MULTIPLIER.get();
+        groupingMode = WorkbenchPreferences.GROUPING.get(); multiplierText = "" + ProcessingMultiplier.normalize(WorkbenchPreferences.MULTIPLIER.get());
         refresh();
     }
     private static Component tr(String key, Object... args) { return Component.translatable("eae2_pattern.workbench." + key, args); }
@@ -117,15 +117,15 @@ public final class PatternWorkbenchScreen extends Screen implements GenerationLi
                 RecipeNavigation.show(plan, focused);
             }
         }).help("jei_help").setMessage(Component.literal("JEI ↗"));
-        multiplier = action(left + 18, layout.footerControlsY(), 54, () -> {
-            List<Component> labels = new ArrayList<>();
-            for (int preset : ProcessingMultiplier.PRESETS) labels.add(tr(preset == 1 ? "default_multiplier" : "multiplier", preset));
-            choice = new Choice(multiplier, labels, -1, index -> multiplierBox.setValue(Integer.toString(ProcessingMultiplier.PRESETS[index])));
-        });
-        multiplierBox = addRenderableWidget(new WorkbenchSearchBox(font, left + 86, layout.footerControlsY() + 5, 34, tr("multiplier_input"), tr("multiplier_empty")));
-        multiplierBox.setMaxLength(5); multiplierBox.setFilter(ProcessingMultiplier::acceptsText);
-        multiplierBox.setBordered(false); multiplierBox.setValue(multiplierText);
-        multiplierBox.setResponder(value -> { multiplierText = value; optionsChanged(); });
+        halveMultiplier = action(left + 18, layout.footerControlsY(), 26,
+                () -> changeMultiplier(ProcessingMultiplier.halveAmount(ProcessingMultiplier.parse(multiplierText))))
+                .help("multiplier_halve_help");
+        multiplier = action(left + 47, layout.footerControlsY(), 42, () -> {}).help("multiplier_help");
+        doubleMultiplier = action(left + 92, layout.footerControlsY(), 26,
+                () -> changeMultiplier(ProcessingMultiplier.doubleAmount(ProcessingMultiplier.parse(multiplierText))))
+                .help("multiplier_double_help");
+        resetMultiplier = action(left + 121, layout.footerControlsY(), 38,
+                () -> changeMultiplier(ProcessingMultiplier.DEFAULT)).help("multiplier_reset_help");
         action(left + panelWidth - 62, top + 9, 52, this::onClose).help("close_help").setMessage(tr("close"));
         generate = action(left + panelWidth - 138, layout.footerControlsY(), 120, this::generate).help("scope_help");
         choice = null; navigatingToJei = false;
@@ -133,9 +133,13 @@ public final class PatternWorkbenchScreen extends Screen implements GenerationLi
         ClientNetworkState.reset(); queryNetwork(); queuePreview(); rebuildDetails(); updateButtons();
     }
     private Action action(int x, int y, int w, Runnable click) { return addRenderableWidget(new Action(x, y, w, click)); }
+    private void changeMultiplier(int value) {
+        multiplierText = Integer.toString(ProcessingMultiplier.normalize(value));
+        optionsChanged();
+    }
     private void queryNetwork() { PacketHandler.sendToServer(new C2SQueryNetworkStatusPacket(0)); }
     @Override public void tick() {
-        inputBox.tick(); outputBox.tick(); multiplierBox.tick();
+        inputBox.tick(); outputBox.tick();
         if (searchDelay > 0 && --searchDelay == 0) { input = ItemSearchQuery.parse(inputText); output = ItemSearchQuery.parse(outputText); refresh(); }
         if (filtering && searchDelay == 0) filterStep();
         if (previewDelay > 0 && !sending && !checking && --previewDelay == 0) requestPreview();
@@ -188,10 +192,16 @@ public final class PatternWorkbenchScreen extends Screen implements GenerationLi
         inputFilter.setMessage(tr("input_mode." + inputMode)); outputFilter.setMessage(tr("output_mode." + outputMode));
         tools.setMessage(tr(dropTools ? "tools_drop" : "tools_keep")); products.setMessage(tr("policy." + outputPolicy));
         grouping.setMessage(tr("grouping." + groupingMode)); more.setMessage(tr("more"));
-        detailMode.setMessage(tr(sourceView ? "source_view" : "final_view")); multiplier.setMessage(tr("multiplier_menu"));
-        tools.active = products.active = multiplier.active = multiplierBox.active = !checking && !sending;
+        detailMode.setMessage(tr(sourceView ? "source_view" : "final_view")); multiplier.setMessage(Component.literal("×" + ProcessingMultiplier.parse(multiplierText)));
+        halveMultiplier.setMessage(Component.literal("÷2"));
+        doubleMultiplier.setMessage(Component.literal("×2"));
+        resetMultiplier.setMessage(tr("multiplier_reset"));
+        tools.active = products.active = !checking && !sending;
+        multiplier.active = false;
+        halveMultiplier.active = !checking && !sending && ProcessingMultiplier.parse(multiplierText) > 1;
+        doubleMultiplier.active = !checking && !sending && ProcessingMultiplier.parse(multiplierText) < ProcessingMultiplier.MAX;
+        resetMultiplier.active = !checking && !sending && ProcessingMultiplier.parse(multiplierText) != 1;
         more.active = !checking && !sending;
-        multiplierBox.setTextColor(ProcessingMultiplier.parse(multiplierText) > 0 ? TEXT : 0xFFFF9D98);
         generate.setMessage(tr(sending ? "sending" : checking ? "checking" : filtering ? "filtering" : "generate_current", eligibleCount));
         generate.active = !sending && !checking && !filtering && searchDelay == 0 && ProcessingMultiplier.parse(multiplierText) > 0
                 && eligibleCount > 0 && ClientNetworkState.hasNetwork() && ClientNetworkState.blankPatterns() >= eligibleCount;
@@ -365,7 +375,7 @@ public final class PatternWorkbenchScreen extends Screen implements GenerationLi
                 case 6 -> { inputBox.setValue(""); outputBox.setValue(""); }
                 case 7 -> {
                     dropTools = true; outputPolicy = inputMode = outputMode = groupingMode = 0;
-                    selectedOnly = false; sourceView = false; pinned = null; expanded.clear(); multiplierBox.setValue("1");
+                    selectedOnly = false; sourceView = false; pinned = null; expanded.clear(); changeMultiplier(1);
                     inputBox.setValue(""); outputBox.setValue(""); optionsChanged(); refresh();
                 }
                 default -> { }
@@ -396,7 +406,6 @@ public final class PatternWorkbenchScreen extends Screen implements GenerationLi
             boolean exact = inputBox.isMouseOver(mx, my) ? exactInput != null : exactOutput != null;
             g.renderComponentTooltip(font, exact ? List.of(tr("exact_filter"), tr("search_help")) : List.of(tr("search_help")), mx, my);
         }
-        if (multiplierBox.isMouseOver(mx, my)) g.renderComponentTooltip(font, List.of(tr("multiplier_help", ProcessingMultiplier.MAX)), mx, my);
         for (var child : children()) if (child instanceof Action a && a.isHovered())
             g.renderComponentTooltip(font, List.of(a.getMessage(), tr(a.helpKey != null ? a.helpKey : a == tools ? "tools_help" : a == multiplier ? "multiplier_help" : a == more ? "more_help" : a == grouping ? "group_help" : "option_help", ProcessingMultiplier.MAX)), mx, my);
         IconHit hit = iconAt(mx, my);
@@ -425,20 +434,20 @@ public final class PatternWorkbenchScreen extends Screen implements GenerationLi
     }
     private void renderFooter(GuiGraphics g, Component status) {
         WorkbenchTheme.control(g, left + 8, layout.footerTop(), panelWidth - 16, layout.footerHeight(), 0xFF202020, LINE);
-        searchSurface(g, multiplierBox);
         boolean ready = ClientNetworkState.hasNetwork() && ClientNetworkState.blankPatterns() >= eligibleCount
                 && ProcessingMultiplier.parse(multiplierText) > 0;
-        footerStatusX = left + 140;
+        footerStatusX = left + 168;
         if (layout.footerTitle()) {
             footerStatusY = layout.footerTop() + (layout.footerHeight() >= 50 ? 9 : 4);
-            footerStatusWidth = panelWidth - 160;
+            footerStatusWidth = panelWidth - 186;
             text(g, tr("generation_settings"), left + 18, footerStatusY, 112, TEXT);
-            int room = panelWidth - 286;
-            if (room >= 70) text(g, tr("processing_only"), left + 140, layout.footerControlsY() + 5, room, DIM);
+            int room = panelWidth - 314;
+            if (room >= 70) text(g, tr("processing_only"), left + 168, layout.footerControlsY() + 5, room, DIM);
         } else {
             footerStatusY = layout.footerControlsY() + 5;
-            footerStatusWidth = Math.max(10, panelWidth - 286);
+            footerStatusWidth = Math.max(0, panelWidth - 314);
         }
+        if (footerStatusWidth < 12) return;
         text(g, !layout.footerTitle() && footerStatusWidth < 70 ? Component.literal(ready ? "✓" : "!") : status,
                 footerStatusX, footerStatusY, footerStatusWidth, ready ? DIM : WorkbenchTheme.WARNING);
     }
@@ -770,8 +779,8 @@ public final class PatternWorkbenchScreen extends Screen implements GenerationLi
             int color = primary && active ? (hovered ? WorkbenchTheme.PRIMARY_HOVER : WorkbenchTheme.PRIMARY) : hovered ? WorkbenchTheme.HOVER : SURFACE;
             int border = primary && active ? 0xFF686868 : hovered ? 0xFF494949 : color;
             WorkbenchTheme.control(g, getX(), getY(), getWidth(), getHeight(), color, border);
-            int textColor = !active ? 0xFF707070 : TEXT;
-            int reserve = state == null ? 10 : 25;
+            int textColor = !active && this != multiplier ? 0xFF707070 : TEXT;
+            int reserve = this == multiplier ? 4 : state == null ? 10 : 25;
             String label = getMessage().getString();
             String value = font.width(label) <= getWidth() - reserve ? label : font.plainSubstrByWidth(label, Math.max(0, getWidth() - reserve - 6)) + "…";
             if (state == null) g.drawString(font, value, getX() + (getWidth() - font.width(value)) / 2, getY() + 5, textColor, false);

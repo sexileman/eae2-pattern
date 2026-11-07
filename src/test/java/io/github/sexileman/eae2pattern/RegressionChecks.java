@@ -163,6 +163,16 @@ public final class RegressionChecks {
     }
 
     private static void manualMultiplier() {
+        int repeated = 1;
+        for (int n = 0; n < 16; n++) repeated = ProcessingMultiplier.doubleAmount(repeated);
+        check(repeated == ProcessingMultiplier.MAX, "repeated doubling reaches maximum");
+        check(ProcessingMultiplier.doubleAmount(repeated) == repeated, "doubling caps without overflow");
+        for (int n = 0; n < 16; n++) repeated = ProcessingMultiplier.halveAmount(repeated);
+        check(repeated == 1 && ProcessingMultiplier.halveAmount(1) == 1, "repeated halving stops at one");
+        check(ProcessingMultiplier.normalize(100) == 64 && ProcessingMultiplier.normalize(0) == 1, "legacy saved multiplier normalizes to valid button step");
+        var buttonEntry = entry(List.of(Ingredient.consumed(stack("test:button_input", 3))), List.of(), List.of(Ingredient.produced(stack("test:button_output", 5), 1)));
+        var buttonSpec = buttonEntry.specForPolicy(ProcessingMultiplier.doubleAmount(ProcessingMultiplier.doubleAmount(1)), 0, true);
+        check(buttonSpec.inputs().get(0).amount() == 12 && buttonSpec.outputs().get(0).amount() == 20, "button multiplier scales both inputs and outputs");
         check(ProcessingMultiplier.parse("1") == ProcessingMultiplier.DEFAULT, "default multiplier is one");
         check(ProcessingMultiplier.parse("100") == 100, "manual non-preset multiplier");
         check(ProcessingMultiplier.parse("65536") == ProcessingMultiplier.MAX, "maximum manual multiplier");

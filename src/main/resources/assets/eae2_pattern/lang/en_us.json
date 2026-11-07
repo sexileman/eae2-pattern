@@ -245,9 +245,13 @@
   "eae2_pattern.workbench.multiplier_menu": "Scale ▾",
   "eae2_pattern.workbench.multiplier_input": "Processing multiplier",
   "eae2_pattern.workbench.default_multiplier": "Default ×1",
-  "eae2_pattern.workbench.multiplier_help": "Default ×1. Choose a preset or enter an integer from 1 to %s. Only consumed processing inputs and outputs are scaled.",
+  "eae2_pattern.workbench.multiplier_help": "Default ×1; repeatedly use ×2 or ÷2, up to ×%s. Only processing inputs consumed and outputs are scaled; reusable inputs stay unchanged.",
   "eae2_pattern.workbench.multiplier_invalid": "Enter a multiplier from 1 to %s",
   "eae2_pattern.workbench.notice_warning": "Encoding warning",
   "eae2_pattern.workbench.notice_info": "Information",
-  "eae2_pattern.workbench.slot_overlay_not_consumed": "Reusable"
+  "eae2_pattern.workbench.slot_overlay_not_consumed": "Reusable",
+  "eae2_pattern.workbench.multiplier_reset": "Reset",
+  "eae2_pattern.workbench.multiplier_halve_help": "Halve the current multiplier, down to ×1. Updates preview and encoded amounts.",
+  "eae2_pattern.workbench.multiplier_double_help": "Double the current multiplier, up to ×%s. Updates preview and encoded amounts.",
+  "eae2_pattern.workbench.multiplier_reset_help": "Reset the processing multiplier to ×1."
 }
