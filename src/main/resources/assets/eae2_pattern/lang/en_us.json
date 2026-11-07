@@ -327,7 +327,7 @@
   "eae2_pattern.editor.pick_machine": "Select the machine recipe type",
   "eae2_pattern.editor.machine_search": "Search machine name or recipe type ID…",
   "eae2_pattern.editor.legacy_help": "Unbound or legacy material rules: right-click and select a machine to configure.",
-  "item.eae2_pattern.machine_wildcard_pattern": "Machine Wildcard Pattern",
+  "item.eae2_pattern.machine_wildcard_pattern": "Processing Pattern (Wildcard)",
   "eae2_pattern.workbench.open_wildcard_editor": "Wildcard editor ↗",
   "eae2_pattern.wildcard.encoder": "Encoded by %s",
   "eae2_pattern.editor.policy_empty": "No valid input or output remains under this policy. Change the encoding settings.",
@@ -392,5 +392,10 @@
   "eae2_pattern.editor.extract_applied": "Forms extracted; include searches replaced, exclusions retained.",
   "eae2_pattern.editor.reset_help": "Craft one wildcard pattern alone in a crafting grid or AE crafting terminal to clear all NBT into one blank carrier. Unmarked blanks stack to 64; tagged carriers stack to 1. Encoding from a blank stack places one result in an empty inventory slot and keeps the remaining blanks in hand.",
   "eae2_pattern.editor.held_saved_inventory": "Encoded one carrier into your inventory; remaining blanks stay in hand.",
-  "eae2_pattern.editor.pinyin_help": "With Just Enough Characters installed, human-readable names, tooltips and machine/material/form choices accept pinyin and initials, e.g. tieding or td. Use forms/materials for dynamic rules, or fixed mode for name searches."
+  "eae2_pattern.editor.pinyin_help": "With Just Enough Characters installed, human-readable names, tooltips and machine/material/form choices accept pinyin and initials, e.g. tieding or td. Use forms/materials for dynamic rules, or fixed mode for name searches.",
+  "eae2_pattern.wildcard.encoding_type": "Encoding type: %s",
+  "eae2_pattern.wildcard.matched_patterns": "Matched patterns: %s",
+  "eae2_pattern.wildcard.dynamic_note": "Dynamic rule · count recorded at last encoding",
+  "eae2_pattern.wildcard.fixed_note": "Fixed collection · count of stored recipes",
+  "eae2_pattern.wildcard.edit_hint": "Right-click to edit · up to 2048 recipes per carrier"
 }

@@ -68,7 +68,6 @@ public final class MachineWildcard {
         CompoundTag gtl = new CompoundTag(); gtl.put("patternQuickUploadRecipeTypes", ids);
         stack.getOrCreateTag().put("gtlcore", gtl);
         stack.getOrCreateTag().putString("encodePlayer", player);
-        stack.setHoverName(Component.translatable("eae2_pattern.wildcard.name", type.toString(), count));
         return stack;
     }
     public static Stream<IPatternDetails> expand(ItemStack stack, Level level) {

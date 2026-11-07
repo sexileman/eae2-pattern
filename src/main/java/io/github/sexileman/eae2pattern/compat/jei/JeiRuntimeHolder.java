@@ -20,6 +20,7 @@ public final class JeiRuntimeHolder {
 
     public static void set(@Nullable IJeiRuntime newRuntime) {
         io.github.sexileman.eae2pattern.client.RecipePlan.clearSearchCaches();
+        io.github.sexileman.eae2pattern.client.WildcardTooltip.clearNames();
         runtime = newRuntime;
     }
 

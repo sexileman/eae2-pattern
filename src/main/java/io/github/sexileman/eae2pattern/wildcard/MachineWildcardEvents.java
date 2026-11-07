@@ -1,10 +1,7 @@
 package io.github.sexileman.eae2pattern.wildcard;
 
 import io.github.sexileman.eae2pattern.EAE2Pattern;
-import net.minecraft.ChatFormatting;
-import net.minecraft.network.chat.Component;
 import net.minecraft.world.InteractionResult;
-import net.minecraftforge.event.entity.player.ItemTooltipEvent;
 import net.minecraftforge.event.entity.player.PlayerInteractEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.fml.common.Mod;
@@ -19,18 +16,6 @@ public final class MachineWildcardEvents {
         MachineWildcard.clearFingerprints(); WildcardProviderRefresh.clear();
     }
     @SubscribeEvent public static void tags(net.minecraftforge.event.TagsUpdatedEvent event) { MaterialForms.clear(); }
-    @SubscribeEvent public static void tooltip(ItemTooltipEvent event) {
-        if (MachineWildcard.isOwnItem(event.getItemStack()) && !MachineWildcard.isBound(event.getItemStack())) {
-            event.getToolTip().add(Component.translatable("eae2_pattern.editor.blank_help").withStyle(ChatFormatting.GOLD)); return;
-        }
-        if (!MachineWildcard.isBound(event.getItemStack())) return;
-        var data = event.getItemStack().getTag().getCompound(MachineWildcardData.KEY);
-        event.getToolTip().add(Component.translatable("eae2_pattern.wildcard.machine", data.getString("machine")).withStyle(ChatFormatting.AQUA));
-        event.getToolTip().add(Component.translatable(data.getInt("version")==3?"eae2_pattern.editor.dynamic_count":"eae2_pattern.wildcard.recipes", MachineWildcardData.count(data)).withStyle(ChatFormatting.GRAY));
-        String encoder = event.getItemStack().getTag().getString("encodePlayer");
-        if (!encoder.isEmpty()) event.getToolTip().add(Component.translatable("eae2_pattern.wildcard.encoder", encoder).withStyle(ChatFormatting.GRAY));
-        event.getToolTip().add(Component.translatable("eae2_pattern.wildcard.bound_help").withStyle(ChatFormatting.GOLD));
-    }
     @SubscribeEvent public static void use(PlayerInteractEvent.RightClickItem event) {
         var stack = event.getEntity().getItemInHand(event.getHand());
         if (!MachineWildcard.isOwnItem(stack) && !MachineWildcard.isBound(stack)) return;

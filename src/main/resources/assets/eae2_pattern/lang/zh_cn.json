@@ -327,7 +327,7 @@
   "eae2_pattern.editor.pick_machine": "选择通配样板对应的工作方块类型",
   "eae2_pattern.editor.machine_search": "搜索机器名称或配方类型 ID…",
   "eae2_pattern.editor.legacy_help": "未绑定机器或为旧版材料规则，请右键选择机器后重新配置。",
-  "item.eae2_pattern.machine_wildcard_pattern": "机器通配样板",
+  "item.eae2_pattern.machine_wildcard_pattern": "处理样板（通配）",
   "eae2_pattern.workbench.open_wildcard_editor": "通配编辑器 ↗",
   "eae2_pattern.wildcard.encoder": "由 %s 编码",
   "eae2_pattern.editor.policy_empty": "当前策略未留下有效输入或输出，请调整编码设置。",
@@ -392,5 +392,10 @@
   "eae2_pattern.editor.extract_applied": "已提取形态，替换包含搜索；保留排除条件。",
   "eae2_pattern.editor.reset_help": "在工作台、背包合成栏或 AE 合成终端放入 1 张通配样板，可清除全部 NBT，得到 1 张空白通配样板。无 NBT 最多堆叠 64 张；带 NBT 为 1 张。从一叠空白样板编码时，成品放入背包空位，剩余空白保留在手中。",
   "eae2_pattern.editor.held_saved_inventory": "已编码 1 张并放入背包，剩余空白保留在手中。",
-  "eae2_pattern.editor.pinyin_help": "检测到 Just Enough Characters 时，名称、提示以及机器/材料/形态候选支持拼音和首字母，如 tieding、td。动态规则请使用形态/材料条件，或切换固定收录使用名称搜索。"
+  "eae2_pattern.editor.pinyin_help": "检测到 Just Enough Characters 时，名称、提示以及机器/材料/形态候选支持拼音和首字母，如 tieding、td。动态规则请使用形态/材料条件，或切换固定收录使用名称搜索。",
+  "eae2_pattern.wildcard.encoding_type": "编码类型：%s",
+  "eae2_pattern.wildcard.matched_patterns": "已匹配样板：%s",
+  "eae2_pattern.wildcard.dynamic_note": "动态规则 · 数量为上次编码时统计",
+  "eae2_pattern.wildcard.fixed_note": "固定收录 · 数量为已保存配方数",
+  "eae2_pattern.wildcard.edit_hint": "右键编辑 · 单张最多 2048 条"
 }
