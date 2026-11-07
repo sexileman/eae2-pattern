@@ -56,7 +56,7 @@ public final class WildcardEditorScreen extends AeToolScreen implements Generati
     private final SearchDebounce searchDebounce = new SearchDebounce();
     private Control generate;
     private Control generateNetwork;
-    private static final int TEXT = WorkbenchTheme.TEXT, DIM = WorkbenchTheme.DIM, ROW = 42;
+    private static final int TEXT = WorkbenchTheme.TEXT, DIM = WorkbenchTheme.DIM, ROW = RecipeListRow.HEIGHT;
 
     public WildcardEditorScreen(RecipePlan plan, Screen parent, CompoundTag state, Set<ResourceLocation> included, boolean savedCopy) {
         this(plan, parent, state, included, savedCopy, null);
@@ -223,7 +223,7 @@ public final class WildcardEditorScreen extends AeToolScreen implements Generati
         }
         updateControls();
     }
-    private void focus(RecipePlan.Entry entry) { focus = entry; detailScroll = 0; previewError = null; preview = null; previewRequest = -1; previewDelay = 4; }
+    private void focus(RecipePlan.Entry entry) { focus = entry; detailScroll = 0; renderedDetailHeight = 0; previewError = null; preview = null; previewRequest = -1; previewDelay = 4; }
     private void inspected(S2CInspectionPacket response) {
         if (response.requestId() != previewRequest || response.operation() != 2) return;
         if (response.success() && !response.preview().isEmpty()) preview = response.preview().get(0);
@@ -314,14 +314,11 @@ public final class WildcardEditorScreen extends AeToolScreen implements Generati
         int first = (int) scroll / ROW, visible = (listBottom - listTop) / ROW + 2;
         for (int i = first; i < Math.min(matches.size(), first + visible); i++) {
             var e = matches.get(i); int ry = listTop + i * ROW - (int) scroll;
-            if (e == focus) g.fill(x + 10, ry, split - 8, ry + ROW - 2, WorkbenchTheme.HOVER);
-            g.fill(x + 14, ry + 2, x + 22, ry + 10, selected.contains(e.recipeId()) ? WorkbenchTheme.TEXT : WorkbenchTheme.LINE);
-            label(g, e.label(), x + 29, ry + 2, split - x - 47, TEXT, 1);
-            var in = new ArrayList<>(e.inputs()); in.addAll(e.catalysts());
-            var columns = RecipeStripLayout.measure(split - x - 41);
-            strip(g, in, x + 29, ry + 18, columns.inputMax(), 0);
-            label(g, Component.literal("→"), x + 29 + columns.arrowX(), ry + 22, 14, DIM, 1);
-            strip(g, e.outputs(), x + 29 + columns.outputX(), ry + 18, columns.outputMax(), 1);
+            boolean skipped=previewErrors.containsKey(e.recipeId())||!e.canEncode(outputPolicy,dropTools);
+            Component badge=skipped?Component.literal("!"):e.hasProbabilisticInput()||e.hasProbabilisticOutput()?Component.translatable("eae2_pattern.workbench.chance_badge"):Component.empty();
+            RecipeListRow.draw(g,font,visuals,e,x+10,ry,split-8,selected.contains(e.recipeId()),e==focus,
+                    mx>=x+10&&mx<split-8&&my>=ry&&my<ry+ROW,badge,
+                    (hx,hy,ingredient,side)->hits.add(new Hit(hx,hy,ingredient.spec(),IngredientPresentation.of(ingredient,side),side)));
         }
         g.disableScissor();
         scrollbar(g, split - 7, listTop, listBottom, scroll, matches.size() * ROW);
@@ -329,43 +326,64 @@ public final class WildcardEditorScreen extends AeToolScreen implements Generati
         if (focus == null) return;
         g.enableScissor(split + 8, listTop, x + w - 10, listBottom);
         int dy = listTop - (int) detailScroll, dx = split + 10, room = x + w - dx - 14;
-        label(g, focus.label(), dx, dy + 2, room, TEXT, 1); dy += 20;
+        label(g, focus.label(), dx, dy + 2, room, TEXT, 1); dy += 18;
         List<Ingredient> in = new ArrayList<>(), out = new ArrayList<>();
         if (sourceView) { in.addAll(focus.inputs()); in.addAll(focus.catalysts()); out.addAll(focus.outputs()); }
         else if (preview != null) {
             for (var s : preview.inputs()) in.add(new Ingredient(s, 1, true));
             for (var s : preview.outputs()) out.add(Ingredient.produced(s, 1));
-        } else { label(g, previewError == null ? tr("preview_wait") : previewError, dx, dy, room, previewError == null ? DIM : WorkbenchTheme.WARNING, .8f); }
-        dy = materialRows(g, in, dx, dy, room, 0); materialRows(g, out, dx, dy, room, 1);
+        } else { dy=detailNotice(g,previewError==null?tr("preview_wait"):previewError,dx,dy,room); }
+        if(sourceView||preview!=null){dy = materialRows(g, in, dx, dy, room, 0); dy = materialRows(g, out, dx, dy, room, 1);}
+        if(!sourceView&&preview!=null&&focus.hasNeverConsumedInput()) {
+            var tools=new ArrayList<Ingredient>();
+            for(var ingredient:focus.inputs())if(ingredient.neverConsumed())tools.add(ingredient);
+            tools.addAll(focus.catalysts());
+            if(!tools.isEmpty())dy=setupRows(g,tools,dx,dy,room);
+        }
+        if(!sourceView&&preview!=null){
+            if(focus.hasProbabilisticOutput())dy=detailNotice(g,Component.translatable("eae2_pattern.workbench.chance_warning"),dx,dy,room);
+            if(focus.hasProbabilisticInput())dy=detailNotice(g,Component.translatable("eae2_pattern.workbench.chance_input_warning"),dx,dy,room);
+        }
+        renderedDetailHeight=dy-listTop+(int)detailScroll;
         g.disableScissor();
         int content = detailHeight(); scrollbar(g, x + w - 9, listTop, listBottom, detailScroll, content);
     }
-    private int strip(GuiGraphics g, List<Ingredient> slots, int px, int py, int max, int side) {
-        for (int i = 0; i < Math.min(max, slots.size()); i++) {
-            var item = slots.get(i); var presentation = IngredientPresentation.of(item, side);
-            WorkbenchTheme.slot(g,px-1,py-1,presentation);
-            visuals.draw(g, item.spec(), px, py); visuals.drawRule(g, presentation, px, py);
-            hits.add(new Hit(px, py, item.spec(), presentation, side)); px += 22;
-        }
-        if (slots.size() > max) { String n = "+" + (slots.size() - max); label(g, Component.literal(n), px + 3, py + 5, 27, DIM, 1); px += font.width(n) + 8; }
-        return px;
+    private int setupRows(GuiGraphics g,List<Ingredient> tools,int dx,int dy,int room) {
+        label(g,Component.translatable("eae2_pattern.workbench."+(dropTools?"machine_setup":"required_tools")),dx,dy+2,room,WorkbenchTheme.WARNING,1);
+        return ingredientRows(g,tools,dx,dy+18,room,0,true);
+    }
+    private int detailNotice(GuiGraphics g,Component text,int dx,int dy,int room) {
+        var lines=font.split(text,Math.max(1,room-16));int height=32+lines.size()*9;
+        g.fill(dx,dy+5,dx+room,dy+height-4,WorkbenchTheme.SURFACE);
+        g.fill(dx,dy+5,dx+2,dy+height-4,WorkbenchTheme.WARNING);
+        label(g,Component.translatable("eae2_pattern.workbench.notice_warning"),dx+8,dy+10,room-16,WorkbenchTheme.WARNING,1);
+        int ty=dy+24;for(var line:lines){g.drawString(font,line,dx+8,ty,DIM,false);ty+=9;}
+        return dy+height;
     }
     private int materialRows(GuiGraphics g, List<Ingredient> ingredients, int dx, int dy, int room, int side) {
-        label(g, tr(side == 0 ? "inputs" : "outputs"), dx, dy + 2, room, TEXT, .85f); dy += 17;
+        label(g, sourceView?tr(side == 0 ? "inputs" : "outputs"):Component.translatable("eae2_pattern.workbench."+(side==0?"encoded_inputs":"encoded_outputs")), dx, dy + 4, room, WorkbenchTheme.ACCENT, 1); dy += 18;
+        return ingredientRows(g,ingredients,dx,dy,room,side,sourceView);
+    }
+    private int ingredientRows(GuiGraphics g,List<Ingredient> ingredients,int dx,int dy,int room,int side,boolean original) {
         for (var ingredient : ingredients) {
-            var p = sourceView ? IngredientPresentation.of(ingredient, side) : IngredientPresentation.encoded(focus, ingredient.spec(), side, dropTools);
-            if (dy + 40 >= listTop && dy < listBottom) {
+            var p = original ? IngredientPresentation.of(ingredient, side) : IngredientPresentation.encoded(focus, ingredient.spec(), side, dropTools);
+            if (dy + 42 >= listTop && dy < listBottom) {
                 WorkbenchTheme.slot(g, dx, dy + 2, p); visuals.draw(g, ingredient.spec(), dx + 1, dy + 3); visuals.drawRule(g, p, dx + 1, dy + 3);
-                label(g, visuals.name(ingredient.spec()), dx + 24, dy + 3, room - 24, TEXT, 1);
-                label(g, Component.literal(ingredient.spec().amount() + (ingredient.spec().isItem() ? "" : " mB")), dx + 24, dy + 16, room - 24, DIM, .8f);
-                if (p.kind() != IngredientPresentation.Kind.REGULAR) label(g, p.description(), dx + 24, dy + 27, room - 24, p.color(), .8f);
+                label(g, ingredientName(ingredient), dx + 24, dy + 3, room - 24, TEXT, 1);
+                label(g, Component.translatable("eae2_pattern.workbench."+(ingredient.spec().isItem()?"item_amount":"fluid_amount"),ingredient.spec().amount()), dx + 24, dy + 16, room - 24, DIM, .8f);
+                if (p.kind() != IngredientPresentation.Kind.REGULAR) label(g, p.description(), dx + 24, dy + 28, room - 24, p.color(), .8f);
                 hits.add(new Hit(dx + 1, dy + 3, ingredient.spec(), p, side));
             }
-            dy += 40;
+            dy += p.kind()==IngredientPresentation.Kind.REGULAR?30:42;
         }
         return dy;
     }
-    private int detailHeight() { return focus == null ? 0 : 60 + (sourceView ? focus.inputs().size() + focus.catalysts().size() + focus.outputs().size() : preview == null ? 0 : preview.inputs().size() + preview.outputs().size()) * 40; }
+    private Component ingredientName(Ingredient ingredient) {
+        var name=visuals.name(ingredient.spec());var tag=ingredient.spec().tag();
+        return tag!=null&&tag.contains("Configuration")?name.copy().append(" · ").append(Component.translatable("eae2_pattern.workbench.circuit_setting",tag.getInt("Configuration"))):name;
+    }
+    private int detailHeight() { return renderedDetailHeight; }
+    private int renderedDetailHeight;
     private void scrollbar(GuiGraphics g, int sx, int top, int bottom, double amount, int content) {
         int size = Math.max(1, bottom - top); if (content <= size) return;
         int thumb = Math.max(12, size * size / content), sy = top + (int) ((size - thumb) * amount / Math.max(1, content - size));

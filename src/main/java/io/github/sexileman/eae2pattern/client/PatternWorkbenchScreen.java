@@ -27,7 +27,7 @@ import org.lwjgl.glfw.GLFW;
 /** Virtual recipe list and independent inspector: work per frame depends on viewport size, not recipe count. */
 public final class PatternWorkbenchScreen extends AeToolScreen implements GenerationListener {
     private static final int BG = WorkbenchTheme.BACKGROUND, SURFACE = WorkbenchTheme.SURFACE, LINE = WorkbenchTheme.LINE;
-    private static final int TEXT = WorkbenchTheme.TEXT, DIM = WorkbenchTheme.DIM, ACCENT = WorkbenchTheme.ACCENT, ROW = 38;
+    private static final int TEXT = WorkbenchTheme.TEXT, DIM = WorkbenchTheme.DIM, ACCENT = WorkbenchTheme.ACCENT, ROW = RecipeListRow.HEIGHT;
     private final RecipePlan plan;
     private final Screen parent;
     private final RecipeNavigation.ReturnContext jeiReturn;
@@ -494,37 +494,17 @@ public final class PatternWorkbenchScreen extends AeToolScreen implements Genera
                 continue;
             }
             RecipePlan.Entry e = row.entry();
-            if (e == focused || over(mx, my, x, y, right, y + ROW)) WorkbenchTheme.rounded(g, x, y, right - x, ROW - 1, e == focused ? WorkbenchTheme.HOVER : SURFACE);
-            checkbox(g, x + 4, y + 3, e.isSelected());
             String flag = existing.contains(e.recipeId()) ? tr("stored_badge").getString() : !skipReason(e).isEmpty() ? "!" : e == pinned ? tr("reference").getString()
                     : e.hasProbabilisticInput() || e.hasProbabilisticOutput() ? tr("chance_badge").getString() : "";
-            int flagWidth = flag.isEmpty() ? 0 : font.width(flag) + 5;
-            text(g, e.label(), x + 19, y + 3, right - x - 23 - flagWidth, e.isSelected() ? TEXT : DIM);
-            if (!flag.isEmpty()) g.drawString(font, flag, right - flagWidth, y + 3, DIM, false);
-            var columns = RecipeStripLayout.measure(right - x - 23);
-            List<Ingredient> inputs = new ArrayList<>(e.inputs()); inputs.addAll(e.catalysts());
-            drawIngredients(g, inputs, x + 19, y + 17, columns.inputMax(), 0);
-            g.drawString(font, "→", x + 19 + columns.arrowX(), y + 22, DIM, false);
-            drawIngredients(g, e.outputs(), x + 19 + columns.outputX(), y + 17, columns.outputMax(), 1);
+            RecipeListRow.draw(g,font,visuals,e,x,y,right,e.isSelected(),e==focused,over(mx,my,x,y,right,y+ROW),Component.literal(flag),
+                    (hx,hy,ingredient,side)->iconHits.add(new IconHit(hx,hy,ingredient.spec(),side,IngredientPresentation.of(ingredient,side))));
         }
         if (visible.isEmpty()) text(g, tr("empty"), x + 6, bodyTop + 12, right - x - 12, DIM);
         g.disableScissor(); scrollbar(g, split - 10, listScroll, rows.size() * ROW);
     }
-    private void checkbox(GuiGraphics g, int x, int y, boolean checked) {
-        g.fill(x, y, x + 9, y + 9, checked ? 0xFF777777 : LINE);
-        g.fill(x + 1, y + 1, x + 8, y + 8, checked ? WorkbenchTheme.PRIMARY : BG);
-        if (checked) { g.fill(x + 2, y + 4, x + 4, y + 6, TEXT); g.fill(x + 4, y + 2, x + 6, y + 6, TEXT); }
-    }
-    private int drawIngredients(GuiGraphics g, List<Ingredient> ingredients, int x, int y, int max, int side) {
-        for (int i = 0; i < Math.min(max, ingredients.size()); i++) {
-            Ingredient ingredient = ingredients.get(i);
-            WorkbenchTheme.slot(g,x-1,y-1,IngredientPresentation.of(ingredient,side));
-            visuals.draw(g, ingredient.spec(), x, y);
-            visuals.drawRule(g, IngredientPresentation.of(ingredient, side), x, y);
-            iconHits.add(new IconHit(x, y, ingredient.spec(), side, IngredientPresentation.of(ingredient, side))); x += 22;
-        }
-        if (ingredients.size() > max) { String extra = "+" + (ingredients.size() - max); g.drawString(font, extra, x + 3, y + 5, DIM, false); x += font.width(extra) + 8; }
-        return x;
+    private void checkbox(GuiGraphics g,int x,int y,boolean checked) {
+        g.fill(x,y,x+9,y+9,LINE);g.fill(x+1,y+1,x+8,y+8,checked?WorkbenchTheme.PRIMARY:BG);
+        if(checked){g.fill(x+2,y+4,x+4,y+6,TEXT);g.fill(x+4,y+2,x+6,y+6,TEXT);}
     }
     private void renderDetails(GuiGraphics g) {
         int x = split + 12, right = left + panelWidth - 18;
