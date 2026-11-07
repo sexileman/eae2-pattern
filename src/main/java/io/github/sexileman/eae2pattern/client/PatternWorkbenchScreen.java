@@ -67,9 +67,10 @@ public final class PatternWorkbenchScreen extends AeToolScreen implements Genera
     private int filterCursor;
     private double listScroll, detailScroll;
     private int left, top, panelWidth, panelHeight, split, bodyTop, bodyBottom;
-    private int selectedCount, eligibleCount, tickCount, searchDelay;
+    private int selectedCount, eligibleCount, tickCount;
     private int footerStatusX, footerStatusY, footerStatusWidth;
     private Component notice = Component.empty();
+    private final SearchDebounce searchDebounce = new SearchDebounce();
     private Action generationMode;
     private Action generate, inputFilter, outputFilter, tools, products, multiplier, halveMultiplier, doubleMultiplier, resetMultiplier, grouping, more, detailMode;
 
@@ -93,8 +94,8 @@ public final class PatternWorkbenchScreen extends AeToolScreen implements Genera
         inputBox.setBordered(false); outputBox.setBordered(false);
         inputBox.setTextColor(WorkbenchTheme.INPUT_TEXT); outputBox.setTextColor(WorkbenchTheme.INPUT_TEXT);
         inputBox.setValue(inputText); outputBox.setValue(outputText);
-        inputBox.setResponder(value -> { inputText = value; exactInput = null; searchDelay = 3; });
-        outputBox.setResponder(value -> { outputText = value; exactOutput = null; searchDelay = 3; });
+        inputBox.setResponder(value -> { if (value.equals(inputText)) return; inputText = value; exactInput = null; searchDebounce.changed(); });
+        outputBox.setResponder(value -> { if (value.equals(outputText)) return; outputText = value; exactOutput = null; searchDebounce.changed(); });
         boolean stacked=panelWidth<420&&panelHeight>=260;
         int q=stacked?(panelWidth-24)/2:(panelWidth-32)/4;
         inputFilter=action(left+10,top+filterY,q,()->choose(inputFilter,"input_mode.",4,inputMode,value->{inputMode=value;refresh();}));
@@ -146,9 +147,9 @@ public final class PatternWorkbenchScreen extends AeToolScreen implements Genera
     private void queryNetwork() { PacketHandler.sendToServer(new C2SQueryNetworkStatusPacket(0)); }
     @Override public void tick() {
         inputBox.tick(); outputBox.tick();
-        if (searchDelay > 0 && --searchDelay == 0) { input = ItemSearchQuery.parse(inputText); output = ItemSearchQuery.parse(outputText); refresh(); }
-        if (filtering && searchDelay == 0) filterStep();
-        if (previewDelay > 0 && !sending && !checking && --previewDelay == 0) requestPreview();
+        if (searchDebounce.poll()) { input = ItemSearchQuery.parse(inputText); output = ItemSearchQuery.parse(outputText); refresh(); }
+        if (filtering && !searchDebounce.pending()) filterStep();
+        if (!searchDebounce.pending() && previewDelay > 0 && !sending && !checking && --previewDelay == 0) requestPreview();
         if (++tickCount % 60 == 0 && !sending) queryNetwork();
         updateButtons();
     }
@@ -213,7 +214,7 @@ public final class PatternWorkbenchScreen extends AeToolScreen implements Genera
             generationMode.active = !sending && !checking;
         }
         generate.setMessage(tr(sending ? "sending" : checking ? "checking" : filtering ? "filtering" : "generate_current", eligibleCount));
-        generate.active = !sending && !checking && !filtering && searchDelay == 0 && ProcessingMultiplier.parse(multiplierText) > 0
+        generate.active = !sending && !checking && !filtering && !searchDebounce.pending() && ProcessingMultiplier.parse(multiplierText) > 0
                 && eligibleCount > 0 && ClientNetworkState.hasNetwork() && ClientNetworkState.blankPatterns() >= requiredBlanks();
     }
     private int requiredBlanks() { return eligibleCount; }
@@ -670,7 +671,7 @@ public final class PatternWorkbenchScreen extends AeToolScreen implements Genera
             if (hit != null && hit.side >= 0) {
                 if (hit.side == 0) { inputBox.setValue("&" + hit.spec.id()); exactInput = hit.spec; setFocused(inputBox); }
                 else { outputBox.setValue("&" + hit.spec.id()); exactOutput = hit.spec; setFocused(outputBox); }
-                searchDelay = 3; return true;
+                searchDebounce.changed(); return true;
             }
             dragList = mx >= split - 12 && mx < split; dragDetails = mx >= left + panelWidth - 18 && mx < left + panelWidth - 8;
             if (dragList || dragDetails) { dragTo(my); return true; }
@@ -822,7 +823,7 @@ public final class PatternWorkbenchScreen extends AeToolScreen implements Genera
     }
     @Override public List<GhostField> jeiGhostFields(){
         if(sending||checking||choice!=null)return List.of();
-        return List.of(ghostField(inputBox,s->{inputBox.setValue("&"+s.id());exactInput=s;searchDelay=3;}),ghostField(outputBox,s->{outputBox.setValue("&"+s.id());exactOutput=s;searchDelay=3;}));
+        return List.of(ghostField(inputBox,s->{inputBox.setValue("&"+s.id());exactInput=s;searchDebounce.changed();}),ghostField(outputBox,s->{outputBox.setValue("&"+s.id());exactOutput=s;searchDebounce.changed();}));
     }
     @Override public List<net.minecraft.client.renderer.Rect2i> jeiExtraAreas(){return choice==null?List.of():List.of(new net.minecraft.client.renderer.Rect2i(choice.x,choice.y,choice.w,choice.h));}
 

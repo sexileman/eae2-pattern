@@ -27,11 +27,24 @@ import java.util.List;
 public final class RegressionChecks {
     private static int checks;
     public static void main(String[] args) throws Exception {
-        policies(); wireFormat(); searches(); gtVersions(); layoutAndGrid(); manualMultiplier(); grouping(); inspectionPackets(); slotPresentation(); patternMetadata(); amountLabels(); machineWildcards(); heldWildcardWrites(); dynamicRules(); stackedCarriers(); wildcardTooltip(); materialPicker(); aeToolScreens(); encodingMessages(); recipeStripColumns();
+        policies(); wireFormat(); searches(); gtVersions(); layoutAndGrid(); manualMultiplier(); grouping(); inspectionPackets(); slotPresentation(); patternMetadata(); amountLabels(); machineWildcards(); heldWildcardWrites(); dynamicRules(); stackedCarriers(); wildcardTooltip(); materialPicker(); aeToolScreens(); encodingMessages(); recipeStripColumns(); searchDebounce();
         System.out.println("Passed " + checks + " regression checks");
     }
     private static void check(boolean condition, String message) {
         checks++; if (!condition) throw new AssertionError(message);
+    }
+    private static void searchDebounce() {
+        var debounce = new io.github.sexileman.eae2pattern.client.SearchDebounce();
+        check(!debounce.poll(0), "idle field does not start a search");
+        debounce.changed(0);
+        check(!debounce.poll(199_999_999L), "search waits a full 200ms");
+        debounce.changed(150_000_000L);
+        check(!debounce.poll(200_000_000L), "typing restarts the trailing delay");
+        check(debounce.pending(), "pending search remains guarded");
+        check(debounce.poll(350_000_000L), "one search runs 200ms after the last change");
+        check(!debounce.pending() && !debounce.poll(900_000_000L), "unchanged text does not repeat the search");
+        debounce.changed(1_000_000_000L);
+        check(debounce.poll(1_700_000_000L), "slow ticks run one overdue search without catchup repeats");
     }
     private static void recipeStripColumns() {
         for (int width : new int[]{136,170,220,280}) {

@@ -34,7 +34,7 @@ public final class WildcardEditorScreen extends AeToolScreen implements Generati
     private final List<Hit> hits = new ArrayList<>();
     private EditBox[] boxes;
     private String[] query = {"", "", "", ""};
-    private int tab, x, y, w, h, split, listTop, listBottom, cursor, delay, multiplier = 1, outputPolicy;
+    private int tab, x, y, w, h, split, listTop, listBottom, cursor, multiplier = 1, outputPolicy;
     private int inScope, outScope, previewRequest = -1, previewDelay;
     private boolean inAll, outAll, searchTools = true, dropTools = true, filtering, sending, sourceView, dragging, detailDragging;
     private double scroll, detailScroll;
@@ -53,6 +53,7 @@ public final class WildcardEditorScreen extends AeToolScreen implements Generati
     private Component previewError;
     private final Map<ResourceLocation, Component> previewErrors = new HashMap<>();
     private Component status = Component.empty();
+    private final SearchDebounce searchDebounce = new SearchDebounce();
     private Control generate;
     private Control generateNetwork;
     private static final int TEXT = WorkbenchTheme.TEXT, DIM = WorkbenchTheme.DIM, ROW = 42;
@@ -112,7 +113,7 @@ public final class WildcardEditorScreen extends AeToolScreen implements Generati
             final int n = i; int side = i / 2;
             boxes[i] = addRenderableWidget(new WorkbenchSearchBox(font, x + 16 + side * (col + 12), y + first + (i % 2) * 26, col - 10, tr("query_" + i), tr("query_" + i)));
             boxes[i].setMaxLength(256); boxes[i].setBordered(false); boxes[i].setValue(query[i]);
-            boxes[i].setResponder(v -> { query[n] = v; changedRules(); });
+            boxes[i].setResponder(v -> { if (v.equals(query[n])) return; query[n] = v; changedRules(); });
         }
         int opts = y + first + 52;
         button(x + 10, opts, col, 3, () -> { inAll = !inAll; changedRules(); }, "input_match");
@@ -175,16 +176,16 @@ public final class WildcardEditorScreen extends AeToolScreen implements Generati
             });
             if (c.key.equals("halve")) c.active &= multiplier > 1;
             if (c.key.equals("double")) c.active &= multiplier < ProcessingMultiplier.MAX;
-            if (c.key.equals("material") || c.key.equals("select_all") || c.key.equals("select_none")) c.active &= !filtering && delay == 0;
+            if (c.key.equals("material") || c.key.equals("select_all") || c.key.equals("select_none")) c.active &= !filtering && !searchDebounce.pending();
         }
-        boolean ready = !sending && !filtering && delay == 0 && heldRefreshTicks == 0 && chosen > 0 && (!dynamic||chosen<=MachineWildcardData.MAX_RECIPES) && ruleError==null;
+        boolean ready = !sending && !filtering && !searchDebounce.pending() && heldRefreshTicks == 0 && chosen > 0 && (!dynamic||chosen<=MachineWildcardData.MAX_RECIPES) && ruleError==null;
         boolean networkReady = ready && ClientNetworkState.hasNetwork() && ClientNetworkState.blankPatterns() >= (dynamic ? 1 : (chosen + 2047) / 2048);
         generate.active = heldTarget == null ? networkReady : ready && chosen <= MachineWildcardData.MAX_RECIPES
                 && minecraft.player != null && WildcardItems.writable(minecraft.player.getItemInHand(heldTarget.hand()));
         if (generateNetwork != null) generateNetwork.active = networkReady;
         for (var box : boxes) box.active = !sending;
     }
-    private void changedRules() { chosenCount=-1;previewErrors.clear();previewError=null; delay = 5; filtering = true; preview = null; previewRequest = -1; updateControls(); }
+    private void changedRules() { chosenCount=-1;previewErrors.clear();previewError=null; searchDebounce.changed(); filtering = true; preview = null; previewRequest = -1; updateControls(); }
     private void changedPolicy() { chosenCount=-1; previewErrors.clear(); previewError = null; preview = null; previewRequest = -1; previewDelay = 4; updateControls(); }
     private void startFilter() {
         ruleError=null;portableRule=null;
@@ -198,8 +199,8 @@ public final class WildcardEditorScreen extends AeToolScreen implements Generati
             var current = minecraft.player.getItemInHand(heldTarget.hand());
             if (MachineWildcard.isOwnItem(current)) heldTarget = new HeldTarget(heldTarget.hand(), current);
         }
-        if (delay > 0 && --delay == 0) startFilter();
-        if (filtering && delay == 0) {
+        if (searchDebounce.poll()) startFilter();
+        if (filtering && !searchDebounce.pending()) {
             long end = System.nanoTime() + 3_000_000; int n = 0;
             while (cursor < plan.entries().size() && n++ < 96 && System.nanoTime() < end) {
                 var e = plan.entries().get(cursor++);
@@ -215,7 +216,7 @@ public final class WildcardEditorScreen extends AeToolScreen implements Generati
                 else previewDelay = 4;
             }
         }
-        if (!sending && !filtering && delay == 0 && previewDelay > 0 && --previewDelay == 0 && focus != null) {
+        if (!sending && !filtering && !searchDebounce.pending() && previewDelay > 0 && --previewDelay == 0 && focus != null) {
             var spec = specFor(focus);
             if (spec != null) previewRequest = PatternRequestSender.send(List.of(spec), 2);
             else previewError = tr("policy_empty");
@@ -246,7 +247,7 @@ public final class WildcardEditorScreen extends AeToolScreen implements Generati
         generate(heldTarget != null);
     }
     private void generate(boolean held) {
-        if (sending || filtering || delay != 0) return;
+        if (sending || filtering || searchDebounce.pending()) return;
         if (!held && (generateNetwork != null ? !generateNetwork.active : !generate.active)) return;
         List<PatternSpec> specs = new ArrayList<>();
         for (var e : matches) if (selected.contains(e.recipeId()) && !previewErrors.containsKey(e.recipeId())) { var spec = specFor(e); if (spec != null) specs.add(spec); }
