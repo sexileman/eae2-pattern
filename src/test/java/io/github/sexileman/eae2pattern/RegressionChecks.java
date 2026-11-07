@@ -27,11 +27,21 @@ import java.util.List;
 public final class RegressionChecks {
     private static int checks;
     public static void main(String[] args) throws Exception {
-        policies(); wireFormat(); searches(); gtVersions(); layoutAndGrid(); manualMultiplier(); grouping(); inspectionPackets(); slotPresentation(); patternMetadata();
+        policies(); wireFormat(); searches(); gtVersions(); layoutAndGrid(); manualMultiplier(); grouping(); inspectionPackets(); slotPresentation(); patternMetadata(); amountLabels();
         System.out.println("Passed " + checks + " regression checks");
     }
     private static void check(boolean condition, String message) {
         checks++; if (!condition) throw new AssertionError(message);
+    }
+    private static void amountLabels() {
+        check(io.github.sexileman.eae2pattern.client.StackAmountLabel.format(1, false).isEmpty(), "single item has no count label");
+        check(io.github.sexileman.eae2pattern.client.StackAmountLabel.format(64, false).equals("64"), "item count");
+        check(io.github.sexileman.eae2pattern.client.StackAmountLabel.format(1, true).equals("1mB"), "single millibucket retains unit");
+        check(io.github.sexileman.eae2pattern.client.StackAmountLabel.format(864, true).equals("864mB"), "fluid below bucket");
+        check(io.github.sexileman.eae2pattern.client.StackAmountLabel.format(1000, true).equals("1B"), "bucket boundary");
+        check(io.github.sexileman.eae2pattern.client.StackAmountLabel.format(2900, true).equals("2.9B"), "fractional bucket");
+        check(io.github.sexileman.eae2pattern.client.StackAmountLabel.format(1000000, true).equals("1kB"), "large fluid quantity");
+        check(io.github.sexileman.eae2pattern.client.StackAmountLabel.format(Long.MAX_VALUE, true).endsWith("PB"), "long amount does not overflow");
     }
     private static void patternMetadata() {
         CompoundTag root = new CompoundTag();

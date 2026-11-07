@@ -42,10 +42,18 @@ public final class StackVisuals {
             try { g.blit(x, y, 0, 16, 16, sprite); }
             finally { g.setColor(1, 1, 1, 1); }
         }
-        if (spec.amount() > 1) {
-            String amount = spec.amount() >= 1_000_000 ? spec.amount() / 1_000_000 + "m" : spec.amount() >= 1000 ? spec.amount() / 1000 + "k" : "" + spec.amount();
+        String amount = StackAmountLabel.format(spec.amount(), !spec.isItem());
+        if (!amount.isEmpty()) {
             var font = Minecraft.getInstance().font;
-            g.drawString(font, amount, x + 17 - font.width(amount), y + 9, 0xFFFFFFFF, true);
+            // Item models render above the GUI plane. Match vanilla decorations' foreground depth,
+            // and keep long labels within their own slot rather than spilling onto adjacent icons.
+            float scale = Math.min(1f, 16f / Math.max(1, font.width(amount)));
+            g.pose().pushPose();
+            try {
+                g.pose().translate(x + 17, y + 17, 200);
+                g.pose().scale(scale, scale, 1);
+                g.drawString(font, amount, -font.width(amount), -font.lineHeight, 0xFFFFFFFF, true);
+            } finally { g.pose().popPose(); }
         }
     }
 }
