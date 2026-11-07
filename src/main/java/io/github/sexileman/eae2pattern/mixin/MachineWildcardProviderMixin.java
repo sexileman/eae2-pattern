@@ -30,6 +30,9 @@ public abstract class MachineWildcardProviderMixin {
         var level = host.getBlockEntity().getLevel();
         if (level == null || level.isClientSide) return;
         boolean changed = false;
+        for(var stack:patternInventory)if(MachineWildcardApi.isPattern(stack)){
+            io.github.sexileman.eae2pattern.wildcard.WildcardProviderRefresh.observe((PatternProviderLogic)(Object)this);break;
+        }
         for (var stack : patternInventory) if (MachineWildcardApi.isPattern(stack)) {
             for (var details : MachineWildcardApi.expand(stack, level)) {
                 patterns.add(details); changed = true;

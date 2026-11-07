@@ -82,6 +82,9 @@ public final class MachineWildcardWriter {
         byte[] expected;
         ResourceLocation machine;
         int cursor, bytes, totalBytes;
+        List<net.minecraft.world.item.crafting.Recipe<?>> sources;
+        DynamicRule dynamicRule;
+        final List<CompoundTag> dynamicPatterns=new ArrayList<>();
         Job(ServerPlayer player, List<PatternSpec> specs, NetworkAccess network, CompoundTag rules, Consumer<GenerationReport> callback) {
             this.player = player; this.specs = specs; this.network = network; this.rules = rules.copy(); this.rules.remove("held_fingerprint"); this.callback = callback;
         }
@@ -105,6 +108,7 @@ public final class MachineWildcardWriter {
                 NetworkAccess current = NetworkAccess.resolve(player);
                 if (current == null || !network.sameNetwork(current)) throw new IllegalArgumentException("ME network changed; no blanks consumed");
             } else verifyHeld(false);
+            if(rules.getBoolean("dynamic"))return dynamicStep();
             PatternSpec spec = specs.get(cursor++);
             if (spec.kind() != PatternKind.PROCESSING) throw new IllegalArgumentException("Machine wildcard supports processing recipes only");
             var recipe = player.serverLevel().getRecipeManager().byKey(spec.recipeId())
@@ -122,6 +126,38 @@ public final class MachineWildcardWriter {
             machine = type; rows.add(row); bytes += size;
             if (cursor < specs.size()) return false;
             flush();
+            return commit();
+        }
+        boolean dynamicStep() throws Exception {
+            if(sources==null){
+                var source=player.serverLevel().getRecipeManager().byKey(specs.get(0).recipeId()).orElseThrow(()->new IllegalArgumentException("Source machine recipe unavailable"));
+                if(!ServerRecipeReader.supports(source))throw new IllegalArgumentException("This machine needs fixed collection mode");
+                machine=MachineWildcard.type(source);
+                for(var spec:specs){var r=player.serverLevel().getRecipeManager().byKey(spec.recipeId()).orElseThrow();if(!machine.equals(MachineWildcard.type(r)))throw new IllegalArgumentException("Dynamic rule must bind one machine type");}
+                dynamicRule=new DynamicRule(rules);sources=WildcardRuntime.recipes(player.serverLevel(),machine);
+            }
+            if(cursor<sources.size()){
+                var recipe=sources.get(cursor++);var raw=WildcardRuntime.read(recipe,player.serverLevel());
+                if(raw!=null&&dynamicRule.matches(raw)){
+                    var spec=raw.encodeSpec(rules.getInt("multiplier"),rules.getInt("output_policy"),rules.getBoolean("drop_tools"));
+                    if(spec!=null){
+                        if(dynamicPatterns.size()==MachineWildcardData.MAX_RECIPES)throw new IllegalArgumentException("Dynamic rule exceeds 2048 recipes; narrow the rule or use fixed batches");
+                        // Child definitions must be identical before and after cache invalidation. Player metadata belongs on the carrier.
+                        var encoded=PatternEncoder.encode(player.serverLevel(),spec).save(new CompoundTag());
+                        totalBytes+=MachineWildcardData.bytes(encoded);if(totalBytes>4_000_000)throw new IllegalArgumentException("Dynamic expansion exceeds 4 MB; narrow the rule");
+                        dynamicPatterns.add(encoded);
+                    }
+                }
+                if(cursor<sources.size())return false;
+            }
+            if(dynamicPatterns.isEmpty())throw new IllegalArgumentException("No server recipes match this dynamic rule");
+            var data=MachineWildcardData.dynamic(machine,rules,dynamicPatterns.size());
+            var item=MachineWildcard.carrier(machine,data,dynamicPatterns.size(),player.getGameProfile().getName());
+            item.getOrCreateTag().put("editor",rules.copy());prepared.add(item);
+            WildcardRuntime.prime(data,player.serverLevel(),dynamicPatterns);
+            return commit();
+        }
+        boolean commit() {
             if (hand == null) PatternWriter.startPrepared(player, prepared, network, callback);
             else {
                 if (prepared.size() != 1) throw new IllegalArgumentException("Selection needs multiple wildcard items; reduce it or use network batch generation");

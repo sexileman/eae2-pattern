@@ -26,6 +26,7 @@ public final class WildcardEditorScreen extends Screen implements GenerationList
     private HeldTarget heldTarget;
     private boolean writingHeld;
     private int heldRefreshTicks;
+    private final Set<ResourceLocation> storedExclusions=new HashSet<>();
     private final Set<ResourceLocation> selected = new HashSet<>();
     private final List<RecipePlan.Entry> matches = new ArrayList<>(), working = new ArrayList<>();
     private final List<Control> controls = new ArrayList<>();
@@ -38,6 +39,15 @@ public final class WildcardEditorScreen extends Screen implements GenerationList
     private boolean inAll, outAll, searchTools = true, dropTools = true, filtering, sending, sourceView, dragging, detailDragging;
     private double scroll, detailScroll;
     private WildcardRules rules;
+    private DynamicRule portableRule;
+    private String inForm="",outForm="",material="";
+    private boolean dynamic;
+    private Component ruleError;
+    private int chosenCount=-1;
+    private final Set<ResourceLocation> catalogued=new HashSet<>();
+    private final SortedSet<String> availableMaterials=new TreeSet<>();
+    private final Map<ResourceLocation,RuleRecipe> sourceRecipes=new HashMap<>();
+    private final Set<ResourceLocation> unsupportedSources=new HashSet<>();
     private RecipePlan.Entry focus;
     private PatternSpec preview;
     private Component previewError;
@@ -54,7 +64,10 @@ public final class WildcardEditorScreen extends Screen implements GenerationList
         super(tr("title")); this.plan = plan; this.parent = parent; this.savedCopy = savedCopy; this.heldTarget = heldTarget;
         if (included == null) for (var e : plan.entries()) { if (e.isSelected()) selected.add(e.recipeId()); }
         else selected.addAll(included);
+        dynamic=plan.entries().stream().anyMatch(e->e.jeiRecipe()!=null&&(e.jeiRecipe().getClass().getName().equals("com.gregtechceu.gtceu.integration.jei.recipe.GTRecipeWrapper")||e.jeiRecipe() instanceof net.minecraft.world.item.crafting.AbstractCookingRecipe));
         if (state != null && !state.isEmpty()) {
+            if(state.contains("dynamic"))dynamic=state.getBoolean("dynamic");inForm=state.getString("in_form");outForm=state.getString("out_form");material=state.getString("material");
+            var excluded=state.getList("exclude_ids",8);for(int i=0;i<excluded.size();i++){var id=ResourceLocation.tryParse(excluded.getString(i));if(id!=null){selected.remove(id);storedExclusions.add(id);}}
             query = new String[]{state.getString("in_include"), state.getString("in_exclude"), state.getString("out_include"), state.getString("out_exclude")};
             multiplier = ProcessingMultiplier.normalize(state.getInt("multiplier")); outputPolicy = state.getInt("output_policy");
             inAll = state.getBoolean("in_all"); outAll = state.getBoolean("out_all");
@@ -72,6 +85,7 @@ public final class WildcardEditorScreen extends Screen implements GenerationList
         CompoundTag root = stack.getTag() == null ? new CompoundTag() : stack.getTag().copy();
         CompoundTag state = root.getCompound("editor");
         try { if (!state.isEmpty()) state = WildcardEditorState.clean(state); } catch (IllegalArgumentException ignored) { state = new CompoundTag(); }
+        if(root.getCompound(MachineWildcardData.KEY).getInt("version")==3)state=root.getCompound(MachineWildcardData.KEY).getCompound("rules").copy();
         final CompoundTag savedState = state;
         final HeldTarget target = MachineWildcard.isOwnItem(stack) ? new HeldTarget(hand, stack) : null;
         String category = state.getString("category");
@@ -92,7 +106,7 @@ public final class WildcardEditorScreen extends Screen implements GenerationList
         controls.clear(); w = Math.min(900, width - 12); h = Math.min(530, height - 12); x = (width - w) / 2; y = (height - h) / 2;
         split = x + w * 3 / 5; listTop = y + 76; listBottom = y + h - 36;
         button(x + w - 58, y + 7, 48, -1, () -> onClose(), "back");
-        for (int i = 0; i < 3; i++) { final int n = i; button(x + 10 + i * 94, y + 30, 88, -1, () -> { tab = n; sync(); }, "tab_" + i); }
+        for (int i = 0; i < 4; i++) { final int n = i; int tw=Math.min(94,(w-20)/4); button(x + 10 + i * tw, y + 30, tw-6, -1, () -> { tab = n; sync(); }, "tab_" + i); }
         boxes = new EditBox[4]; int col = (w - 34) / 2, first = h < 220 ? 57 : 70;
         for (int i = 0; i < 4; i++) {
             final int n = i; int side = i / 2;
@@ -101,10 +115,16 @@ public final class WildcardEditorScreen extends Screen implements GenerationList
             boxes[i].setResponder(v -> { query[n] = v; changedRules(); });
         }
         int opts = y + first + 52;
-        button(x + 10, opts, col, 0, () -> { inAll = !inAll; changedRules(); }, "input_match");
-        button(x + 22 + col, opts, col, 0, () -> { outAll = !outAll; changedRules(); }, "output_match");
-        button(x + 10, y + 53, 62, 1, () -> { matches.forEach(e -> selected.add(e.recipeId())); updateControls(); }, "select_all");
-        button(x + 78, y + 53, 62, 1, () -> { matches.forEach(e -> selected.remove(e.recipeId())); updateControls(); }, "select_none");
+        button(x + 10, opts, col, 3, () -> { inAll = !inAll; changedRules(); }, "input_match");
+        button(x + 22 + col, opts, col, 3, () -> { outAll = !outAll; changedRules(); }, "output_match");
+        int quickY=y+(h<250?57:70);
+        button(x+10,quickY,col,0,()->chooseForm(true),"input_form");
+        button(x+22+col,quickY,col,0,()->chooseForm(false),"output_form");
+        button(x+10,quickY+25,w-20,0,this::chooseMaterial,"material");
+        button(x+10,quickY+50,w-20,0,this::extractFocused,"extract");
+        button(x+10,quickY+75,w-20,0,()->{dynamic=!dynamic;changedRules();},"mode");
+        button(x + 10, y + 53, 62, 1, () -> { matches.forEach(e -> selected.add(e.recipeId())); chosenCount=-1; updateControls(); }, "select_all");
+        button(x + 78, y + 53, 62, 1, () -> { matches.forEach(e -> selected.remove(e.recipeId())); chosenCount=-1; updateControls(); }, "select_none");
         int modeWidth = Math.max(48, Math.min(82, w - (split - x) - 70));
         button(split + 10, y + 53, modeWidth, 1, () -> { sourceView = !sourceView; detailScroll = 0; updateControls(); }, "source");
         button(split + 16 + modeWidth, y + 53, 44, 1, () -> { if (focus != null) RecipeNavigation.show(plan, focus); }, "jei");
@@ -127,16 +147,21 @@ public final class WildcardEditorScreen extends Screen implements GenerationList
         Control c = new Control(bx, by, width, page, action, key); controls.add(c); return addRenderableWidget(c);
     }
     private void sync() {
-        for (int i = 0; i < 4; i++) boxes[i].visible = tab == 0;
+        for (int i = 0; i < 4; i++) boxes[i].visible = tab == 3;
         for (var c : controls) c.visible = c.page < 0 || c.page == tab;
         updateControls();
     }
-    private int chosen() { int n = 0; for (var e : matches) if (selected.contains(e.recipeId()) && e.canEncode(outputPolicy, dropTools) && !previewErrors.containsKey(e.recipeId())) n++; return n; }
+    private int chosen() { if(chosenCount>=0)return chosenCount; int n = 0; for (var e : matches) if (selected.contains(e.recipeId()) && (dynamic ? sourceRecipe(e)!=null&&sourceRecipe(e).canEncode(outputPolicy,dropTools) : e.canEncode(outputPolicy, dropTools)) && !previewErrors.containsKey(e.recipeId())) n++; return chosenCount=n; }
     private void updateControls() {
         int chosen = chosen();
         for (var c : controls) {
             c.active = !sending;
             c.setMessage(switch (c.key) {
+                case "tab_3" -> Arrays.stream(query).anyMatch(q->!q.isBlank())?tr("advanced_active"):tr("tab_3");
+                case "input_form" -> tr("input_form_value", formName(inForm));
+                case "output_form" -> tr("output_form_value", formName(outForm));
+                case "material" -> tr("material_value", material.isEmpty()?tr("all_materials"):Component.literal(material));
+                case "mode" -> tr(dynamic?"mode_dynamic":"mode_fixed");
                 case "input_match" -> tr(inAll ? "input_all" : "input_recipe");
                 case "output_match" -> tr(outAll ? "output_all" : "output_recipe");
                 case "input_scope" -> tr("input_scope_value", tr("scope_" + inScope));
@@ -150,18 +175,20 @@ public final class WildcardEditorScreen extends Screen implements GenerationList
             });
             if (c.key.equals("halve")) c.active &= multiplier > 1;
             if (c.key.equals("double")) c.active &= multiplier < ProcessingMultiplier.MAX;
-            if (c.key.equals("select_all") || c.key.equals("select_none")) c.active &= !filtering && delay == 0;
+            if (c.key.equals("material") || c.key.equals("select_all") || c.key.equals("select_none")) c.active &= !filtering && delay == 0;
         }
-        boolean ready = !sending && !filtering && delay == 0 && heldRefreshTicks == 0 && chosen > 0;
-        boolean networkReady = ready && ClientNetworkState.hasNetwork() && ClientNetworkState.blankPatterns() >= (chosen + 2047) / 2048;
+        boolean ready = !sending && !filtering && delay == 0 && heldRefreshTicks == 0 && chosen > 0 && (!dynamic||chosen<=MachineWildcardData.MAX_RECIPES) && ruleError==null;
+        boolean networkReady = ready && ClientNetworkState.hasNetwork() && ClientNetworkState.blankPatterns() >= (dynamic ? 1 : (chosen + 2047) / 2048);
         generate.active = heldTarget == null ? networkReady : ready && chosen <= MachineWildcardData.MAX_RECIPES
                 && minecraft.player != null && MachineWildcard.isOwnItem(minecraft.player.getItemInHand(heldTarget.hand()));
         if (generateNetwork != null) generateNetwork.active = networkReady;
         for (var box : boxes) box.active = !sending;
     }
-    private void changedRules() { delay = 5; filtering = true; preview = null; previewRequest = -1; updateControls(); }
-    private void changedPolicy() { previewErrors.clear(); previewError = null; preview = null; previewRequest = -1; previewDelay = 4; updateControls(); }
+    private void changedRules() { chosenCount=-1;previewErrors.clear();previewError=null; delay = 5; filtering = true; preview = null; previewRequest = -1; updateControls(); }
+    private void changedPolicy() { chosenCount=-1; previewErrors.clear(); previewError = null; preview = null; previewRequest = -1; previewDelay = 4; updateControls(); }
     private void startFilter() {
+        ruleError=null;portableRule=null;
+        try{if(dynamic)portableRule=new DynamicRule(state());}catch(IllegalArgumentException invalid){ruleError=tr("dynamic_query_help");}
         rules = new WildcardRules(WildcardRules.Side.of(query[0], query[1], inAll, inScope), WildcardRules.Side.of(query[2], query[3], outAll, outScope));
         working.clear(); cursor = 0; filtering = true;
     }
@@ -176,16 +203,20 @@ public final class WildcardEditorScreen extends Screen implements GenerationList
             long end = System.nanoTime() + 3_000_000; int n = 0;
             while (cursor < plan.entries().size() && n++ < 96 && System.nanoTime() < end) {
                 var e = plan.entries().get(cursor++);
-                if (e.kind() == PatternKind.PROCESSING && rules.matches(e, searchTools)) working.add(e);
+                if(catalogued.add(e.recipeId()))for(var slots:List.of(e.inputs(),e.outputs()))for(var i:slots)availableMaterials.addAll(MaterialForms.materials(i.spec()));
+                if (e.kind() == PatternKind.PROCESSING) {
+                    if(dynamic){var raw=sourceRecipe(e);if(portableRule!=null&&raw!=null&&portableRule.matches(raw))working.add(e);}
+                    else if(rules.matches(e, searchTools)&&formMatches(e))working.add(e);
+                }
             }
             if (cursor == plan.entries().size()) {
-                matches.clear(); matches.addAll(working); working.clear(); filtering = false; scroll = 0;
+                chosenCount=-1; matches.clear(); matches.addAll(working); working.clear(); filtering = false; scroll = 0;
                 if (!matches.contains(focus)) focus(matches.isEmpty() ? null : matches.get(0));
                 else previewDelay = 4;
             }
         }
         if (!sending && !filtering && delay == 0 && previewDelay > 0 && --previewDelay == 0 && focus != null) {
-            var spec = focus.specForPolicy(multiplier, outputPolicy, dropTools);
+            var spec = specFor(focus);
             if (spec != null) previewRequest = PatternRequestSender.send(List.of(spec), 2);
             else previewError = tr("policy_empty");
         }
@@ -197,7 +228,7 @@ public final class WildcardEditorScreen extends Screen implements GenerationList
         if (response.success() && !response.preview().isEmpty()) preview = response.preview().get(0);
         else {
             status = response.details().isEmpty() ? tr("preview_failed") : Component.literal(response.details().get(0));
-            previewError = status; if (focus != null) previewErrors.put(focus.recipeId(), status);
+            chosenCount=-1; previewError = status; if (focus != null) previewErrors.put(focus.recipeId(), status);
         }
         updateControls();
     }
@@ -206,6 +237,7 @@ public final class WildcardEditorScreen extends Screen implements GenerationList
         for (int i = 0; i < 4; i++) s.putString(keys[i], query[i]); s.putString("category", plan.machineId().toString());
         s.putBoolean("in_all", inAll); s.putBoolean("out_all", outAll); s.putBoolean("drop_tools", dropTools); s.putBoolean("search_tools", searchTools);
         s.putInt("in_scope", inScope); s.putInt("out_scope", outScope); s.putInt("output_policy", outputPolicy); s.putInt("multiplier", multiplier);
+        s.putString("in_form",inForm);s.putString("out_form",outForm);s.putString("material",material);s.putBoolean("dynamic",dynamic);
         return WildcardEditorState.clean(s);
     }
     private void generate() {
@@ -216,14 +248,16 @@ public final class WildcardEditorScreen extends Screen implements GenerationList
         if (sending || filtering || delay != 0) return;
         if (!held && (generateNetwork != null ? !generateNetwork.active : !generate.active)) return;
         List<PatternSpec> specs = new ArrayList<>();
-        for (var e : matches) if (selected.contains(e.recipeId()) && !previewErrors.containsKey(e.recipeId())) { var spec = e.specForPolicy(multiplier, outputPolicy, dropTools); if (spec != null) specs.add(spec); }
+        for (var e : matches) if (selected.contains(e.recipeId()) && !previewErrors.containsKey(e.recipeId())) { var spec = specFor(e); if (spec != null) specs.add(spec); }
         try {
             CompoundTag rules = state();
+            if(dynamic){var exceptions=new TreeSet<ResourceLocation>(Comparator.comparing(ResourceLocation::toString));exceptions.addAll(storedExclusions);for(var e:plan.entries())if(e.kind()==PatternKind.PROCESSING){if(!selected.contains(e.recipeId()))exceptions.add(e.recipeId());else exceptions.remove(e.recipeId());}var excluded=new net.minecraft.nbt.ListTag();for(var id:exceptions)excluded.add(net.minecraft.nbt.StringTag.valueOf(id.toString()));rules.put("exclude_ids",excluded);rules=WildcardEditorState.clean(rules);}
             int operation = 4;
             if (held) {
                 rules.putByteArray("held_fingerprint", HeldWildcardFingerprint.visible(heldTarget.snapshot()));
                 operation = heldTarget.hand() == net.minecraft.world.InteractionHand.MAIN_HAND ? 5 : 6;
             }
+            if(dynamic&&specs.size()>1)specs=List.of(specs.get(0));
             PatternRequestSender.send(specs, operation, rules); writingHeld = held; sending = true; status = tr("preparing");
         }
         catch (IllegalArgumentException e) { status = Component.literal(e.getMessage()); }
@@ -240,12 +274,15 @@ public final class WildcardEditorScreen extends Screen implements GenerationList
         label(g, title.copy().append(" / ").append(plan.machineName()), x + 10, y + 10, w - 80, TEXT, 1);
         g.fill(x + 10, y + 26, x + w - 10, y + 27, WorkbenchTheme.LINE);
         if (tab == 0) {
+            if(h>=250){label(g,tr("input_rules"),x+12,y+55,w/2-20,TEXT,.85f);label(g,tr("output_rules"),x+w/2+6,y+55,w/2-20,TEXT,.85f);}
+            wrapped(g,ruleError!=null?ruleError:tr(dynamic?"dynamic_help":"fixed_help"),x+14,y+(h<250?160:173),w-28,ruleError!=null?WorkbenchTheme.WARNING:DIM,.8f);
+        } else if (tab == 3) {
             if (h >= 220) {
                 label(g, tr("input_rules"), x + 12, y + 55, w / 2 - 20, TEXT, .85f);
                 label(g, tr("output_rules"), x + w / 2 + 6, y + 55, w / 2 - 20, TEXT, .85f);
             }
             for (var box : boxes) WorkbenchTheme.control(g, box.getX() - 5, box.getY() - 4, box.getWidth() + 10, 19, WorkbenchTheme.INPUT, WorkbenchTheme.LINE);
-            if (h > 250) wrapped(g, tr("rule_help"), x + 14, y + 160, w - 28, DIM, .8f);
+            if (h > 250) wrapped(g, tr(dynamic?"dynamic_query_help":"rule_help"), x + 14, y + 160, w - 28, DIM, .8f);
         } else if (tab == 1) renderRecipes(g, mx, my);
         else if (h > 210) wrapped(g, tr(heldTarget == null ? "settings_help" : "held_settings_help"), x + 14, y + (heldTarget == null ? 147 : 169), w - 28, DIM, .8f);
         g.fill(x + 10, y + h - 34, x + w - 10, y + h - 33, WorkbenchTheme.LINE);
@@ -264,11 +301,11 @@ public final class WildcardEditorScreen extends Screen implements GenerationList
         }
         for (int i = 0; i < boxes.length; i++) if (boxes[i].visible && boxes[i].isMouseOver(mx, my))
             g.renderComponentTooltip(font, List.of(tr("query_" + i), tr("syntax_help")), mx, my);
-        if (generate.isMouseOver(mx, my)) g.renderComponentTooltip(font, List.of(tr(heldTarget == null ? "capacity_help" : "held_capacity_help")), mx, my);
+        if (generate.isMouseOver(mx, my)) g.renderComponentTooltip(font, List.of(tr(dynamic?"dynamic_help":heldTarget == null ? "capacity_help" : "held_capacity_help")), mx, my);
         for (var control : controls) if (control != generate && control.visible && control.isMouseOver(mx, my))
             g.renderComponentTooltip(font, List.of(control.getMessage()), mx, my);
         if (mx >= x + 10 && mx < x + w - 145 && my >= y + h - 30 && my < y + h - 2)
-            g.renderComponentTooltip(font, List.of(tr("summary", matches.size(), chosen(), ClientNetworkState.blankPatterns()), status), mx, my);
+            g.renderComponentTooltip(font, List.of(tr(heldTarget!=null?"summary_held":"summary", matches.size(), chosen(), ClientNetworkState.blankPatterns()), status), mx, my);
     }
     private void renderRecipes(GuiGraphics g, int mx, int my) {
         g.enableScissor(x + 10, listTop, split - 5, listBottom);
@@ -305,7 +342,7 @@ public final class WildcardEditorScreen extends Screen implements GenerationList
         for (int i = 0; i < Math.min(max, slots.size()); i++) {
             var item = slots.get(i); var presentation = IngredientPresentation.of(item, side);
             visuals.draw(g, item.spec(), px, py); visuals.drawRule(g, presentation, px, py);
-            hits.add(new Hit(px, py, item.spec(), presentation)); px += 22;
+            hits.add(new Hit(px, py, item.spec(), presentation, side)); px += 22;
         }
         if (slots.size() > max) { String n = "+" + (slots.size() - max); label(g, Component.literal(n), px + 3, py + 5, 35, DIM, .8f); px += font.width(n) + 8; }
         return px;
@@ -319,7 +356,7 @@ public final class WildcardEditorScreen extends Screen implements GenerationList
                 label(g, visuals.name(ingredient.spec()), dx + 30, dy + 3, room - 30, TEXT, 1);
                 label(g, Component.literal(ingredient.spec().amount() + (ingredient.spec().isItem() ? "" : " mB")), dx + 30, dy + 16, room - 30, DIM, .8f);
                 if (p.kind() != IngredientPresentation.Kind.REGULAR) label(g, p.description(), dx + 30, dy + 27, room - 30, p.color(), .8f);
-                hits.add(new Hit(dx + 4, dy + 6, ingredient.spec(), p));
+                hits.add(new Hit(dx + 4, dy + 6, ingredient.spec(), p, side));
             }
             dy += 40;
         }
@@ -351,14 +388,52 @@ public final class WildcardEditorScreen extends Screen implements GenerationList
     }
     @Override public boolean mouseClicked(double mx, double my, int button) {
         if (super.mouseClicked(mx, my, button)) return true;
+        if(tab==1&&button==0&&!sending&&my>=listTop&&my<listBottom)for(var hit:hits)if(mx>=hit.x&&mx<hit.x+18&&my>=hit.y&&my<hit.y+18){chooseIngredient(hit);return true;}
         if (tab != 1 || my < listTop || my >= listBottom || button != 0) return false;
         if (mx >= split - 11 && mx < split) { dragging = true; drag(my, false); return true; }
         if (mx >= x + w - 13 && mx < x + w) { detailDragging = true; drag(my, true); return true; }
         if (mx >= x + 10 && mx < split - 11) {
             int index = (int) ((my - listTop + scroll) / ROW);
-            if (index < matches.size()) { var e = matches.get(index); focus(e); if (mx < x + 26 && !sending) { if (!selected.remove(e.recipeId())) selected.add(e.recipeId()); } updateControls(); return true; }
+            if (index < matches.size()) { var e = matches.get(index); focus(e); if (mx < x + 26 && !sending) { if (!selected.remove(e.recipeId())) selected.add(e.recipeId()); chosenCount=-1; } updateControls(); return true; }
         }
         return false;
+    }
+    private static Component formName(String value){return tr(value.isEmpty()?"all_forms":"form_"+value);}
+    private void chooseForm(boolean input){
+        var choices=MaterialForms.FORMS.stream().map(f->new WildcardChoiceScreen.Choice(f,formName(f))).toList();
+        minecraft.setScreen(new WildcardChoiceScreen(this,tr(input?"input_rules":"output_rules"),choices,v->{if(input)inForm=v;else outForm=v;changedRules();}));
+    }
+    private void chooseMaterial(){
+        var names=availableMaterials;
+        var choices=new ArrayList<WildcardChoiceScreen.Choice>();choices.add(new WildcardChoiceScreen.Choice("",tr("all_materials")));
+        names.forEach(n->{String key="material.gtceu."+n;Component name=net.minecraft.locale.Language.getInstance().has(key)?Component.translatable(key).append(" · "+n):Component.literal(n);choices.add(new WildcardChoiceScreen.Choice(n,name));});
+        minecraft.setScreen(new WildcardChoiceScreen(this,tr("material"),choices,v->{material=v;changedRules();}));
+    }
+    private RuleRecipe sourceRecipe(RecipePlan.Entry e){
+        var cached=sourceRecipes.get(e.recipeId());if(cached!=null)return cached;if(unsupportedSources.contains(e.recipeId()))return null;
+        Object r=e.jeiRecipe();try{if(r!=null&&r.getClass().getName().equals("com.gregtechceu.gtceu.integration.jei.recipe.GTRecipeWrapper"))r=ServerRecipeReader.member(r,"recipe");}catch(ReflectiveOperationException ignored){r=null;}
+        if(r instanceof net.minecraft.world.item.crafting.Recipe<?> recipe&&minecraft.level!=null){var raw=ServerRecipeReader.read(recipe,minecraft.level);if(raw!=null){sourceRecipes.put(e.recipeId(),raw);return raw;}}
+        unsupportedSources.add(e.recipeId());return null;
+    }
+    private PatternSpec specFor(RecipePlan.Entry e){var raw=dynamic?sourceRecipe(e):null;return dynamic?(raw==null?null:raw.encodeSpec(multiplier,outputPolicy,dropTools)):e.specForPolicy(multiplier,outputPolicy,dropTools);}
+    private boolean formMatches(RecipePlan.Entry e){
+        return structural(e.inputs().stream().filter(i->!i.neverConsumed()).map(Ingredient::spec).toList(),inForm)&&structural(e.outputs().stream().map(Ingredient::spec).toList(),outForm);
+    }
+    private boolean structural(List<StackSpec> slots,String form){return (form.isEmpty()&&material.isEmpty())||slots.stream().anyMatch(s->MaterialForms.matches(s,form,material));}
+    private void extractFocused(){
+        var e=focus;if(e==null){status=tr("extract_choose");tab=1;sync();return;}
+        var inputs=new TreeSet<String>();var outputs=new TreeSet<String>();
+        for(var i:e.inputs())if(!i.neverConsumed())inputs.addAll(MaterialForms.forms(i.spec()));for(var i:e.outputs())outputs.addAll(MaterialForms.forms(i.spec()));
+        var choices=new ArrayList<WildcardChoiceScreen.Choice>();for(String in:inputs)for(String out:outputs)choices.add(new WildcardChoiceScreen.Choice(in+">"+out,formName(in).copy().append(" → ").append(formName(out))));
+        if(choices.isEmpty()){status=tr("extract_none");return;}
+        minecraft.setScreen(new WildcardChoiceScreen(this,tr("extract"),choices,v->{var pair=v.split(">");inForm=pair[0];outForm=pair[1];material="";query[0]="";query[2]="";inAll=false;outAll=false;status=tr("extract_applied");tab=0;changedRules();}));
+    }
+    private void chooseIngredient(Hit hit){
+        int index=hit.side==0?0:2;var choices=new ArrayList<WildcardChoiceScreen.Choice>();
+        for(String form:MaterialForms.forms(hit.spec))choices.add(new WildcardChoiceScreen.Choice("form:"+form,tr("use_form",formName(form))));
+        for(String tag:MaterialForms.tags(hit.spec))if(tag.length()<240)choices.add(new WildcardChoiceScreen.Choice("tag:"+tag,Component.literal("$"+tag)));
+        choices.add(new WildcardChoiceScreen.Choice("id:"+hit.spec.id(),tr("use_id",hit.spec.id().toString())));
+        minecraft.setScreen(new WildcardChoiceScreen(this,tr("ingredient_rule"),choices,v->{if(v.startsWith("form:")){if(index==0)inForm=v.substring(5);else outForm=v.substring(5);tab=0;}else{query[index]=(v.startsWith("tag:")?"$":"&")+v.substring(v.indexOf(':')+1);tab=3;}changedRules();}));
     }
     private void drag(double my, boolean detail) {
         int viewport = listBottom - listTop, content = detail ? detailHeight() : matches.size() * ROW;
@@ -372,7 +447,7 @@ public final class WildcardEditorScreen extends Screen implements GenerationList
     @Override public void removed() { ClientGenerationFeedback.setListener(null); InspectionFeedback.setListener(null); }
     @Override public void onClose() { minecraft.setScreen(parent); }
     @Override public boolean isPauseScreen() { return false; }
-    private record Hit(int x, int y, StackSpec spec, IngredientPresentation presentation) {}
+    private record Hit(int x, int y, StackSpec spec, IngredientPresentation presentation, int side) {}
     private final class Control extends AbstractButton {
         final int page; final Runnable action; final String key;
         Control(int x, int y, int width, int page, Runnable action, String key) { super(x, y, width, 18, tr(key)); this.page = page; this.action = action; this.key = key; }

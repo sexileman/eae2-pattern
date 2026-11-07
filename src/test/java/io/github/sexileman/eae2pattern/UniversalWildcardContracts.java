@@ -37,6 +37,17 @@ public final class UniversalWildcardContracts {
                     && recipe.getAsJsonObject("result").get("count").getAsInt() == 1, "recipe yields exactly one independent blank carrier");
             check(!recipe.toString().contains("wildcard_pattern:wildcard_pattern") && !recipe.toString().contains("gtceu:"), "crafting does not require either optional mod");
             check(app.getEntry("data/eae2_pattern/advancements/recipes/misc/machine_wildcard_pattern.json") != null, "vanilla recipe-book unlock is shipped");
+            for(String name:List.of("DynamicRule","PortableRuleQuery","RuleRecipe","ServerRecipeReader","WildcardRuntime","MaterialForms","WeightedCache")){
+                var binary=bytes(app,"io/github/sexileman/eae2pattern/wildcard/"+name+".class");
+                check(!new String(binary,java.nio.charset.StandardCharsets.ISO_8859_1).contains("net/minecraft/client/"),"dedicated-server dynamic core has no client class link: "+name);
+            }
+            check(app.getEntry("io/github/sexileman/eae2pattern/client/WildcardChoiceScreen.class")!=null,"searchable form/material/tag picker shipped");
+            var writerJob=node(bytes(app,"io/github/sexileman/eae2pattern/net/server/MachineWildcardWriter$Job.class"));
+            var dynamic=writerJob.methods.stream().filter(m->m.name.equals("dynamicStep")).findFirst().orElseThrow();
+            boolean levelEncoding=false,playerEncoding=false;for(var insn:dynamic.instructions)if(insn instanceof MethodInsnNode call&&call.owner.equals("io/github/sexileman/eae2pattern/pattern/PatternEncoder")&&call.name.equals("encode")){levelEncoding|=call.desc.contains("/Level;");playerEncoding|=call.desc.contains("/ServerPlayer;");}
+            check(levelEncoding&&!playerEncoding,"dynamic prewarming uses the same player-independent child definitions as reload resolution");
+            var runtime=node(bytes(app,"io/github/sexileman/eae2pattern/wildcard/WildcardRuntime.class"));
+            check(runtime.methods.stream().anyMatch(m->m.name.equals("clear"))&&runtime.methods.stream().anyMatch(m->m.name.equals("prime")),"runtime supports reload invalidation and generation prewarming");
             var items = node(bytes(app, "io/github/sexileman/eae2pattern/wildcard/WildcardItems.class"));
             check(items.methods.stream().anyMatch(m -> m.name.equals("creative")), "blank carrier has a creative-tab acquisition entry");
             var jei = node(bytes(app, "io/github/sexileman/eae2pattern/compat/jei/EAE2PatternJeiPlugin.class"));

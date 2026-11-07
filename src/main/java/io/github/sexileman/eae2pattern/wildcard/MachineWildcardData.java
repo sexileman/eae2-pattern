@@ -24,7 +24,7 @@ public final class MachineWildcardData {
         } catch (IOException e) { throw new IllegalArgumentException("Invalid wildcard NBT", e); }
     }
     public static int count(CompoundTag data) {
-        return data.getInt("version") == 2 ? data.getInt("count") : data.getList("recipes", 10).size();
+        return data.getInt("version") >= 2 ? data.getInt("count") : data.getList("recipes", 10).size();
     }
     public static CompoundTag create(ResourceLocation type, List<CompoundTag> entries) {
         ListTag rows = new ListTag(); entries.forEach(row -> rows.add(row.copy()));
@@ -46,7 +46,14 @@ public final class MachineWildcardData {
     public static ResourceLocation validate(CompoundTag data) {
         ResourceLocation machine = ResourceLocation.tryParse(data.getString("machine"));
         if (machine == null) throw new IllegalArgumentException("Invalid machine type");
+        if(data.getInt("version")==3){dynamic(machine,data.getCompound("rules"),count(data));return machine;}
         readRecipes(data); return machine;
+    }
+    public static CompoundTag dynamic(ResourceLocation type, CompoundTag rules, int initialCount) {
+        if(type==null||initialCount<0||initialCount>MAX_RECIPES)throw new IllegalArgumentException("Invalid dynamic wildcard");
+        CompoundTag clean=WildcardEditorState.clean(rules);clean.remove("held_fingerprint");clean.putBoolean("dynamic",true);new DynamicRule(clean);
+        CompoundTag data=new CompoundTag();data.putInt("version",3);data.putString("machine",type.toString());data.putInt("count",initialCount);data.put("rules",clean);
+        if(bytes(data)>128_000)throw new CapacityException("Dynamic wildcard rules exceed 128 KB");return data;
     }
     public static ListTag readRecipes(CompoundTag data) {
         int version = data.getInt("version");

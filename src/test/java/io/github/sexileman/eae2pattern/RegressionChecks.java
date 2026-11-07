@@ -27,12 +27,75 @@ import java.util.List;
 public final class RegressionChecks {
     private static int checks;
     public static void main(String[] args) throws Exception {
-        policies(); wireFormat(); searches(); gtVersions(); layoutAndGrid(); manualMultiplier(); grouping(); inspectionPackets(); slotPresentation(); patternMetadata(); amountLabels(); machineWildcards(); heldWildcardWrites();
+        policies(); wireFormat(); searches(); gtVersions(); layoutAndGrid(); manualMultiplier(); grouping(); inspectionPackets(); slotPresentation(); patternMetadata(); amountLabels(); machineWildcards(); heldWildcardWrites(); dynamicRules();
         System.out.println("Passed " + checks + " regression checks");
     }
     private static void check(boolean condition, String message) {
         checks++; if (!condition) throw new AssertionError(message);
     }
+    private static void dynamicRules() throws Exception {
+        var cache=new io.github.sexileman.eae2pattern.wildcard.WeightedCache<String,String>(2,10);
+        cache.put("a","A",4);cache.put("b","B",4);check(cache.get("a").equals("A"),"LRU read retains cached value");
+        cache.put("c","C",4);check(cache.get("b")==null&&cache.get("a")!=null,"LRU evicts the least recently used entry");
+        check(cache.size()==2&&cache.weight()==8,"cache maintains entry and weight bounds");
+        cache.put("large","never",11);check(cache.get("large")==null&&cache.weight()==8,"oversized entries are not retained");
+        cache.put("a","changed",9);check(cache.get("c")==null&&cache.weight()==9,"replacement updates weight and evicts neighbors");
+        cache.clear();check(cache.size()==0&&cache.weight()==0,"reload clears retained entries and accounting");
+        var ingot=StackSpec.of(StackType.ITEM,new ResourceLocation("test:iron_ingot"),2);
+        var plate=StackSpec.of(StackType.ITEM,new ResourceLocation("test:iron_plate"),1);
+        var tool=StackSpec.of(StackType.ITEM,new ResourceLocation("other:circuit"),1);
+        var fluid=new StackSpec(StackType.FLUID,new ResourceLocation("test:solder"),144);
+        var tag=new CompoundTag();tag.putInt("configuration",24);tool=new StackSpec(StackType.ITEM,tool.id(),tag,1);
+        var raw=new io.github.sexileman.eae2pattern.wildcard.RuleRecipe(new ResourceLocation("test:bend"),List.of(new io.github.sexileman.eae2pattern.wildcard.RuleRecipe.Slot(ingot,1),new io.github.sexileman.eae2pattern.wildcard.RuleRecipe.Slot(tool,0),new io.github.sexileman.eae2pattern.wildcard.RuleRecipe.Slot(fluid,.1f)),List.of(new io.github.sexileman.eae2pattern.wildcard.RuleRecipe.Slot(plate,.2f),new io.github.sexileman.eae2pattern.wildcard.RuleRecipe.Slot(plate.withAmount(3),1)));
+        var spec=raw.encodeSpec(8,0,false);
+        check(spec.inputs().get(0).amount()==16&&spec.inputs().get(2).amount()==1152,"dynamic multiplier scales items and fluid mB");
+        check(spec.inputs().get(1).amount()==1&&spec.inputs().get(1).tag().getInt("configuration")==24,"dynamic tool retains circuit NBT and does not scale");
+        check(raw.encodeSpec(8,0,true).inputs().size()==2,"dynamic drop-tools only removes non-consumed input");
+        check(raw.encodeSpec(1,1,true).outputs().size()==1&&raw.encodeSpec(1,1,true).outputs().get(0).amount()==3,"dynamic guaranteed-only policy uses source chance");
+        check(raw.encodeSpec(1,2,true).outputs().get(0).amount()==3,"dynamic main output is the first guaranteed output");
+        var allChance=new io.github.sexileman.eae2pattern.wildcard.RuleRecipe(raw.id(),raw.inputs(),List.of(raw.outputs().get(0)));
+        check(allChance.encodeSpec(1,2,true)==null,"main-only dynamic recipe rejects all-chance outputs");
+        check(allChance.encodeSpec(1,0,true).outputs().size()==1,"all-output dynamic policy retains chance products");
+        var noInput=new io.github.sexileman.eae2pattern.wildcard.RuleRecipe(raw.id(),List.of(new io.github.sexileman.eae2pattern.wildcard.RuleRecipe.Slot(tool,0)),raw.outputs());
+        check(noInput.encodeSpec(1,0,true)==null,"dynamic recipe with only removed tools is not advertised");
+        var huge=new io.github.sexileman.eae2pattern.wildcard.RuleRecipe(raw.id(),List.of(new io.github.sexileman.eae2pattern.wildcard.RuleRecipe.Slot(ingot.withAmount(Long.MAX_VALUE),1)),raw.outputs());
+        boolean rejected=false;try{huge.encodeSpec(2,0,true);}catch(ArithmeticException expected){rejected=true;}check(rejected,"dynamic scaling rejects overflow instead of wrapping");
+        check(new io.github.sexileman.eae2pattern.wildcard.PortableRuleQuery("&iron_ingot @test").matches(List.of(ingot)),"portable terms combine with AND");
+        check(!new io.github.sexileman.eae2pattern.wildcard.PortableRuleQuery("&iron_ingot @other").matches(List.of(ingot)),"portable mod filter checks actual source side");
+        check(new io.github.sexileman.eae2pattern.wildcard.PortableRuleQuery("&absent | &*plate").matches(List.of(plate)),"portable OR and wildcard match IDs");
+        check(new io.github.sexileman.eae2pattern.wildcard.PortableRuleQuery("&iron_?ngot -@other").matches(List.of(ingot)),"portable wildcard and negation semantics");
+        check(!new io.github.sexileman.eae2pattern.wildcard.PortableRuleQuery("&iron_ingot -@other").matches(List.of(ingot,tool)),"portable exclusions inspect the entire side");
+        check(new io.github.sexileman.eae2pattern.wildcard.PortableRuleQuery("  ").matches(List.of()),"empty portable condition accepts empty side");
+        for(String bad:List.of("铁锭","#tooltip","%tools","^red","$")){rejected=false;try{new io.github.sexileman.eae2pattern.wildcard.PortableRuleQuery(bad);}catch(IllegalArgumentException expected){rejected=true;}check(rejected,"non-portable dynamic query rejected: "+bad);}
+        var rules=new CompoundTag();rules.putString("in_include","&iron_ingot");rules.putString("out_include","&iron_plate");rules.putBoolean("drop_tools",true);rules.putInt("multiplier",2);rules.putBoolean("dynamic",true);
+        check(new io.github.sexileman.eae2pattern.wildcard.DynamicRule(rules).matches(raw),"portable dynamic rule matches both source sides");
+        rules.putBoolean("in_all",true);check(!new io.github.sexileman.eae2pattern.wildcard.DynamicRule(rules).matches(raw),"every-slot dynamic input rejects unmatched fluid");
+        rules.putInt("in_scope",1);check(new io.github.sexileman.eae2pattern.wildcard.DynamicRule(rules).matches(raw),"item-only search excludes fluid but keeps recipe fluid encoding");
+        rules.putBoolean("search_tools",true);check(!new io.github.sexileman.eae2pattern.wildcard.DynamicRule(rules).matches(raw),"search-tools includes auxiliary input in advanced every-slot condition");
+        rules.putBoolean("in_all",false);rules.putString("out_exclude","@test");check(!new io.github.sexileman.eae2pattern.wildcard.DynamicRule(rules).matches(raw),"dynamic output exclusion wins");rules.putString("out_exclude","");
+        var excluded=new net.minecraft.nbt.ListTag();excluded.add(net.minecraft.nbt.StringTag.valueOf(raw.id().toString()));excluded.add(excluded.get(0).copy());rules.put("exclude_ids",excluded);
+        check(!new io.github.sexileman.eae2pattern.wildcard.DynamicRule(rules).matches(raw),"manual dynamic recipe exception overrides rules");
+        check(io.github.sexileman.eae2pattern.wildcard.WildcardEditorState.clean(rules).getList("exclude_ids",8).size()==1,"duplicate exceptions are canonicalized");
+        rules.remove("exclude_ids");
+        var machine=new ResourceLocation("test:bender");var data=io.github.sexileman.eae2pattern.wildcard.MachineWildcardData.dynamic(machine,rules,200);
+        check(data.getInt("version")==3&&io.github.sexileman.eae2pattern.wildcard.MachineWildcardData.validate(data).equals(machine),"dynamic v3 rules round trip");
+        check(!data.contains("payload")&&!data.contains("recipes")&&!data.toString().contains("fingerprint"),"dynamic item stores no concrete recipes or encoded child patterns");
+        check(io.github.sexileman.eae2pattern.wildcard.MachineWildcardData.bytes(data)<2048,"simple dynamic item stays below 2 KB for 200 recipes");
+        check(io.github.sexileman.eae2pattern.wildcard.MachineWildcardData.bytes(data)==io.github.sexileman.eae2pattern.wildcard.MachineWildcardData.bytes(io.github.sexileman.eae2pattern.wildcard.MachineWildcardData.dynamic(machine,rules,2048)),"rule payload does not grow with recipe count");
+        for(int bad:new int[]{-1,2049}){rejected=false;try{io.github.sexileman.eae2pattern.wildcard.MachineWildcardData.dynamic(machine,rules,bad);}catch(IllegalArgumentException expected){rejected=true;}check(rejected,"dynamic initial count boundary: "+bad);}
+        for(String badKey:List.of("in_form","material")){var bad=rules.copy();bad.putString(badKey,"INVALID");rejected=false;try{io.github.sexileman.eae2pattern.wildcard.WildcardEditorState.clean(bad);}catch(IllegalArgumentException expected){rejected=true;}check(rejected,"invalid structured condition rejected: "+badKey);}
+        var forms=io.github.sexileman.eae2pattern.wildcard.MaterialForms.formsFromTags(List.of("forge:ingots/iron","c:plates/iron","other:gears/iron","forge:ingot"));
+        check(forms.equals(java.util.Set.of("ingots","plates")),"forms use registered common tag families, not guessed singular names or arbitrary namespaces");
+        check(io.github.sexileman.eae2pattern.wildcard.MaterialForms.materialsFromTags(List.of("forge:ingots/iron","c:plates/iron","forge:ingots/rubber")).equals(java.util.Set.of("iron","rubber")),"material candidates are extracted without user typing tags");
+        check(io.github.sexileman.eae2pattern.wildcard.MaterialForms.formsFromTags(List.of("forge:plates","forge:plates/double/iron")).equals(java.util.Set.of("double_plates")),"nested common forms do not match generic plates");
+        check(io.github.sexileman.eae2pattern.wildcard.MaterialForms.materialsFromTags(List.of("forge:plates/double/iron","forge:plates/double")).equals(java.util.Set.of("iron")),"nested form paths extract the actual material rather than double/iron");
+        check(!io.github.sexileman.eae2pattern.wildcard.PortableRuleQuery.globContains("a".repeat(1000),"*a".repeat(100)+"b"),"adversarial wildcard sequence terminates without regex backtracking");
+        check(io.github.sexileman.eae2pattern.wildcard.PortableRuleQuery.globContains("prefix_iron_ingot_suffix","iron_?ngot"),"portable glob retains substring matching");
+        check(((Number)io.github.sexileman.eae2pattern.wildcard.ServerRecipeReader.member(new PublicContent(),"chance")).intValue()==1000,"server reader handles older public-field content");
+        check(((Number)io.github.sexileman.eae2pattern.wildcard.ServerRecipeReader.member(new PublicContentRecord(1000),"chance")).intValue()==1000,"server reader handles record accessors");
+    }
+    public static final class PublicContent {public int chance=1000;}
+    public record PublicContentRecord(int chance){}
     private static void heldWildcardWrites() {
         CompoundTag first = new CompoundTag(); first.putString("id", "eae2_pattern:machine_wildcard_pattern"); first.putByte("Count", (byte) 1);
         CompoundTag second = new CompoundTag(); second.putByte("Count", (byte) 1); second.putString("id", "eae2_pattern:machine_wildcard_pattern");

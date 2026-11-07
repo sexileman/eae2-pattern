@@ -13,11 +13,12 @@ import net.minecraftforge.fml.common.Mod;
 public final class MachineWildcardEvents {
     private MachineWildcardEvents() {}
     @SubscribeEvent public static void reload(net.minecraftforge.event.OnDatapackSyncEvent event) {
-        if (event.getPlayer() == null) MachineWildcard.clearFingerprints();
+        if (event.getPlayer() == null) {MachineWildcard.clearFingerprints();WildcardProviderRefresh.refresh();}
     }
     @SubscribeEvent public static void stopped(net.minecraftforge.event.server.ServerStoppedEvent event) {
-        MachineWildcard.clearFingerprints();
+        MachineWildcard.clearFingerprints(); WildcardProviderRefresh.clear();
     }
+    @SubscribeEvent public static void tags(net.minecraftforge.event.TagsUpdatedEvent event) { MaterialForms.clear(); }
     @SubscribeEvent public static void tooltip(ItemTooltipEvent event) {
         if (MachineWildcard.isOwnItem(event.getItemStack()) && !MachineWildcard.isBound(event.getItemStack())) {
             event.getToolTip().add(Component.translatable("eae2_pattern.editor.blank_help").withStyle(ChatFormatting.GOLD)); return;
@@ -25,7 +26,7 @@ public final class MachineWildcardEvents {
         if (!MachineWildcard.isBound(event.getItemStack())) return;
         var data = event.getItemStack().getTag().getCompound(MachineWildcardData.KEY);
         event.getToolTip().add(Component.translatable("eae2_pattern.wildcard.machine", data.getString("machine")).withStyle(ChatFormatting.AQUA));
-        event.getToolTip().add(Component.translatable("eae2_pattern.wildcard.recipes", MachineWildcardData.count(data)).withStyle(ChatFormatting.GRAY));
+        event.getToolTip().add(Component.translatable(data.getInt("version")==3?"eae2_pattern.editor.dynamic_count":"eae2_pattern.wildcard.recipes", MachineWildcardData.count(data)).withStyle(ChatFormatting.GRAY));
         String encoder = event.getItemStack().getTag().getString("encodePlayer");
         if (!encoder.isEmpty()) event.getToolTip().add(Component.translatable("eae2_pattern.wildcard.encoder", encoder).withStyle(ChatFormatting.GRAY));
         event.getToolTip().add(Component.translatable("eae2_pattern.wildcard.bound_help").withStyle(ChatFormatting.GOLD));

@@ -44,6 +44,20 @@ public final class CompatibilityContracts {
         check(read(gt, "com/gregtechceu/gtceu/api/recipe/GTRecipeSerializer").fields.stream()
                 .anyMatch(f -> f.name.equals("CODEC") && f.desc.equals("Lcom/mojang/serialization/Codec;") && (f.access & 9) == 9),
                 "GT serializer must expose a public codec for stable restart fingerprints");
+        var gtRecipe=read(gt,"com/gregtechceu/gtceu/api/recipe/GTRecipe");
+        for(String field:new String[]{"inputs","outputs","tickInputs","tickOutputs"})check(gtRecipe.fields.stream().anyMatch(f->f.name.equals(field)&&(f.access&1)!=0),"dynamic GT source map is public: "+field);
+        var content=read(gt,"com/gregtechceu/gtceu/api/recipe/content/Content");
+        for(String field:new String[]{"content","chance","maxChance"})check(content.fields.stream().anyMatch(f->f.name.equals(field)&&(f.access&1)!=0),"dynamic GT content contract: "+field);
+        check(read(gt,"com/gregtechceu/gtceu/api/recipe/ingredient/SizedIngredient").methods.stream().anyMatch(m->m.name.equals("getAmount")&&m.desc.equals("()I")),"dynamic sized item amount accessor exists");
+        check(read(gt,"com/gregtechceu/gtceu/api/recipe/ingredient/FluidIngredient").methods.stream().anyMatch(m->m.name.equals("getStacks")&&m.desc.equals("()[Lcom/lowdragmc/lowdraglib/side/fluid/FluidStack;")),"dynamic fluid alternatives accessor exists");
+        var chemical=read(gt,"com/gregtechceu/gtceu/api/data/chemical/ChemicalHelper");
+        check(chemical.methods.stream().anyMatch(m->m.name.equals("getPrefix")&&m.desc.equals("(Lnet/minecraft/world/level/ItemLike;)Lcom/gregtechceu/gtceu/api/data/tag/TagPrefix;")),"GT form recognition uses the public unification prefix API");
+        check(chemical.methods.stream().anyMatch(m->m.name.equals("getMaterial")&&m.desc.equals("(Lnet/minecraft/world/item/ItemStack;)Lcom/gregtechceu/gtceu/api/data/chemical/material/stack/MaterialStack;")),"GT material picker uses public stack material API");
+        check(read(gt,"com/gregtechceu/gtceu/api/data/tag/TagPrefix").methods.stream().anyMatch(m->m.name.equals("name")&&m.desc.equals("()Ljava/lang/String;")),"GT prefix identity accessor exists");
+        var gtlBuffer=read(gtl,"org/gtlcore/gtlcore/integration/wildcard/MEWildcardPatternBufferPartMachine");
+        var update=gtlBuffer.methods.stream().filter(m->m.name.equals("update")&&m.desc.equals("()V")).findFirst().orElseThrow();
+        boolean hotExpansion=false;for(var insn:update.instructions)if(insn instanceof MethodInsnNode call&&call.name.equals("expandPatterns"))hotExpansion=true;
+        check(!hotExpansion,"installed GTL buffer does not call wildcard expansion directly from its per-tick update");
         Path extended = jar(mods, n -> n.startsWith("ExtendedAE-") && n.endsWith(".jar"));
         for (String name : new String[]{"common/tileentities/TileExPatternProvider", "common/parts/PartExPatternProvider"}) {
             var provider = read(extended, "com/glodblock/github/extendedae/" + name);

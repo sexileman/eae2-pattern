@@ -27,7 +27,7 @@ public final class MachineWildcard {
     private record Fingerprint(java.lang.ref.WeakReference<Recipe<?>> owner, byte[] hash) {}
     private static final Map<Recipe<?>, Fingerprint> FINGERPRINTS = new WeakHashMap<>();
     private MachineWildcard() {}
-    public static synchronized void clearFingerprints() { FINGERPRINTS.clear(); }
+    public static synchronized void clearFingerprints() { FINGERPRINTS.clear(); WildcardRuntime.clear(); MaterialForms.clear(); }
     public static boolean available() { return ForgeRegistries.ITEMS.containsKey(ITEM); }
     public static boolean isOwnItem(ItemStack stack) { return !stack.isEmpty() && BuiltInRegistries.ITEM.getKey(stack.getItem()).equals(ITEM); }
     public static boolean isBound(ItemStack stack) { return stack.getTag() != null && stack.getTag().contains(MachineWildcardData.KEY, 10); }
@@ -59,37 +59,26 @@ public final class MachineWildcard {
     }
     public static ItemStack item(ResourceLocation type, List<CompoundTag> entries, String player) {
         if (!available()) throw new IllegalStateException("Independent machine wildcard item is not registered");
+        return carrier(type, MachineWildcardData.create(type, entries), entries.size(), player);
+    }
+    public static ItemStack carrier(ResourceLocation type, CompoundTag data, int count, String player) {
         ItemStack stack = new ItemStack(ForgeRegistries.ITEMS.getValue(ITEM));
-        stack.getOrCreateTag().put(MachineWildcardData.KEY, MachineWildcardData.create(type, entries));
+        stack.getOrCreateTag().put(MachineWildcardData.KEY, data);
         var ids = new net.minecraft.nbt.ListTag(); ids.add(net.minecraft.nbt.StringTag.valueOf(type.toString()));
         CompoundTag gtl = new CompoundTag(); gtl.put("patternQuickUploadRecipeTypes", ids);
         stack.getOrCreateTag().put("gtlcore", gtl);
         stack.getOrCreateTag().putString("encodePlayer", player);
-        stack.setHoverName(Component.translatable("eae2_pattern.wildcard.name", type.toString(), entries.size()));
+        stack.setHoverName(Component.translatable("eae2_pattern.wildcard.name", type.toString(), count));
         return stack;
     }
     public static Stream<IPatternDetails> expand(ItemStack stack, Level level) {
-        // Missing, changed, or moved recipes fail closed. Reloading never broadens the machine whitelist.
+        // Both formats bind a real machine type; fixed snapshots validate fingerprints, dynamic rules resolve live recipes.
         if (level == null || level.isClientSide) return Stream.empty();
         try {
             CompoundTag data = stack.getTag().getCompound(MachineWildcardData.KEY);
-            ResourceLocation machine = ResourceLocation.tryParse(data.getString("machine"));
-            if (machine == null) return Stream.empty();
-            var rows = MachineWildcardData.readRecipes(data);
-            var result = new ArrayList<IPatternDetails>(rows.size());
-            for (int i = 0; i < rows.size(); i++) {
-                CompoundTag row = rows.getCompound(i);
-                var recipe = level.getRecipeManager().byKey(new ResourceLocation(row.getString("recipe"))).orElse(null);
-                if (recipe == null || !MachineWildcardData.matches(machine, type(recipe), row.getByteArray("fingerprint"), fingerprint(recipe))) continue;
-                ItemStack encoded = ItemStack.of(row.getCompound("pattern"));
-                // Only concrete AE2 processing children are accepted; no recursive wildcard expansion.
-                if (!BuiltInRegistries.ITEM.getKey(encoded.getItem()).equals(new ResourceLocation("ae2", "processing_pattern"))) continue;
-                IPatternDetails details = PatternDetailsHelper.decodePattern(encoded, level);
-                if (details != null) result.add(details);
-            }
-            return result.stream();
+            return WildcardRuntime.expand(data, level).stream();
         } catch (RuntimeException e) {
-            EAE2Pattern.LOGGER.debug("Rejected machine wildcard", e); return Stream.empty();
+            EAE2Pattern.LOGGER.warn("Rejected machine wildcard expansion: {}", e.getMessage()); return Stream.empty();
         }
     }
 }
