@@ -189,7 +189,7 @@ public final class WildcardEditorScreen extends AeToolScreen implements Generati
     private void changedPolicy() { chosenCount=-1; previewErrors.clear(); previewError = null; preview = null; previewRequest = -1; previewDelay = 4; updateControls(); }
     private void startFilter() {
         ruleError=null;portableRule=null;
-        try{if(dynamic)portableRule=new DynamicRule(state());}catch(IllegalArgumentException invalid){ruleError=tr("dynamic_query_help");}
+        try{if(dynamic)portableRule=new DynamicRule(state());}catch(IllegalArgumentException invalid){ruleError=tr("invalid_rule");}
         rules = new WildcardRules(WildcardRules.Side.of(query[0], query[1], inAll, inScope), WildcardRules.Side.of(query[2], query[3], outAll, outScope));
         working.clear(); cursor = 0; filtering = true;
     }
@@ -277,16 +277,16 @@ public final class WildcardEditorScreen extends AeToolScreen implements Generati
         g.fill(x + 10, y + 26, x + w - 10, y + 27, WorkbenchTheme.LINE);
         if (tab == 0) {
             if(h>=250){label(g,tr("input_rules"),x+12,y+55,w/2-20,TEXT,.85f);label(g,tr("output_rules"),x+w/2+6,y+55,w/2-20,TEXT,.85f);}
-            wrapped(g,ruleError!=null?ruleError:tr(dynamic?"dynamic_help":"fixed_help"),x+14,y+(h<250?160:173),w-28,ruleError!=null?WorkbenchTheme.WARNING:DIM,.8f);
+            if(ruleError!=null)wrapped(g,ruleError,x+14,y+(h<250?160:173),w-28,WorkbenchTheme.WARNING,1);
         } else if (tab == 3) {
             if (h >= 220) {
                 label(g, tr("input_rules"), x + 12, y + 55, w / 2 - 20, TEXT, .85f);
                 label(g, tr("output_rules"), x + w / 2 + 6, y + 55, w / 2 - 20, TEXT, .85f);
             }
             for (var box : boxes) WorkbenchTheme.control(g, box.getX() - 5, box.getY() - 4, box.getWidth() + 10, 19, WorkbenchTheme.INPUT, WorkbenchTheme.LINE);
-            if (h > 250) wrapped(g, tr(dynamic?"dynamic_query_help":"rule_help"), x + 14, y + 160, w - 28, DIM, .8f);
+            if (h > 250 && ruleError!=null) wrapped(g,ruleError,x+14,y+160,w-28,WorkbenchTheme.WARNING,1);
         } else if (tab == 1) renderRecipes(g, mx, my);
-        else if (h > 210) wrapped(g, tr(heldTarget == null ? "settings_help" : "held_settings_help"), x + 14, y + (heldTarget == null ? 147 : 169), w - 28, DIM, .8f);
+        else if (h > 210) wrapped(g,encodingSummary(),x+14,y+(heldTarget==null?147:169),w-28,DIM,1);
         g.fill(x + 10, y + h - 34, x + w - 10, y + h - 33, WorkbenchTheme.LINE);
         label(g, filtering ? tr("filtering", cursor, plan.entries().size()) : heldTarget != null ? tr("summary_held", matches.size(), chosen()) : tr("summary", matches.size(), chosen(), ClientNetworkState.blankWildcards()), x + 10, y + h - 24, w - 160, DIM, .8f);
         if (!status.getString().isEmpty()) label(g, status, x + 10, y + h - 13, w - 160, WorkbenchTheme.WARNING, .7f);
@@ -302,12 +302,23 @@ public final class WildcardEditorScreen extends AeToolScreen implements Generati
             lines.add(hit.presentation.description()); Tooltips.show(g,font,width, lines, mx, my); break;
         }
         for (int i = 0; i < boxes.length; i++) if (boxes[i].visible && boxes[i].isMouseOver(mx, my))
-            Tooltips.show(g,font,width, List.of(tr("query_" + i), tr("syntax_help")), mx, my);
-        if (generate.isMouseOver(mx, my)) Tooltips.show(g,font,width, List.of(tr(dynamic?"dynamic_help":heldTarget == null ? "capacity_help" : "held_capacity_help")), mx, my);
-        for (var control : controls) if (control != generate && control.visible && control.isMouseOver(mx, my))
+            Tooltips.show(g,font,width, List.of(tr("syntax_help")), mx, my);
+        if (generate.isMouseOver(mx, my)) Tooltips.show(g,font,width, List.of(encodingSummary()), mx, my);
+        for (var control : controls) if (control != generate && control.visible && control.isMouseOver(mx, my) && font.width(control.getMessage()) > control.getWidth()-10)
             Tooltips.show(g,font,width, List.of(control.getMessage()), mx, my);
         if (mx >= x + 10 && mx < x + w - 145 && my >= y + h - 30 && my < y + h - 2)
             Tooltips.show(g,font,width, List.of(tr(heldTarget!=null?"summary_held":"summary", matches.size(), chosen(), ClientNetworkState.blankWildcards()), status), mx, my);
+    }
+    private Component encodingSummary() {
+        if(ruleError!=null)return ruleError;
+        if(filtering||searchDebounce.pending())return tr("filtering",cursor,plan.entries().size());
+        int count=chosen();
+        if(count==0)return Component.translatable("eae2_pattern.report.nothing");
+        if((dynamic||heldTarget!=null)&&count>MachineWildcardData.MAX_RECIPES)return tr("limit_exceeded",count);
+        if(heldTarget!=null)return tr("target_held");
+        if(!ClientNetworkState.hasStatus())return Component.translatable("eae2_pattern.workbench.querying");
+        if(!ClientNetworkState.hasNetwork())return Component.translatable("eae2_pattern.workbench.no_network");
+        return tr(dynamic?"stock_exact":"stock_minimum",ClientNetworkState.blankWildcards(),dynamic?1:(count+2047)/2048);
     }
     private void renderRecipes(GuiGraphics g, int mx, int my) {
         g.enableScissor(x + 10, listTop, split - 5, listBottom);

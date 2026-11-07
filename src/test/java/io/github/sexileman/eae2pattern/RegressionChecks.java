@@ -61,7 +61,7 @@ public final class RegressionChecks {
         io.github.sexileman.eae2pattern.client.ClientNetworkState.reset();buffer.release();
         var title=io.github.sexileman.eae2pattern.wildcard.WildcardTooltipText.boundName(Component.literal("Wiremill"));
         check(title.getContents() instanceof net.minecraft.network.chat.contents.TranslatableContents t && t.getKey().equals("eae2_pattern.wildcard.bound_name") && ((Component)t.getArgs()[0]).getString().equals("Wiremill"), "bound name includes the machine and no recipe count");
-        check(title.getStyle().getColor().getValue()==0x9DBCD4 && !title.getStyle().isItalic(), "bound name uses restrained blue-silver text without italics");
+        check(title.getStyle().getColor().getValue()==0xC9B78C && !title.getStyle().isItalic(), "bound name uses muted champagne text without italics");
         check(new GenerationReport(1,0,0,0,0,GenerationReport.StopReason.NOT_ENOUGH_WILDCARD_PATTERNS,List.of()).summaryKey().equals("eae2_pattern.report.no_wildcards"), "wildcard shortage has a distinct explanation");
     }
     private static void searchDebounce() {

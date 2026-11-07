@@ -601,7 +601,6 @@ public final class PatternWorkbenchScreen extends AeToolScreen implements Genera
         if (entry.outputs().size() > 3) lines.add(tr("more_slots", entry.outputs().size() - 3));
         String reason = skipReason(entry);
         if (!reason.isEmpty()) lines.add(tr(reason));
-        lines.add(tr("row_help"));
         return lines;
     }
     private Component amountText(StackSpec spec) { return tr(spec.isItem() ? "item_amount" : "fluid_amount", spec.amount()); }
