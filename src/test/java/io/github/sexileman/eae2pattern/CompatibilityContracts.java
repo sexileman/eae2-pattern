@@ -54,6 +54,9 @@ public final class CompatibilityContracts {
         check(chemical.methods.stream().anyMatch(m->m.name.equals("getPrefix")&&m.desc.equals("(Lnet/minecraft/world/level/ItemLike;)Lcom/gregtechceu/gtceu/api/data/tag/TagPrefix;")),"GT form recognition uses the public unification prefix API");
         check(chemical.methods.stream().anyMatch(m->m.name.equals("getMaterial")&&m.desc.equals("(Lnet/minecraft/world/item/ItemStack;)Lcom/gregtechceu/gtceu/api/data/chemical/material/stack/MaterialStack;")),"GT material picker uses public stack material API");
         check(read(gt,"com/gregtechceu/gtceu/api/data/tag/TagPrefix").methods.stream().anyMatch(m->m.name.equals("name")&&m.desc.equals("()Ljava/lang/String;")),"GT prefix identity accessor exists");
+        var material=read(gt,"com/gregtechceu/gtceu/api/data/chemical/material/Material");
+        check(material.methods.stream().anyMatch(m->m.name.equals("getResourceLocation")&&m.desc.equals("()Lnet/minecraft/resources/ResourceLocation;")),"material picker uses the actual namespaced GT material identity");
+        check(material.methods.stream().anyMatch(m->m.name.equals("getLocalizedName")&&m.desc.equals("()Lnet/minecraft/network/chat/MutableComponent;")),"material picker uses GT localized names across namespaces");
         var gtlBuffer=read(gtl,"org/gtlcore/gtlcore/integration/wildcard/MEWildcardPatternBufferPartMachine");
         var update=gtlBuffer.methods.stream().filter(m->m.name.equals("update")&&m.desc.equals("()V")).findFirst().orElseThrow();
         boolean hotExpansion=false;for(var insn:update.instructions)if(insn instanceof MethodInsnNode call&&call.name.equals("expandPatterns"))hotExpansion=true;

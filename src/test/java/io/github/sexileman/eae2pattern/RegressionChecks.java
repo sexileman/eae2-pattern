@@ -27,11 +27,25 @@ import java.util.List;
 public final class RegressionChecks {
     private static int checks;
     public static void main(String[] args) throws Exception {
-        policies(); wireFormat(); searches(); gtVersions(); layoutAndGrid(); manualMultiplier(); grouping(); inspectionPackets(); slotPresentation(); patternMetadata(); amountLabels(); machineWildcards(); heldWildcardWrites(); dynamicRules(); stackedCarriers(); wildcardTooltip();
+        policies(); wireFormat(); searches(); gtVersions(); layoutAndGrid(); manualMultiplier(); grouping(); inspectionPackets(); slotPresentation(); patternMetadata(); amountLabels(); machineWildcards(); heldWildcardWrites(); dynamicRules(); stackedCarriers(); wildcardTooltip(); materialPicker();
         System.out.println("Passed " + checks + " regression checks");
     }
     private static void check(boolean condition, String message) {
         checks++; if (!condition) throw new AssertionError(message);
+    }
+    private static void materialPicker() {
+        var source=StackSpec.of(StackType.ITEM,new ResourceLocation("gtceu:iron_ingot"),64);
+        var name=Component.literal("Iron");var detail=Component.literal("gtceu:iron");
+        var option=new io.github.sexileman.eae2pattern.client.PickerOption("iron",name,detail,source);
+        check(option.value().equals("iron")&&option.detail().getString().equals("gtceu:iron"),"full displayed material ID does not change the persisted family filter");
+        check(option.icon().amount()==1&&source.amount()==64,"representative icon is normalized without changing recipe quantity");
+        check(option.matches("gtceu:iron")&&option.matches("gtceu:iron_ingot"),"material picker searches complete material and example item IDs");
+        check(option.matches("IRON")&&!option.matches("copper"),"material picker preserves ordinary name matching");
+        name.append(" changed");detail.append(" changed");check(option.label().getString().equals("Iron")&&option.detail().getString().equals("gtceu:iron"),"picker owns display components");
+        var any=new io.github.sexileman.eae2pattern.client.PickerOption("",Component.literal("All materials"));
+        check(any.icon()==null&&any.detail().getString().isEmpty()&&any.value().isEmpty(),"unrestricted option has no invented item identity");
+        check(io.github.sexileman.eae2pattern.client.MaterialChoiceCatalog.rank(java.util.Set.of("ingots"),true)<io.github.sexileman.eae2pattern.client.MaterialChoiceCatalog.rank(java.util.Set.of("plates"),true),"material thumbnail prefers a representative ingot over a processed plate");
+        check(io.github.sexileman.eae2pattern.client.MaterialChoiceCatalog.rank(java.util.Set.of("dusts"),true)<io.github.sexileman.eae2pattern.client.MaterialChoiceCatalog.rank(java.util.Set.of(),false),"available material item is preferred over fluid fallback");
     }
     private static void wildcardTooltip() {
         var generated=Component.translatable("eae2_pattern.wildcard.name","gtceu:wiremill",325);

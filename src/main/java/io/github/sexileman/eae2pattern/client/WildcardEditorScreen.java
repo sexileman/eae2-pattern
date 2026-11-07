@@ -45,7 +45,7 @@ public final class WildcardEditorScreen extends Screen implements GenerationList
     private Component ruleError;
     private int chosenCount=-1;
     private final Set<ResourceLocation> catalogued=new HashSet<>();
-    private final SortedSet<String> availableMaterials=new TreeSet<>();
+    private final MaterialChoiceCatalog materialCatalog=new MaterialChoiceCatalog();
     private final Map<ResourceLocation,RuleRecipe> sourceRecipes=new HashMap<>();
     private final Set<ResourceLocation> unsupportedSources=new HashSet<>();
     private RecipePlan.Entry focus;
@@ -203,7 +203,7 @@ public final class WildcardEditorScreen extends Screen implements GenerationList
             long end = System.nanoTime() + 3_000_000; int n = 0;
             while (cursor < plan.entries().size() && n++ < 96 && System.nanoTime() < end) {
                 var e = plan.entries().get(cursor++);
-                if(catalogued.add(e.recipeId()))for(var slots:List.of(e.inputs(),e.outputs()))for(var i:slots)availableMaterials.addAll(MaterialForms.materials(i.spec()));
+                if(catalogued.add(e.recipeId()))for(var slots:List.of(e.inputs(),e.outputs()))for(var i:slots)materialCatalog.add(i.spec());
                 if (e.kind() == PatternKind.PROCESSING) {
                     if(dynamic){var raw=sourceRecipe(e);if(portableRule!=null&&raw!=null&&portableRule.matches(raw))working.add(e);}
                     else if(rules.matches(e, searchTools)&&formMatches(e))working.add(e);
@@ -400,13 +400,13 @@ public final class WildcardEditorScreen extends Screen implements GenerationList
     }
     private static Component formName(String value){return tr(value.isEmpty()?"all_forms":"form_"+value);}
     private void chooseForm(boolean input){
-        var choices=MaterialForms.FORMS.stream().map(f->new WildcardChoiceScreen.Choice(f,formName(f))).toList();
+        var choices=MaterialForms.FORMS.stream().map(f->new PickerOption(f,formName(f))).toList();
         minecraft.setScreen(new WildcardChoiceScreen(this,tr(input?"input_rules":"output_rules"),choices,v->{if(input)inForm=v;else outForm=v;changedRules();}));
     }
     private void chooseMaterial(){
-        var names=availableMaterials;
-        var choices=new ArrayList<WildcardChoiceScreen.Choice>();choices.add(new WildcardChoiceScreen.Choice("",tr("all_materials")));
-        names.forEach(n->{String key="material.gtceu."+n;Component name=net.minecraft.locale.Language.getInstance().has(key)?Component.translatable(key).append(" · "+n):Component.literal(n);choices.add(new WildcardChoiceScreen.Choice(n,name));});
+        var choices=new ArrayList<PickerOption>();
+        choices.add(new PickerOption("",tr("all_materials")));
+        choices.addAll(materialCatalog.options());
         minecraft.setScreen(new WildcardChoiceScreen(this,tr("material"),choices,v->{material=v;changedRules();}));
     }
     private RuleRecipe sourceRecipe(RecipePlan.Entry e){
@@ -424,15 +424,15 @@ public final class WildcardEditorScreen extends Screen implements GenerationList
         var e=focus;if(e==null){status=tr("extract_choose");tab=1;sync();return;}
         var inputs=new TreeSet<String>();var outputs=new TreeSet<String>();
         for(var i:e.inputs())if(!i.neverConsumed())inputs.addAll(MaterialForms.forms(i.spec()));for(var i:e.outputs())outputs.addAll(MaterialForms.forms(i.spec()));
-        var choices=new ArrayList<WildcardChoiceScreen.Choice>();for(String in:inputs)for(String out:outputs)choices.add(new WildcardChoiceScreen.Choice(in+">"+out,formName(in).copy().append(" → ").append(formName(out))));
+        var choices=new ArrayList<PickerOption>();for(String in:inputs)for(String out:outputs)choices.add(new PickerOption(in+">"+out,formName(in).copy().append(" → ").append(formName(out))));
         if(choices.isEmpty()){status=tr("extract_none");return;}
         minecraft.setScreen(new WildcardChoiceScreen(this,tr("extract"),choices,v->{var pair=v.split(">");inForm=pair[0];outForm=pair[1];material="";query[0]="";query[2]="";inAll=false;outAll=false;status=tr("extract_applied");tab=0;changedRules();}));
     }
     private void chooseIngredient(Hit hit){
-        int index=hit.side==0?0:2;var choices=new ArrayList<WildcardChoiceScreen.Choice>();
-        for(String form:MaterialForms.forms(hit.spec))choices.add(new WildcardChoiceScreen.Choice("form:"+form,tr("use_form",formName(form))));
-        for(String tag:MaterialForms.tags(hit.spec))if(tag.length()<240)choices.add(new WildcardChoiceScreen.Choice("tag:"+tag,Component.literal("$"+tag)));
-        choices.add(new WildcardChoiceScreen.Choice("id:"+hit.spec.id(),tr("use_id",hit.spec.id().toString())));
+        int index=hit.side==0?0:2;var choices=new ArrayList<PickerOption>();
+        for(String form:MaterialForms.forms(hit.spec))choices.add(new PickerOption("form:"+form,tr("use_form",formName(form))));
+        for(String tag:MaterialForms.tags(hit.spec))if(tag.length()<240)choices.add(new PickerOption("tag:"+tag,Component.literal("$"+tag)));
+        choices.add(new PickerOption("id:"+hit.spec.id(),tr("use_id",hit.spec.id().toString())));
         minecraft.setScreen(new WildcardChoiceScreen(this,tr("ingredient_rule"),choices,v->{if(v.startsWith("form:")){if(index==0)inForm=v.substring(5);else outForm=v.substring(5);tab=0;}else{query[index]=(v.startsWith("tag:")?"$":"&")+v.substring(v.indexOf(':')+1);tab=3;}changedRules();}));
     }
     private void drag(double my, boolean detail) {
