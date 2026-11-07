@@ -121,8 +121,8 @@ public final class PatternWorkbenchScreen extends AeToolScreen implements Genera
         }).help("jei_help").setMessage(Component.literal("JEI ↗"));
         generationMode = null;
         if (layout.footerTitle()) {
-            generationMode = action(left + 18, layout.footerTop() + 1, panelWidth<420?96:128, this::toggleWildcard).help("wildcard_mode_help");
-            generationMode.setHeight(14);
+            generationMode = action(left + 18, layout.footerTop() + 4, panelWidth<420?96:128, this::toggleWildcard).help("wildcard_mode_help");
+            generationMode.setHeight(Math.max(9, Math.min(18, layout.footerControlsY() - layout.footerTop() - 8)));
         }
         halveMultiplier = action(left + 18, layout.footerControlsY(), panelWidth<300?22:26,
                 () -> changeMultiplier(ProcessingMultiplier.halveAmount(ProcessingMultiplier.parse(multiplierText))))
@@ -329,7 +329,6 @@ public final class PatternWorkbenchScreen extends AeToolScreen implements Genera
         } else {
             details.add(new DetailLine(focused.label(), null, TEXT));
             if(preview==null)details.add(DetailLine.notice(previewNotice,WorkbenchTheme.WARNING));
-            else details.add(new DetailLine(previewNotice,null,DIM));
             if (preview != null) {
                 details.add(new DetailLine(tr("encoded_inputs"), null, ACCENT));
                 for (StackSpec input : preview.inputs()) details.add(encodedLine(input, 0));
@@ -343,7 +342,6 @@ public final class PatternWorkbenchScreen extends AeToolScreen implements Genera
                 for (Ingredient input : focused.inputs()) if (input.neverConsumed()) addIngredient(input, false, false);
                 for (Ingredient input : focused.catalysts()) addIngredient(input, false, false);
             }
-            if(preview!=null)details.add(DetailLine.notice(tr("server_preview_help"), DIM));
         }
         int detailWidth = left + panelWidth - 18 - (split + 12);
         if (!referenceDetails.isEmpty()) detailWidth = (left + panelWidth - split) / 2 - 24;
@@ -364,8 +362,6 @@ public final class PatternWorkbenchScreen extends AeToolScreen implements Genera
     }
     private void sourceDetails(RecipePlan.Entry entry) {
         details.add(new DetailLine(entry.label(), null, TEXT));
-        details.add(new DetailLine(Component.literal(entry.recipeId().toString()), null, DIM));
-        details.add(new DetailLine(Component.translatable("eae2_pattern.kind." + entry.kind().name().toLowerCase(Locale.ROOT)), null, DIM));
         details.add(new DetailLine(tr("inputs"), null, ACCENT));
         for (Ingredient input : entry.inputs()) addIngredient(input, false, false);
         for (Ingredient input : entry.catalysts()) addIngredient(input, false, false);
@@ -490,7 +486,7 @@ public final class PatternWorkbenchScreen extends AeToolScreen implements Genera
                 int chosen = groupSelected.getOrDefault(group, 0);
                 boolean all = chosen == group.entries().size();
                 WorkbenchTheme.rounded(g, x, y, right - x, ROW - 2, SURFACE);
-                checkbox(g, x + 4, y + 13, all);
+                checkbox(g, x + 4, y + 3, all);
                 if (!all && chosen > 0) g.fill(x + 6, y + 17, x + 11, y + 18, DIM);
                 g.drawString(font, expanded.contains(group.key().id()) ? "▾" : "▸", x + 18, y + 13, DIM, false);
                 text(g, group.key().label(), x + 29, y + 7, right - x - 34, TEXT);
@@ -499,7 +495,7 @@ public final class PatternWorkbenchScreen extends AeToolScreen implements Genera
             }
             RecipePlan.Entry e = row.entry();
             if (e == focused || over(mx, my, x, y, right, y + ROW)) WorkbenchTheme.rounded(g, x, y, right - x, ROW - 1, e == focused ? WorkbenchTheme.HOVER : SURFACE);
-            checkbox(g, x + 4, y + 13, e.isSelected());
+            checkbox(g, x + 4, y + 3, e.isSelected());
             String flag = existing.contains(e.recipeId()) ? tr("stored_badge").getString() : !skipReason(e).isEmpty() ? "!" : e == pinned ? tr("reference").getString()
                     : e.hasProbabilisticInput() || e.hasProbabilisticOutput() ? tr("chance_badge").getString() : "";
             int flagWidth = flag.isEmpty() ? 0 : font.width(flag) + 5;

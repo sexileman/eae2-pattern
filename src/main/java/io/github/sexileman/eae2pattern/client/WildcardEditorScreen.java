@@ -315,7 +315,7 @@ public final class WildcardEditorScreen extends AeToolScreen implements Generati
         for (int i = first; i < Math.min(matches.size(), first + visible); i++) {
             var e = matches.get(i); int ry = listTop + i * ROW - (int) scroll;
             if (e == focus) g.fill(x + 10, ry, split - 8, ry + ROW - 2, WorkbenchTheme.HOVER);
-            g.fill(x + 14, ry + 12, x + 22, ry + 20, selected.contains(e.recipeId()) ? WorkbenchTheme.TEXT : WorkbenchTheme.LINE);
+            g.fill(x + 14, ry + 2, x + 22, ry + 10, selected.contains(e.recipeId()) ? WorkbenchTheme.TEXT : WorkbenchTheme.LINE);
             label(g, e.label(), x + 29, ry + 2, split - x - 47, TEXT, 1);
             var in = new ArrayList<>(e.inputs()); in.addAll(e.catalysts());
             var columns = RecipeStripLayout.measure(split - x - 41);
