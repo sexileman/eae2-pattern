@@ -27,7 +27,7 @@ public final class WildcardMachineScreen extends Screen {
         search = addRenderableWidget(new WorkbenchSearchBox(font, x + 10, y + 30, w - 20, title, WildcardEditorScreen.tr("machine_search")));
         search.setResponder(value -> {
             String q = value.toLowerCase(Locale.ROOT); visible = categories.stream().filter(c ->
-                    (c.getTitle().getString() + " " + c.getRecipeType().getUid()).toLowerCase(Locale.ROOT).contains(q)).toList(); scroll = 0;
+                    OptionalPinyinSearch.contains(c.getTitle().getString() + " " + c.getRecipeType().getUid(), q)).toList(); scroll = 0;
         });
     }
     @Override public void render(GuiGraphics g, int mx, int my, float partial) {

@@ -336,7 +336,7 @@
   "eae2_pattern.editor.save_copy_network": "使用 ME 网络批量另存（消耗 AE2 空白样板）",
   "eae2_pattern.editor.held_saved": "已写入手持样板；未消耗额外空白样板。",
   "eae2_pattern.editor.summary_held": "匹配 %s · 已选 %s · 手持写入",
-  "eae2_pattern.editor.held_capacity_help": "直接写入当前手持载体，不要求 ME 网络，也不消耗额外空白。单张最多 2048 条；若载荷需要多张，请减少选择或改用网络批量。",
+  "eae2_pattern.editor.held_capacity_help": "写入 1 张载体无需 ME 网络、不额外扣空白；一叠空白需预留 1 个背包空位。单张最多 2048 条，超量请缩小规则或使用固定批量。",
   "eae2_pattern.editor.held_settings_help": "写入手持载体会原地更新该物品。服务端完成配方校验后才写入；若物品、槽位或数据已改变，则拒绝写入。超过单张容量时不会覆盖物品，可减少选择或通过网络另存多张。网络批量仍从 ME 存储消耗 AE2 空白样板。",
   "item.eae2_pattern.machine_wildcard_pattern.blank": "空白机器通配样板",
   "eae2_pattern.editor.blank_recipe": "工作台无序合成：1 个 AE2 空白样板 → 1 个空白机器通配样板。可在工具与实用物品创造栏中找到。",
@@ -356,7 +356,7 @@
   "eae2_pattern.editor.mode_fixed": "模式：固定收录 ▾",
   "eae2_pattern.editor.dynamic_help": "仅保存机器和规则；供应器刷新时解析真实配方，配方重载后可纳入新增匹配项。取消勾选会保存为排除项。每条动态规则最多展开 2048 条；超量应缩小条件或使用固定收录。",
   "eae2_pattern.editor.fixed_help": "保存当前勾选的具体配方。新增配方需重新收录；支持完整 JEI 搜索。形态条件忽略不消耗的电路、模具。",
-  "eae2_pattern.editor.dynamic_query_help": "动态搜索支持 $标签、&物品ID、@模组ID、|、-、*、?。名称、提示、创造栏与颜色搜索请切换固定收录。动态解析支持 GT 和原版烹饪配方，未知机器请使用固定收录。",
+  "eae2_pattern.editor.dynamic_query_help": "动态搜索支持 $标签、&物品ID、@模组ID、|、-、*、?。名称、拼音、提示、创造栏与颜色搜索请切换固定收录。动态解析支持 GT 和原版烹饪配方，未知机器请使用固定收录。",
   "eae2_pattern.editor.choice_search": "搜索选项名称或 ID…",
   "eae2_pattern.editor.choice_empty": "没有匹配选项",
   "eae2_pattern.editor.use_form": "按形态：%s",
@@ -389,5 +389,8 @@
   "eae2_pattern.editor.form_small_springs": "小弹簧",
   "eae2_pattern.editor.form_frames": "框架",
   "eae2_pattern.editor.advanced_active": "高级搜索 •",
-  "eae2_pattern.editor.extract_applied": "已提取形态，替换包含搜索；保留排除条件。"
+  "eae2_pattern.editor.extract_applied": "已提取形态，替换包含搜索；保留排除条件。",
+  "eae2_pattern.editor.reset_help": "在工作台、背包合成栏或 AE 合成终端放入 1 张通配样板，可清除全部 NBT，得到 1 张空白通配样板。无 NBT 最多堆叠 64 张；带 NBT 为 1 张。从一叠空白样板编码时，成品放入背包空位，剩余空白保留在手中。",
+  "eae2_pattern.editor.held_saved_inventory": "已编码 1 张并放入背包，剩余空白保留在手中。",
+  "eae2_pattern.editor.pinyin_help": "检测到 Just Enough Characters 时，名称、提示以及机器/材料/形态候选支持拼音和首字母，如 tieding、td。动态规则请使用形态/材料条件，或切换固定收录使用名称搜索。"
 }

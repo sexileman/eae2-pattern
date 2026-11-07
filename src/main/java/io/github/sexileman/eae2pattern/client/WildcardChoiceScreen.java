@@ -13,7 +13,7 @@ final class WildcardChoiceScreen extends Screen {
     WildcardChoiceScreen(Screen parent,Component title,List<Choice> choices,Consumer<String> select){super(title);this.parent=parent;this.choices=List.copyOf(choices);this.select=select;}
     protected void init(){w=Math.min(420,width-24);h=Math.min(330,height-24);x=(width-w)/2;y=(height-h)/2;top=y+57;
         search=addRenderableWidget(new WorkbenchSearchBox(font,x+12,y+32,w-24,Component.translatable("eae2_pattern.editor.choice_search"),title));search.setBordered(false);
-        search.setResponder(q->{String text=q.toLowerCase(Locale.ROOT);visible=choices.stream().filter(c->(c.label().getString()+" "+c.value()).toLowerCase(Locale.ROOT).contains(text)).toList();scroll=0;});visible=choices;
+        search.setResponder(q->{String text=q.toLowerCase(Locale.ROOT);visible=choices.stream().filter(c->OptionalPinyinSearch.contains(c.label().getString()+" "+c.value(),text)).toList();scroll=0;});visible=choices;
         addRenderableWidget(Button.builder(Component.translatable("gui.back"),b->onClose()).bounds(x+w-54,y+6,46,18).build());
     }
     public void render(GuiGraphics g,int mx,int my,float p){g.fill(0,0,width,height,0xDD101010);g.fill(x,y,x+w,y+h,WorkbenchTheme.BACKGROUND);g.drawString(font,title,x+12,y+11,WorkbenchTheme.TEXT,false);

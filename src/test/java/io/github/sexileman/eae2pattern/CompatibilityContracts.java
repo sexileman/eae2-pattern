@@ -67,6 +67,20 @@ public final class CompatibilityContracts {
             });
             check(baseLogic, "ExtendedAE provider must use standard AE2 provider logic: " + name);
         }
-        System.out.println("Passed " + checks + " installed-mod bytecode contracts (not a game runtime test)");
+        Path jec;
+        try(var files=Files.list(mods)){jec=files.filter(p->p.getFileName().toString().contains("jecharacters-")&&p.toString().endsWith(".jar")).findFirst().orElse(null);}
+        if(jec!=null)try(var loader=new java.net.URLClassLoader(new java.net.URL[]{jec.toUri().toURL()},CompatibilityContracts.class.getClassLoader())){
+            var nativeMatch=read(jec,"me/towdium/jecharacters/utils/Match");
+            check(nativeMatch.methods.stream().anyMatch(m->m.name.equals("contains")&&m.desc.equals("(Ljava/lang/String;Ljava/lang/CharSequence;)Z")&&(m.access&9)==9),"optional JEC exposes its native shared-context match API");
+            var search=io.github.sexileman.eae2pattern.client.OptionalPinyinSearch.bind(loader);
+            check(search.test("铁锭","tieding"),"actual installed JEC accepts full pinyin");
+            check(search.test("铁锭","td"),"actual installed JEC accepts pinyin initials");
+            check(search.test("卷板机","juanbanji"),"actual installed JEC matches machine names");
+            check(search.test("卷板机","jbj"),"actual installed JEC matches machine initials");
+            check(search.test("铁板","TB"),"actual JEC bridge accepts uppercase initials");
+            check(!search.test("铁板","tongding"),"JEC bridge rejects unrelated pinyin");
+            check(search.test("铁板","铁板"),"literal Chinese remains valid with JEC");
+        }
+        System.out.println("Passed " + checks + " installed-mod interface and optional JEC matching checks (not a game runtime test)");
     }
 }

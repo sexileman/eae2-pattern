@@ -225,7 +225,7 @@ public final class ItemSearchQuery {
             }
             for (String value : values) {
                 String lower = value.toLowerCase(Locale.ROOT);
-                if (this.glob != null ? this.glob.matcher(lower).matches() : lower.contains(this.literal)) {
+                if (this.glob != null ? this.glob.matcher(lower).matches() : (this.kind == Kind.NAME || this.kind == Kind.TOOLTIP || this.kind == Kind.MOD || this.kind == Kind.TAB) ? OptionalPinyinSearch.contains(lower, this.literal) : lower.contains(this.literal)) {
                     return true;
                 }
             }

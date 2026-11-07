@@ -58,6 +58,8 @@ public final class PatternEncoder {
      * @throws EncodingException when the recipe is missing, of the wrong type, or AE2 refuses to encode it
      */
     public static ItemStack encode(Level level, PatternSpec spec) throws EncodingException {
+        if(io.github.sexileman.eae2pattern.wildcard.WildcardCarrierRules.isResetRecipe(spec.recipeId().toString()))
+            throw new EncodingException("Wildcard reset is a manual crafting operation, not a batch pattern");
         List<StackSpec> inputs = IngredientFilter.filterInputs(spec.inputs());
         if (inputs.isEmpty() && spec.kind() != PatternKind.CRAFTING) {
             throw new EncodingException("pattern has no ingredients after filtering: " + spec.recipeId());

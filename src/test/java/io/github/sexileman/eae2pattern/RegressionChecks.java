@@ -27,11 +27,35 @@ import java.util.List;
 public final class RegressionChecks {
     private static int checks;
     public static void main(String[] args) throws Exception {
-        policies(); wireFormat(); searches(); gtVersions(); layoutAndGrid(); manualMultiplier(); grouping(); inspectionPackets(); slotPresentation(); patternMetadata(); amountLabels(); machineWildcards(); heldWildcardWrites(); dynamicRules();
+        policies(); wireFormat(); searches(); gtVersions(); layoutAndGrid(); manualMultiplier(); grouping(); inspectionPackets(); slotPresentation(); patternMetadata(); amountLabels(); machineWildcards(); heldWildcardWrites(); dynamicRules(); stackedCarriers();
         System.out.println("Passed " + checks + " regression checks");
     }
     private static void check(boolean condition, String message) {
         checks++; if (!condition) throw new AssertionError(message);
+    }
+    private static void stackedCarriers() {
+        check(io.github.sexileman.eae2pattern.wildcard.WildcardCarrierRules.isResetRecipe("eae2_pattern:machine_wildcard_pattern_reset"),"reset recipe is excluded from generic blank-to-blank batch encoding");
+        check(!io.github.sexileman.eae2pattern.wildcard.WildcardCarrierRules.isResetRecipe("other:machine_wildcard_pattern_reset"),"reset exclusion does not hide unrelated recipes");
+        check(io.github.sexileman.eae2pattern.wildcard.WildcardCarrierRules.maxStackSize(false)==64,"NBT-free carriers stack to 64");
+        check(io.github.sexileman.eae2pattern.wildcard.WildcardCarrierRules.maxStackSize(true)==1,"any NBT keeps carriers unstackable");
+        for(int count:new int[]{1,2,64})check(io.github.sexileman.eae2pattern.wildcard.WildcardCarrierRules.validCount(count,false),"valid blank carrier count "+count);
+        for(int count:new int[]{0,65})check(!io.github.sexileman.eae2pattern.wildcard.WildcardCarrierRules.validCount(count,false),"invalid blank carrier count "+count);
+        check(!io.github.sexileman.eae2pattern.wildcard.WildcardCarrierRules.validCount(2,true),"tagged stack cannot duplicate encoded data");
+        var one=io.github.sexileman.eae2pattern.wildcard.WildcardCarrierRules.writePlan(1,true,-1);
+        check(!one.splits()&&one.destination()==-1,"single encoded carrier updates in place with full inventory");
+        var stack=io.github.sexileman.eae2pattern.wildcard.WildcardCarrierRules.writePlan(64,false,7);
+        check(stack.splits()&&stack.remainingBlanks()==63&&stack.destination()==7,"encode exactly one blank and keep 63 in hand");
+        var two=io.github.sexileman.eae2pattern.wildcard.WildcardCarrierRules.writePlan(2,false,0);
+        check(two.remainingBlanks()==1,"two blanks leave exactly one after encoding");
+        for(int slot:new int[]{-1,36}){boolean failed=false;try{io.github.sexileman.eae2pattern.wildcard.WildcardCarrierRules.writePlan(64,false,slot);}catch(IllegalArgumentException expected){failed=true;}check(failed,"full/invalid destination rejects before inventory mutation "+slot);}
+        boolean failed=false;try{io.github.sexileman.eae2pattern.wildcard.WildcardCarrierRules.writePlan(2,true,7);}catch(IllegalArgumentException expected){failed=true;}check(failed,"multi-item tagged write has no allocation plan");
+        check(io.github.sexileman.eae2pattern.wildcard.HeldWildcardFingerprint.positionMatches(true,2,2,true,64,false),"stacked blank main-hand token uses original slot");
+        check(!io.github.sexileman.eae2pattern.wildcard.HeldWildcardFingerprint.positionMatches(true,2,3,true,64,false),"switching main-hand slot rejects stacked encoding");
+        check(io.github.sexileman.eae2pattern.wildcard.HeldWildcardFingerprint.positionMatches(false,-1,3,true,64,false),"stacked off-hand encoding ignores selected main-hand slot");
+        check(!io.github.sexileman.eae2pattern.wildcard.HeldWildcardFingerprint.positionMatches(false,-1,3,true,2,true),"encoded items remain singular in both hands");
+        check(io.github.sexileman.eae2pattern.client.OptionalPinyinSearch.contains("Iron Plate","PLATE"),"without optional JEC ordinary matching stays case-insensitive");
+        check(io.github.sexileman.eae2pattern.client.OptionalPinyinSearch.contains("铁板","铁"),"without optional JEC Chinese literal matching works");
+        check(!io.github.sexileman.eae2pattern.client.OptionalPinyinSearch.contains("铁板","tb"),"without JEC no bundled pinyin implementation is loaded");
     }
     private static void dynamicRules() throws Exception {
         var cache=new io.github.sexileman.eae2pattern.wildcard.WeightedCache<String,String>(2,10);

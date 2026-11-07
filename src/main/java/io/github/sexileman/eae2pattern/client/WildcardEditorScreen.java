@@ -180,7 +180,7 @@ public final class WildcardEditorScreen extends Screen implements GenerationList
         boolean ready = !sending && !filtering && delay == 0 && heldRefreshTicks == 0 && chosen > 0 && (!dynamic||chosen<=MachineWildcardData.MAX_RECIPES) && ruleError==null;
         boolean networkReady = ready && ClientNetworkState.hasNetwork() && ClientNetworkState.blankPatterns() >= (dynamic ? 1 : (chosen + 2047) / 2048);
         generate.active = heldTarget == null ? networkReady : ready && chosen <= MachineWildcardData.MAX_RECIPES
-                && minecraft.player != null && MachineWildcard.isOwnItem(minecraft.player.getItemInHand(heldTarget.hand()));
+                && minecraft.player != null && WildcardItems.writable(minecraft.player.getItemInHand(heldTarget.hand()));
         if (generateNetwork != null) generateNetwork.active = networkReady;
         for (var box : boxes) box.active = !sending;
     }
@@ -265,7 +265,7 @@ public final class WildcardEditorScreen extends Screen implements GenerationList
     }
     @Override public void onGenerationFinished(GenerationReport report) {
         sending = false; status = ClientGenerationFeedback.describe(report);
-        if (writingHeld && report.isSuccess()) { status = tr("held_saved"); heldRefreshTicks = 2; }
+        if (writingHeld && report.isSuccess()) { status = tr(heldTarget.snapshot().getCount()>1?"held_saved_inventory":"held_saved"); heldRefreshTicks = 2; }
         if (!report.details().isEmpty()) status = status.copy().append(" · ").append(report.details().get(0));
         PacketHandler.sendToServer(new C2SQueryNetworkStatusPacket(0)); updateControls();
     }

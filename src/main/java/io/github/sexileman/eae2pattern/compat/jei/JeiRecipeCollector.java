@@ -118,6 +118,9 @@ public final class JeiRecipeCollector {
                 return;
             }
             Object recipe = recipes.get(cursor++);
+            var sourceId=category.getRegistryName(recipe);
+            // JEI displays reset normally, but its generic blank -> blank layout must not become a batch crafting loop.
+            if(sourceId!=null&&io.github.sexileman.eae2pattern.wildcard.WildcardCarrierRules.isResetRecipe(sourceId.toString()))return;
             if (entries.size() >= MAX_RECIPES_PER_CATEGORY) {
                 if (!truncated) {
                     truncated = true;

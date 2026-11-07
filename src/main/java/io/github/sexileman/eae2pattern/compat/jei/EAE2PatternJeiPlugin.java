@@ -26,7 +26,9 @@ public final class EAE2PatternJeiPlugin implements IModPlugin {
         registration.addIngredientInfo(io.github.sexileman.eae2pattern.wildcard.WildcardItems.MACHINE_PATTERN.get().getDefaultInstance(),
                 mezz.jei.api.constants.VanillaTypes.ITEM_STACK,
                 net.minecraft.network.chat.Component.translatable("eae2_pattern.editor.blank_recipe"),
-                net.minecraft.network.chat.Component.translatable("eae2_pattern.editor.blank_help"));
+                net.minecraft.network.chat.Component.translatable("eae2_pattern.editor.blank_help"),
+                net.minecraft.network.chat.Component.translatable("eae2_pattern.editor.reset_help"),
+                net.minecraft.network.chat.Component.translatable("eae2_pattern.editor.pinyin_help"));
     }
 
     @Override

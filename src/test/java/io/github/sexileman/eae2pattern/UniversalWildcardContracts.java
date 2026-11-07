@@ -37,6 +37,14 @@ public final class UniversalWildcardContracts {
                     && recipe.getAsJsonObject("result").get("count").getAsInt() == 1, "recipe yields exactly one independent blank carrier");
             check(!recipe.toString().contains("wildcard_pattern:wildcard_pattern") && !recipe.toString().contains("gtceu:"), "crafting does not require either optional mod");
             check(app.getEntry("data/eae2_pattern/advancements/recipes/misc/machine_wildcard_pattern.json") != null, "vanilla recipe-book unlock is shipped");
+            var reset=com.google.gson.JsonParser.parseString(new String(bytes(app,"data/eae2_pattern/recipes/machine_wildcard_pattern_reset.json"),java.nio.charset.StandardCharsets.UTF_8)).getAsJsonObject();
+            check(reset.get("type").getAsString().equals("minecraft:crafting_shapeless"),"reset uses standard crafting for workbench and AE crafting grids");
+            check(reset.getAsJsonArray("ingredients").size()==1&&reset.getAsJsonArray("ingredients").get(0).getAsJsonObject().get("item").getAsString().equals("eae2_pattern:machine_wildcard_pattern"),"reset consumes one carrier without an NBT-specific ingredient restriction");
+            var blank=reset.getAsJsonObject("result");
+            check(blank.get("item").getAsString().equals("eae2_pattern:machine_wildcard_pattern")&&blank.get("count").getAsInt()==1&&blank.keySet().equals(Set.of("item","count")),"reset returns one fresh NBT-free carrier, never copies source data or multiplies items");
+            check(app.getEntry("data/eae2_pattern/advancements/recipes/misc/machine_wildcard_pattern_reset.json")!=null,"reset recipe-book unlock is shipped");
+            check(app.getEntry("io/github/sexileman/eae2pattern/client/OptionalPinyinSearch.class")!=null,"optional native JEC bridge is shipped");
+            check(Collections.list(app.entries()).stream().noneMatch(e->e.getName().startsWith("me/towdium/")),"JEC and pinyin library are not bundled into the universal jar");
             for(String name:List.of("DynamicRule","PortableRuleQuery","RuleRecipe","ServerRecipeReader","WildcardRuntime","MaterialForms","WeightedCache")){
                 var binary=bytes(app,"io/github/sexileman/eae2pattern/wildcard/"+name+".class");
                 check(!new String(binary,java.nio.charset.StandardCharsets.ISO_8859_1).contains("net/minecraft/client/"),"dedicated-server dynamic core has no client class link: "+name);
@@ -49,6 +57,7 @@ public final class UniversalWildcardContracts {
             var runtime=node(bytes(app,"io/github/sexileman/eae2pattern/wildcard/WildcardRuntime.class"));
             check(runtime.methods.stream().anyMatch(m->m.name.equals("clear"))&&runtime.methods.stream().anyMatch(m->m.name.equals("prime")),"runtime supports reload invalidation and generation prewarming");
             var items = node(bytes(app, "io/github/sexileman/eae2pattern/wildcard/WildcardItems.class"));
+            check(node(bytes(app,"io/github/sexileman/eae2pattern/wildcard/WildcardItems$1.class")).methods.stream().anyMatch(m->m.name.equals("getMaxStackSize")&&m.desc.equals("(Lnet/minecraft/world/item/ItemStack;)I")),"per-stack Forge limit distinguishes blank and NBT carriers");
             check(items.methods.stream().anyMatch(m -> m.name.equals("creative")), "blank carrier has a creative-tab acquisition entry");
             var jei = node(bytes(app, "io/github/sexileman/eae2pattern/compat/jei/EAE2PatternJeiPlugin.class"));
             check(jei.methods.stream().anyMatch(m -> m.name.equals("registerRecipes")), "JEI usage information is registered");

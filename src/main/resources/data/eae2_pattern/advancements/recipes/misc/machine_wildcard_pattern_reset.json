@@ -1,0 +1,34 @@
+{
+  "parent": "minecraft:recipes/root",
+  "criteria": {
+    "has_carrier": {
+      "trigger": "minecraft:inventory_changed",
+      "conditions": {
+        "items": [
+          {
+            "items": [
+              "eae2_pattern:machine_wildcard_pattern"
+            ]
+          }
+        ]
+      }
+    },
+    "has_the_recipe": {
+      "trigger": "minecraft:recipe_unlocked",
+      "conditions": {
+        "recipe": "eae2_pattern:machine_wildcard_pattern_reset"
+      }
+    }
+  },
+  "requirements": [
+    [
+      "has_carrier",
+      "has_the_recipe"
+    ]
+  ],
+  "rewards": {
+    "recipes": [
+      "eae2_pattern:machine_wildcard_pattern_reset"
+    ]
+  }
+}

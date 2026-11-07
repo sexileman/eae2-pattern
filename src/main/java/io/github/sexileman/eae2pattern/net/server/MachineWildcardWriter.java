@@ -42,7 +42,7 @@ public final class MachineWildcardWriter {
         }
         CompoundTag clean = WildcardEditorState.clean(rules);
         ItemStack held = player.getItemInHand(hand);
-        if (!MachineWildcard.isOwnItem(held) || held.getCount() != 1 || clean.getByteArray("held_fingerprint").length != 32
+        if (!WildcardItems.writable(held) || clean.getByteArray("held_fingerprint").length != 32
                 || !java.security.MessageDigest.isEqual(clean.getByteArray("held_fingerprint"), HeldWildcardFingerprint.visible(held))) {
             callback.accept(failed(specs.size(), "Held wildcard changed; reopen its editor")); return;
         }
@@ -162,9 +162,16 @@ public final class MachineWildcardWriter {
             else {
                 if (prepared.size() != 1) throw new IllegalArgumentException("Selection needs multiple wildcard items; reduce it or use network batch generation");
                 verifyHeld(true);
-                var updated = player.getItemInHand(hand).copy();
+                var current = player.getItemInHand(hand);
+                int destination = current.getCount() > 1 ? player.getInventory().getFreeSlot() : -1;
+                var allocation=WildcardCarrierRules.writePlan(current.getCount(),current.hasTag(),destination);
+                var updated = current.copy(); updated.setCount(1);
                 updated.setTag(HeldWildcardFingerprint.mergeEncodingTags(updated.getOrCreateTag(), prepared.get(0).getOrCreateTag()));
-                player.setItemInHand(hand, updated); player.getInventory().setChanged();
+                if(allocation.splits()) {
+                    player.getInventory().setItem(allocation.destination(), updated);
+                    var remaining=current.copy();remaining.setCount(allocation.remainingBlanks());player.setItemInHand(hand, remaining);
+                } else player.setItemInHand(hand, updated);
+                player.getInventory().setChanged();
                 player.inventoryMenu.broadcastChanges();
                 if (player.containerMenu != player.inventoryMenu) player.containerMenu.broadcastChanges();
                 callback.accept(new GenerationReport(1, 1, 1, 0, 0, GenerationReport.StopReason.COMPLETED, List.of()));
@@ -174,7 +181,7 @@ public final class MachineWildcardWriter {
         void verifyHeld(boolean checkData) {
             ItemStack current = player.getItemInHand(hand);
             if (!HeldWildcardFingerprint.positionMatches(hand == net.minecraft.world.InteractionHand.MAIN_HAND, slot,
-                    player.getInventory().selected, MachineWildcard.isOwnItem(current), current.getCount())
+                    player.getInventory().selected, MachineWildcard.isOwnItem(current), current.getCount(), current.hasTag())
                     || (checkData && !java.security.MessageDigest.isEqual(expected, HeldWildcardFingerprint.visible(current))))
                 throw new IllegalArgumentException("Held wildcard changed; no item was modified");
         }

@@ -12,6 +12,9 @@ public final class HeldWildcardFingerprint {
     public static boolean positionMatches(boolean mainHand, int originalSlot, int currentSlot, boolean ownItem, int count) {
         return ownItem && count == 1 && (!mainHand || originalSlot == currentSlot);
     }
+    public static boolean positionMatches(boolean mainHand, int originalSlot, int currentSlot, boolean ownItem, int count, boolean hasNbt) {
+        return ownItem && WildcardCarrierRules.validCount(count, hasNbt) && (!mainHand || originalSlot == currentSlot);
+    }
     public static byte[] of(ItemStack stack) { return ofTag(stack.save(new CompoundTag())); }
     public static byte[] visible(ItemStack stack) {
         CompoundTag publicData = new CompoundTag();

@@ -336,7 +336,7 @@
   "eae2_pattern.editor.save_copy_network": "Save a network batch (uses AE2 blank patterns)",
   "eae2_pattern.editor.held_saved": "Held pattern written; no additional blank was consumed.",
   "eae2_pattern.editor.summary_held": "Matched %s · Selected %s · Held-item write",
-  "eae2_pattern.editor.held_capacity_help": "Writes the held carrier without an ME network or an additional blank. Up to 2048 recipes per item; reduce selection or use network batch generation if more than one item is required.",
+  "eae2_pattern.editor.held_capacity_help": "Encode one carrier without an ME network or extra blanks. Stacked blanks need one empty inventory slot. Up to 2048 recipes per carrier; narrow dynamic rules or use fixed batches.",
   "eae2_pattern.editor.held_settings_help": "Writing updates the held carrier in place only after server validation. A changed item, slot or data rejects the write. If multiple items are required nothing is overwritten; reduce the selection or save a network batch. Network batch generation consumes AE2 blank patterns from ME storage.",
   "item.eae2_pattern.machine_wildcard_pattern.blank": "Blank Machine Wildcard Pattern",
   "eae2_pattern.editor.blank_recipe": "Shapeless crafting: 1 AE2 blank pattern → 1 blank machine wildcard. Also available in the Tools & Utilities creative tab.",
@@ -356,7 +356,7 @@
   "eae2_pattern.editor.mode_fixed": "Mode: fixed collection ▾",
   "eae2_pattern.editor.dynamic_help": "Store machine and rules only. Provider refresh resolves real recipes; reload can include new matches. Unchecked recipes become exclusions. Each dynamic rule expands at most 2048 recipes; narrow the rule or use fixed batches.",
   "eae2_pattern.editor.fixed_help": "Store the checked concrete recipes. New recipes require collection again. Full JEI search supported. Form filters ignore non-consumed circuits and tools.",
-  "eae2_pattern.editor.dynamic_query_help": "Dynamic queries support $tags, &item IDs, @mod IDs, |, -, * and ?. Use fixed mode for translated names, tooltips, tabs or colors. GT and vanilla cooking recipes support dynamic resolution; use fixed mode for unknown machines.",
+  "eae2_pattern.editor.dynamic_query_help": "Dynamic queries support $tags, &item IDs, @mod IDs, |, -, * and ?. Use fixed mode for translated names or pinyin, tooltips, tabs or colors. GT and vanilla cooking recipes support dynamic resolution; use fixed mode for unknown machines.",
   "eae2_pattern.editor.choice_search": "Search names or IDs…",
   "eae2_pattern.editor.choice_empty": "No matching options",
   "eae2_pattern.editor.use_form": "Match form: %s",
@@ -389,5 +389,8 @@
   "eae2_pattern.editor.form_small_springs": "Small Springs",
   "eae2_pattern.editor.form_frames": "Frames",
   "eae2_pattern.editor.advanced_active": "Advanced •",
-  "eae2_pattern.editor.extract_applied": "Forms extracted; include searches replaced, exclusions retained."
+  "eae2_pattern.editor.extract_applied": "Forms extracted; include searches replaced, exclusions retained.",
+  "eae2_pattern.editor.reset_help": "Craft one wildcard pattern alone in a crafting grid or AE crafting terminal to clear all NBT into one blank carrier. Unmarked blanks stack to 64; tagged carriers stack to 1. Encoding from a blank stack places one result in an empty inventory slot and keeps the remaining blanks in hand.",
+  "eae2_pattern.editor.held_saved_inventory": "Encoded one carrier into your inventory; remaining blanks stay in hand.",
+  "eae2_pattern.editor.pinyin_help": "With Just Enough Characters installed, human-readable names, tooltips and machine/material/form choices accept pinyin and initials, e.g. tieding or td. Use forms/materials for dynamic rules, or fixed mode for name searches."
 }
