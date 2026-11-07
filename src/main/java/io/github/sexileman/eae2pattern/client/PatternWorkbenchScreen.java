@@ -70,6 +70,8 @@ public final class PatternWorkbenchScreen extends Screen implements GenerationLi
     private int selectedCount, eligibleCount, tickCount, searchDelay;
     private int footerStatusX, footerStatusY, footerStatusWidth;
     private Component notice = Component.empty();
+    private boolean wildcardMode;
+    private Action generationMode;
     private Action generate, inputFilter, outputFilter, tools, products, multiplier, halveMultiplier, doubleMultiplier, resetMultiplier, grouping, more, detailMode;
 
     public PatternWorkbenchScreen(RecipePlan plan, Screen parent) {
@@ -117,6 +119,11 @@ public final class PatternWorkbenchScreen extends Screen implements GenerationLi
                 RecipeNavigation.show(plan, focused);
             }
         }).help("jei_help").setMessage(Component.literal("JEI ↗"));
+        generationMode = null;
+        if (layout.footerTitle()) {
+            generationMode = action(left + 18, layout.footerTop() + 1, 128, this::toggleWildcard).help("wildcard_mode_help");
+            generationMode.setHeight(14);
+        }
         halveMultiplier = action(left + 18, layout.footerControlsY(), 26,
                 () -> changeMultiplier(ProcessingMultiplier.halveAmount(ProcessingMultiplier.parse(multiplierText))))
                 .help("multiplier_halve_help");
@@ -202,14 +209,30 @@ public final class PatternWorkbenchScreen extends Screen implements GenerationLi
         doubleMultiplier.active = !checking && !sending && ProcessingMultiplier.parse(multiplierText) < ProcessingMultiplier.MAX;
         resetMultiplier.active = !checking && !sending && ProcessingMultiplier.parse(multiplierText) != 1;
         more.active = !checking && !sending;
-        generate.setMessage(tr(sending ? "sending" : checking ? "checking" : filtering ? "filtering" : "generate_current", eligibleCount));
+        if (generationMode != null) {
+            generationMode.setMessage(tr(wildcardMode ? "mode_wildcard" : "mode_regular"));
+            generationMode.active = !sending && !checking;
+        }
+        generate.setMessage(tr(sending ? "sending" : checking ? "checking" : filtering ? "filtering" : wildcardMode ? "generate_wildcard" : "generate_current", eligibleCount));
         generate.active = !sending && !checking && !filtering && searchDelay == 0 && ProcessingMultiplier.parse(multiplierText) > 0
-                && eligibleCount > 0 && ClientNetworkState.hasNetwork() && ClientNetworkState.blankPatterns() >= eligibleCount;
+                && eligibleCount > 0 && ClientNetworkState.hasNetwork() && ClientNetworkState.blankPatterns() >= requiredBlanks();
+    }
+    private int requiredBlanks() {
+        return wildcardMode ? (eligibleCount + io.github.sexileman.eae2pattern.wildcard.MachineWildcardData.MAX_RECIPES - 1)
+                / io.github.sexileman.eae2pattern.wildcard.MachineWildcardData.MAX_RECIPES : eligibleCount;
+    }
+    private void toggleWildcard() {
+        if (sending || checking) return;
+        if (!wildcardMode && !io.github.sexileman.eae2pattern.wildcard.MachineWildcard.available()) {
+            notice = tr("wildcard_missing"); return;
+        }
+        wildcardMode = !wildcardMode;
+        optionsChanged(); updateButtons();
     }
     private void generate() {
         if (!generate.active) return;
         List<PatternSpec> specs = selectedSpecs();
-        try { PatternRequestSender.send(specs); sending = true; notice = tr("sending"); }
+        try { PatternRequestSender.send(specs, wildcardMode ? 4 : 0); sending = true; notice = tr("sending"); }
         catch (IllegalArgumentException e) { notice = Component.literal(e.getMessage()); }
         updateButtons();
     }
@@ -245,8 +268,9 @@ public final class PatternWorkbenchScreen extends Screen implements GenerationLi
     private void optionsChanged() {
         existing.clear(); previewErrors.clear(); queuePreview(); recount(); rebuildDetails();
     }
-    private boolean eligible(RecipePlan.Entry entry) { return entry.canEncode(outputPolicy, dropTools) && !previewErrors.containsKey(entry.recipeId()); }
+    private boolean eligible(RecipePlan.Entry entry) { return (!wildcardMode || entry.kind() == io.github.sexileman.eae2pattern.pattern.PatternKind.PROCESSING) && entry.canEncode(outputPolicy, dropTools) && !previewErrors.containsKey(entry.recipeId()); }
     private String skipReason(RecipePlan.Entry entry) {
+        if (wildcardMode && entry.kind() != io.github.sexileman.eae2pattern.pattern.PatternKind.PROCESSING) return "skip_wildcard_processing";
         return previewErrors.containsKey(entry.recipeId()) ? "skip_server" : RecipeDiagnostics.skipReason(entry, outputPolicy, dropTools);
     }
     private void queuePreview() {
@@ -297,6 +321,7 @@ public final class PatternWorkbenchScreen extends Screen implements GenerationLi
         detailRows = DetailRowLayout.of(List.of(), ignored -> false);
         referenceRows = DetailRowLayout.of(List.of(), ignored -> false);
         if (focused == null) return;
+        if (wildcardMode) details.add(DetailLine.notice(tr("wildcard_mode_help"), WorkbenchTheme.WARNING));
         if (sourceView) {
             if (pinned != null && pinned != focused) {
                 details.add(new DetailLine(tr("reference"), null, ACCENT));
@@ -355,7 +380,7 @@ public final class PatternWorkbenchScreen extends Screen implements GenerationLi
         if (checking || sending) return;
         List<Component> labels = List.of(tr(selectedOnly ? "show_all" : "selected"), tr("invert"),
                 tr(pinned != null ? "unpin" : "pin"), tr("check_stored"),
-                tr("skip_summary"), tr("collapse"), tr("clear_search"), tr("reset_settings"));
+                tr("skip_summary"), tr("collapse"), tr("clear_search"), tr("reset_settings"), tr(wildcardMode ? "switch_regular" : "switch_wildcard"));
         choice = new Choice(more, labels, -1, index -> {
             switch (index) {
                 case 0 -> { selectedOnly = !selectedOnly; refresh(); }
@@ -373,7 +398,9 @@ public final class PatternWorkbenchScreen extends Screen implements GenerationLi
                 }
                 case 5 -> { expanded.clear(); rebuildRows(); }
                 case 6 -> { inputBox.setValue(""); outputBox.setValue(""); }
+                case 8 -> toggleWildcard();
                 case 7 -> {
+                    wildcardMode = false;
                     dropTools = true; outputPolicy = inputMode = outputMode = groupingMode = 0;
                     selectedOnly = false; sourceView = false; pinned = null; expanded.clear(); changeMultiplier(1);
                     inputBox.setValue(""); outputBox.setValue(""); optionsChanged(); refresh();
@@ -391,7 +418,7 @@ public final class PatternWorkbenchScreen extends Screen implements GenerationLi
         searchSurface(g, inputBox); searchSurface(g, outputBox);
         g.fill(split, bodyTop - 27, split + 1, bodyBottom, LINE);
         renderList(g, mx, my); renderDetails(g);
-        Component status = !ClientNetworkState.hasStatus() ? tr("querying") : !ClientNetworkState.hasNetwork() ? tr("no_network") : tr("stock", ClientNetworkState.blankPatterns(), eligibleCount);
+        Component status = !ClientNetworkState.hasStatus() ? tr("querying") : !ClientNetworkState.hasNetwork() ? tr("no_network") : tr(wildcardMode ? "wildcard_stock" : "stock", ClientNetworkState.blankPatterns(), requiredBlanks());
         if (ProcessingMultiplier.parse(multiplierText) == 0) status = tr("multiplier_invalid", ProcessingMultiplier.MAX);
         renderFooter(g, status);
         Component summary = notice.getString().isEmpty() ? tr("scope_counts", visible.size(), plan.entries().size(), selectedCount, hiddenSelected, skippedCount) : notice;
@@ -434,13 +461,13 @@ public final class PatternWorkbenchScreen extends Screen implements GenerationLi
     }
     private void renderFooter(GuiGraphics g, Component status) {
         WorkbenchTheme.control(g, left + 8, layout.footerTop(), panelWidth - 16, layout.footerHeight(), 0xFF202020, LINE);
-        boolean ready = ClientNetworkState.hasNetwork() && ClientNetworkState.blankPatterns() >= eligibleCount
+        boolean ready = ClientNetworkState.hasNetwork() && ClientNetworkState.blankPatterns() >= requiredBlanks()
                 && ProcessingMultiplier.parse(multiplierText) > 0;
         footerStatusX = left + 168;
         if (layout.footerTitle()) {
             footerStatusY = layout.footerTop() + (layout.footerHeight() >= 50 ? 9 : 4);
             footerStatusWidth = panelWidth - 186;
-            text(g, tr("generation_settings"), left + 18, footerStatusY, 112, TEXT);
+
             int room = panelWidth - 314;
             if (room >= 70) text(g, tr("processing_only"), left + 168, layout.footerControlsY() + 5, room, DIM);
         } else {

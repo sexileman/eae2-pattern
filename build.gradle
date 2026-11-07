@@ -125,7 +125,8 @@ tasks.named('jar', Jar).configure {
                 'Specification-Version'  : '1',
                 'Implementation-Title'   : project.name,
                 'Implementation-Version' : project.jar.archiveVersion,
-                'Implementation-Vendor'  : mod_authors
+                'Implementation-Vendor'  : mod_authors,
+                'MixinConfigs'           : 'eae2_pattern.mixins.json'
         ])
     }
     finalizedBy 'reobfJar'
@@ -159,3 +160,10 @@ tasks.register('regressionTest', JavaExec) {
     enableAssertions = true
 }
 tasks.named('check').configure { dependsOn 'regressionTest' }
+
+tasks.register('compatibilityTest', JavaExec) {
+    dependsOn testClasses
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = 'io.github.sexileman.eae2pattern.CompatibilityContracts'
+    args(project.findProperty('compatModsDir') ?: '../others/mods')
+}

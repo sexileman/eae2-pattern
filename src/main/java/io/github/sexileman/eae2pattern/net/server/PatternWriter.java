@@ -27,8 +27,8 @@ public final class PatternWriter {
     private static final ArrayDeque<Job> JOBS = new ArrayDeque<>();
     private PatternWriter() {}
 
-    public static boolean busy(UUID player) { return JOBS.stream().anyMatch(j -> j.player.getUUID().equals(player)); }
-    public static void forget(UUID player) { JOBS.removeIf(j -> j.player.getUUID().equals(player)); }
+    public static boolean busy(UUID player) { return MachineWildcardWriter.busy(player) || JOBS.stream().anyMatch(j -> j.player.getUUID().equals(player)); }
+    public static void forget(UUID player) { JOBS.removeIf(j -> j.player.getUUID().equals(player)); MachineWildcardWriter.forget(player); }
     public static long countBlankPatterns(ServerPlayer player) {
         NetworkAccess network = NetworkAccess.resolve(player);
         return network == null ? 0 : network.blankPatterns();
@@ -48,6 +48,19 @@ public final class PatternWriter {
                     List.of("need " + specs.size() + " blank patterns, network has " + available))); return;
         }
         JOBS.add(new Job(player, List.copyOf(specs), network, callback));
+    }
+
+    static void startPrepared(ServerPlayer player, List<ItemStack> items, NetworkAccess expected, Consumer<GenerationReport> callback) {
+        NetworkAccess network = NetworkAccess.resolve(player);
+        StopReason reason = network == null || !expected.sameNetwork(network) ? StopReason.NO_NETWORK
+                : network.blankPatterns() < items.size() ? StopReason.NOT_ENOUGH_BLANK_PATTERNS : null;
+        if (reason != null) {
+            callback.accept(new GenerationReport(items.size(), 0, 0, 0, 0, reason,
+                    List.of("Machine wildcard requires " + items.size() + " blank patterns; none consumed")));
+            return;
+        }
+        Job job = new Job(player, List.of(), network, callback);
+        job.prepared = List.copyOf(items); JOBS.add(job);
     }
 
     @SubscribeEvent public static void tick(TickEvent.ServerTickEvent event) {
@@ -75,23 +88,27 @@ public final class PatternWriter {
         final Consumer<GenerationReport> callback;
         final List<String> details = new ArrayList<>();
         int cursor, encoded, inserted, skipped;
+        List<ItemStack> prepared;
+        int requested() { return prepared == null ? specs.size() : prepared.size(); }
         Job(ServerPlayer player, List<PatternSpec> specs, NetworkAccess network, Consumer<GenerationReport> callback) {
             this.player = player; this.specs = specs; this.network = network; this.callback = callback;
         }
         void detail(String message) { if (details.size() < 5) details.add(message); }
         void finish(StopReason reason) {
-            EAE2Pattern.LOGGER.info("Generation for {}: requested={} inserted={} skipped={} reason={}", player.getUUID(), specs.size(), inserted, skipped, reason);
-            callback.accept(new GenerationReport(specs.size(), encoded, inserted, skipped, inserted, reason, details));
+            EAE2Pattern.LOGGER.info("Generation for {}: requested={} inserted={} skipped={} reason={}", player.getUUID(), requested(), inserted, skipped, reason);
+            callback.accept(new GenerationReport(requested(), encoded, inserted, skipped, inserted, reason, details));
         }
         boolean step() {
             NetworkAccess current = NetworkAccess.resolve(player);
             if (current == null || !network.sameNetwork(current)) { finish(StopReason.NO_NETWORK); return true; }
-            PatternSpec spec = specs.get(cursor++);
+            PatternSpec spec = prepared == null ? specs.get(cursor) : null;
+            int index = cursor++;
             ItemStack pattern;
-            try { pattern = PatternEncoder.encode(player, spec); }
+            try { pattern = prepared == null ? PatternEncoder.encode(player, spec) : prepared.get(index); }
             catch (PatternEncoder.EncodingException | RuntimeException e) {
-                skipped++; detail(spec.recipeId() + ": " + e.getMessage());
-                EAE2Pattern.LOGGER.debug("Skipping {}", spec.recipeId(), e);
+                String sourceId = spec == null ? "machine wildcard " + index : spec.recipeId().toString();
+                skipped++; detail(sourceId + ": " + e.getMessage());
+                EAE2Pattern.LOGGER.debug("Skipping {}", sourceId, e);
                 return endIfFinished();
             }
             MEStorage storage = current.storage();
@@ -123,7 +140,7 @@ public final class PatternWriter {
             }
         }
         boolean endIfFinished() {
-            if (cursor < specs.size()) return false;
+            if (cursor < requested()) return false;
             finish(inserted == 0 && skipped > 0 ? StopReason.ENCODE_FAILED : StopReason.COMPLETED); return true;
         }
     }

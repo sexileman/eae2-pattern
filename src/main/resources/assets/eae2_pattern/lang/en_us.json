@@ -253,5 +253,19 @@
   "eae2_pattern.workbench.multiplier_reset": "Reset",
   "eae2_pattern.workbench.multiplier_halve_help": "Halve the current multiplier, down to ×1. Updates preview and encoded amounts.",
   "eae2_pattern.workbench.multiplier_double_help": "Double the current multiplier, up to ×%s. Updates preview and encoded amounts.",
-  "eae2_pattern.workbench.multiplier_reset_help": "Reset the processing multiplier to ×1."
+  "eae2_pattern.workbench.multiplier_reset_help": "Reset the processing multiplier to ×1.",
+  "eae2_pattern.workbench.mode_wildcard": "Machine wildcard ▾",
+  "eae2_pattern.workbench.mode_regular": "Regular patterns ▾",
+  "eae2_pattern.workbench.switch_regular": "Switch to regular patterns",
+  "eae2_pattern.workbench.switch_wildcard": "Switch to machine wildcard",
+  "eae2_pattern.workbench.generate_wildcard": "Bind %s recipes",
+  "eae2_pattern.workbench.wildcard_missing": "Install Wildcard Pattern on both client and server.",
+  "eae2_pattern.workbench.wildcard_stock": "Blanks %s / at least %s (server verifies shards)",
+  "eae2_pattern.workbench.wildcard_mode_help": "Bind selected, filtered processing recipes to their real server machine type. Up to 32 recipes / 24 KB per shard, one blank per shard. Place in a provider connected to the correct machine; voltage, circuits and machine setup still apply. Changed or removed recipes stop expanding; regenerate after recipe changes.",
+  "eae2_pattern.wildcard.name": "Machine wildcard · %s · %s recipes",
+  "eae2_pattern.wildcard.machine": "Recipe type: %s",
+  "eae2_pattern.wildcard.recipes": "Contains %s real recipes",
+  "eae2_pattern.wildcard.bound_help": "Bound recipes only; standard/extended providers and GTL wildcard buffer",
+  "eae2_pattern.wildcard.edit_help": "Open the workbench from the machine JEI usage page and regenerate to edit.",
+  "eae2_pattern.workbench.skip_wildcard_processing": "Machine wildcard requires a real processing recipe"
 }

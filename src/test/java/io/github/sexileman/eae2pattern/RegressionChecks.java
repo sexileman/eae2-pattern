@@ -27,11 +27,56 @@ import java.util.List;
 public final class RegressionChecks {
     private static int checks;
     public static void main(String[] args) throws Exception {
-        policies(); wireFormat(); searches(); gtVersions(); layoutAndGrid(); manualMultiplier(); grouping(); inspectionPackets(); slotPresentation(); patternMetadata(); amountLabels();
+        policies(); wireFormat(); searches(); gtVersions(); layoutAndGrid(); manualMultiplier(); grouping(); inspectionPackets(); slotPresentation(); patternMetadata(); amountLabels(); machineWildcards();
         System.out.println("Passed " + checks + " regression checks");
     }
     private static void check(boolean condition, String message) {
         checks++; if (!condition) throw new AssertionError(message);
+    }
+    private static void machineWildcards() {
+        var jsonA = com.google.gson.JsonParser.parseString("{\"out\":[2,1],\"input\":{\"b\":2,\"a\":1}}");
+        var jsonB = com.google.gson.JsonParser.parseString("{\"input\":{\"a\":1,\"b\":2},\"out\":[2,1]}");
+        check(io.github.sexileman.eae2pattern.wildcard.CanonicalRecipeJson.encode(jsonA).equals(io.github.sexileman.eae2pattern.wildcard.CanonicalRecipeJson.encode(jsonB)), "GT capability map order cannot change fingerprint after restart");
+        var jsonChanged = com.google.gson.JsonParser.parseString("{\"out\":[1,2],\"input\":{\"a\":1,\"b\":2}}");
+        check(!io.github.sexileman.eae2pattern.wildcard.CanonicalRecipeJson.encode(jsonA).equals(io.github.sexileman.eae2pattern.wildcard.CanonicalRecipeJson.encode(jsonChanged)), "ingredient and output array order remains significant");
+        var a = new ResourceLocation("test", "machine_a");
+        var b = new ResourceLocation("test", "machine_b");
+        byte[] fingerprint = new byte[32]; fingerprint[0] = 1;
+        check(io.github.sexileman.eae2pattern.wildcard.MachineWildcardData.matches(a, a, fingerprint, fingerprint.clone()), "real recipe remains usable in its source machine");
+        check(!io.github.sexileman.eae2pattern.wildcard.MachineWildcardData.matches(a, b, fingerprint, fingerprint), "iron and rubber cannot cross machine types despite identical ingot-to-plate shape");
+        check(!io.github.sexileman.eae2pattern.wildcard.MachineWildcardData.matches(a, null, fingerprint, fingerprint), "removed recipe cannot expand");
+        check(!io.github.sexileman.eae2pattern.wildcard.MachineWildcardData.matches(a, a, fingerprint, new byte[32]), "changed source recipe fails closed");
+        CompoundTag row = new CompoundTag(); row.putString("recipe", "test:iron_plate");
+        row.putByteArray("fingerprint", fingerprint); row.put("pattern", new CompoundTag());
+        var data = io.github.sexileman.eae2pattern.wildcard.MachineWildcardData.create(a, List.of(row));
+        check(io.github.sexileman.eae2pattern.wildcard.MachineWildcardData.validate(data).equals(a), "machine wildcard schema round trip");
+        row.putString("recipe", "test:mutated");
+        check(data.getList("recipes", 10).getCompound(0).getString("recipe").equals("test:iron_plate"), "wildcard owns its entry NBT");
+        for (int bad = 0; bad < 5; bad++) {
+            CompoundTag invalid = data.copy();
+            if (bad == 0) invalid.putInt("version", 2);
+            if (bad == 1) invalid.putString("machine", "INVALID ID");
+            if (bad == 2) invalid.getList("recipes", 10).add(invalid.getList("recipes", 10).getCompound(0).copy());
+            if (bad == 3) invalid.getList("recipes", 10).getCompound(0).putByteArray("fingerprint", new byte[1]);
+            if (bad == 4) invalid.putByteArray("oversized", new byte[24001]);
+            boolean rejected = false;
+            try { io.github.sexileman.eae2pattern.wildcard.MachineWildcardData.validate(invalid); }
+            catch (IllegalArgumentException expected) { rejected = true; }
+            check(rejected, "reject malformed wildcard payload " + bad);
+        }
+        var maxRows = new java.util.ArrayList<CompoundTag>();
+        for (int i = 0; i < 33; i++) { var next = row.copy(); next.putString("recipe", "test:recipe_" + i); maxRows.add(next); }
+        check(io.github.sexileman.eae2pattern.wildcard.MachineWildcardData.create(a, maxRows.subList(0, 32)).getList("recipes", 10).size() == 32, "full wildcard shard supports 32 real recipes");
+        boolean rejected = false;
+        try { io.github.sexileman.eae2pattern.wildcard.MachineWildcardData.create(a, maxRows); }
+        catch (IllegalArgumentException expected) { rejected = true; }
+        check(rejected, "oversized recipe count requires another shard");
+        FriendlyByteBuf wire = new FriendlyByteBuf(Unpooled.buffer());
+        try {
+            io.github.sexileman.eae2pattern.config.EAE2PatternConfig.SPEC.setConfig(com.electronwill.nightconfig.core.CommentedConfig.inMemory());
+            new C2SGeneratePatternsPacket(8, 0, 1, List.of(), 4).encode(wire);
+            check(C2SGeneratePatternsPacket.decode(wire).operation() == 4, "wildcard generation operation survives packet round trip");
+        } finally { wire.release(); }
     }
     private static void amountLabels() {
         check(io.github.sexileman.eae2pattern.client.StackAmountLabel.format(1, false).isEmpty(), "single item has no count label");

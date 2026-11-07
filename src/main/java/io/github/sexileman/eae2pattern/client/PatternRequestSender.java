@@ -61,7 +61,7 @@ public final class PatternRequestSender {
         for (int i = 0; i < chunks.size(); i++) {
             PacketHandler.sendToServer(new C2SGeneratePatternsPacket(requestId, i, chunks.size(), chunks.get(i), operation));
         }
-        if (operation == 0) EAE2Pattern.LOGGER.info("Sent {} pattern specs in {} chunk(s) (request {}, {} bytes max per chunk)",
+        if (operation == 0 || operation == 4) EAE2Pattern.LOGGER.info("Sent {} pattern specs in {} chunk(s) (request {}, {} bytes max per chunk)",
                 specs.size(), chunks.size(), requestId, maxBytes);
         else EAE2Pattern.LOGGER.debug("Sent read-only pattern inspection {}: {} specs, operation {}", requestId, specs.size(), operation);
         return requestId;

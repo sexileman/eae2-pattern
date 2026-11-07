@@ -34,7 +34,7 @@ public record C2SGeneratePatternsPacket(int requestId, int chunkIndex, int chunk
         if (buf.readableBytes() > io.github.sexileman.eae2pattern.config.EAE2PatternConfig.MAX_REQUEST_BYTES.get())
             throw new IllegalArgumentException("Pattern packet exceeds byte limit");
         int operation = buf.readUnsignedByte();
-        if (operation > 3) throw new IllegalArgumentException("Unknown pattern operation");
+        if (operation > 4) throw new IllegalArgumentException("Unknown pattern operation");
         int requestId = buf.readVarInt();
         int chunkIndex = buf.readVarInt();
         int chunkCount = buf.readVarInt();
