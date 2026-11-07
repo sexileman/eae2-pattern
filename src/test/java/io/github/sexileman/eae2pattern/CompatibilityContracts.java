@@ -32,7 +32,8 @@ public final class CompatibilityContracts {
     }
     public static void main(String[] args) throws Exception {
         Path mods = Path.of(args[0]);
-        Path wildcard = jar(mods, n -> n.toLowerCase().contains("wildcard_pattern") && n.endsWith(".jar"));
+        Path wildcard = args.length > 1 ? Path.of(args[1])
+                : jar(mods, n -> n.toLowerCase().contains("wildcard_pattern") && n.endsWith(".jar"));
         String logic = "org/leodreamer/wildcard_pattern/wildcard/WildcardPatternLogic";
         var node = read(wildcard, logic);
         check(node.methods.stream().anyMatch(m -> m.name.equals("decodePatterns") && m.desc.equals("(Lnet/minecraft/world/item/ItemStack;Lnet/minecraft/world/level/Level;)Ljava/util/stream/Stream;") && (m.access & 8) != 0), "native static wildcard expansion descriptor changed");
