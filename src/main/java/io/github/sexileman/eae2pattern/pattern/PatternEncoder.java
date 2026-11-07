@@ -38,6 +38,13 @@ public final class PatternEncoder {
     private PatternEncoder() {
     }
 
+    public static ItemStack encode(net.minecraft.server.level.ServerPlayer player, PatternSpec spec)
+            throws EncodingException {
+        ItemStack encoded = encode(player.serverLevel(), spec);
+        PatternMetadata.apply(player, spec, encoded);
+        return encoded;
+    }
+
     public static final class EncodingException extends Exception {
         public EncodingException(String message) {
             super(message);

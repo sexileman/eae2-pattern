@@ -88,7 +88,7 @@ public final class PatternWriter {
             if (current == null || !network.sameNetwork(current)) { finish(StopReason.NO_NETWORK); return true; }
             PatternSpec spec = specs.get(cursor++);
             ItemStack pattern;
-            try { pattern = PatternEncoder.encode(player.serverLevel(), spec); }
+            try { pattern = PatternEncoder.encode(player, spec); }
             catch (PatternEncoder.EncodingException | RuntimeException e) {
                 skipped++; detail(spec.recipeId() + ": " + e.getMessage());
                 EAE2Pattern.LOGGER.debug("Skipping {}", spec.recipeId(), e);

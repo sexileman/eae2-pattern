@@ -27,11 +27,28 @@ import java.util.List;
 public final class RegressionChecks {
     private static int checks;
     public static void main(String[] args) throws Exception {
-        policies(); wireFormat(); searches(); gtVersions(); layoutAndGrid(); manualMultiplier(); grouping(); inspectionPackets(); slotPresentation();
+        policies(); wireFormat(); searches(); gtVersions(); layoutAndGrid(); manualMultiplier(); grouping(); inspectionPackets(); slotPresentation(); patternMetadata();
         System.out.println("Passed " + checks + " regression checks");
     }
     private static void check(boolean condition, String message) {
         checks++; if (!condition) throw new AssertionError(message);
+    }
+    private static void patternMetadata() {
+        CompoundTag root = new CompoundTag();
+        root.putString("in", "ae2 payload");
+        CompoundTag addon = new CompoundTag(); addon.putInt("other", 42); root.put("gtlcore", addon);
+        ResourceLocation bender = new ResourceLocation("gtceu:bender");
+        PatternMetadata.write(root, "crydawny", bender);
+        check(root.getString("encodePlayer").equals("crydawny"), "ExtendedAE Plus native encoder key");
+        check(root.getCompound("gtlcore").getList("patternQuickUploadRecipeTypes", 8).getString(0).equals("gtceu:bender"), "GTLCore native recipe type list");
+        check(root.getString("in").equals("ae2 payload") && root.getCompound("gtlcore").getInt("other") == 42, "preserve AE2 and unrelated addon NBT");
+        PatternMetadata.write(root, "serverPlayer", bender);
+        check(root.getString("encodePlayer").equals("serverPlayer"), "server encoder replaces stale attribution");
+        check(root.getCompound("gtlcore").getList("patternQuickUploadRecipeTypes", 8).size() == 1, "idempotent recipe type metadata");
+        CompoundTag before = root.copy(); PatternMetadata.write(root, null, null);
+        check(root.equals(before), "absent optional metadata does not erase existing data");
+        CompoundTag absent = new CompoundTag(); PatternMetadata.write(absent, "", null);
+        check(absent.isEmpty(), "no blank attribution or invented machine type");
     }
     private static StackSpec stack(String id, long amount) { return StackSpec.of(StackType.ITEM, new ResourceLocation(id), amount); }
     private static RecipePlan.Entry entry(List<Ingredient> inputs, List<Ingredient> tools, List<Ingredient> outputs) {

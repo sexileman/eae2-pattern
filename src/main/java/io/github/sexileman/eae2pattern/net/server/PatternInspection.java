@@ -64,9 +64,11 @@ public final class PatternInspection {
             }
             PatternSpec spec = specs.get(cursor++);
             try {
-                var encoded = PatternEncoder.encode(player.serverLevel(), spec);
+                var encoded = PatternEncoder.encode(player, spec);
                 if (operation == 2) preview.add(EncodedPatternView.decode(player.serverLevel(), spec, encoded));
-                else if (network.storedAmount(AEItemKey.of(encoded)) > 0) existing.add(spec.recipeId());
+                else if (network.storedAmount(AEItemKey.of(encoded)) > 0
+                        || network.storedAmount(AEItemKey.of(PatternEncoder.encode(player.serverLevel(), spec))) > 0)
+                    existing.add(spec.recipeId());
             } catch (Exception e) {
                 failed++;
                 if (details.size() < 4) {
