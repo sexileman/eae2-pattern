@@ -246,5 +246,7 @@
   "eae2_pattern.workbench.multiplier_input": "Processing multiplier",
   "eae2_pattern.workbench.default_multiplier": "Default ×1",
   "eae2_pattern.workbench.multiplier_help": "Default ×1. Choose a preset or enter an integer from 1 to %s. Only consumed processing inputs and outputs are scaled.",
-  "eae2_pattern.workbench.multiplier_invalid": "Enter a multiplier from 1 to %s"
+  "eae2_pattern.workbench.multiplier_invalid": "Enter a multiplier from 1 to %s",
+  "eae2_pattern.workbench.notice_warning": "Encoding warning",
+  "eae2_pattern.workbench.notice_info": "Information"
 }

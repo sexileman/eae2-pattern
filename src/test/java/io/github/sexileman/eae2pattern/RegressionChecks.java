@@ -254,6 +254,10 @@ public final class RegressionChecks {
         check(rows.height() == 96 && rows.top(1) == 18 && rows.top(2) == 48 && rows.top(3) == 66, "detail rows reserve full slot height without overlapping text");
         check(rows.indexAt(17.9) == 0 && rows.indexAt(18) == 1 && rows.indexAt(47.9) == 1 && rows.indexAt(48) == 2 && rows.indexAt(66) == 3, "detail tooltip hit tests follow the same offsets as rendering");
         check(rows.indexAt(-1) == -1 && rows.indexAt(96) == -1, "detail border and outside points do not select a row");
+        var measured = DetailRowLayout.measured(List.of(18, 42, 65, 30), Integer::intValue);
+        check(measured.height() == 155 && measured.top(2) == 60, "wrapped notice and special material contribute actual heights");
+        check(measured.indexAt(59) == 1 && measured.indexAt(60) == 2 && measured.indexAt(124) == 2, "hit testing remains aligned through wrapped notice");
+        check(measured.indexAt(125) == 3 && measured.indexAt(155) == -1, "last material and content boundary after notice");
         var empty = DetailRowLayout.of(List.of(), ignored -> false);
         check(empty.height() == 0 && empty.indexAt(0) == -1, "empty details have no stale tooltip targets");
     }

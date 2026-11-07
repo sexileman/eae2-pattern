@@ -3,6 +3,7 @@ package io.github.sexileman.eae2pattern.client;
 import java.util.Arrays;
 import java.util.List;
 import java.util.function.Predicate;
+import java.util.function.ToIntFunction;
 
 /** Variable-height detail rows use identical offsets for drawing, scrolling and hit-testing. */
 public final class DetailRowLayout {
@@ -10,8 +11,11 @@ public final class DetailRowLayout {
     private final int[] offsets;
     private DetailRowLayout(int[] offsets) { this.offsets = offsets; }
     public static <T> DetailRowLayout of(List<T> rows, Predicate<T> material) {
+        return measured(rows, row -> material.test(row) ? SLOT_HEIGHT : TEXT_HEIGHT);
+    }
+    public static <T> DetailRowLayout measured(List<T> rows, ToIntFunction<T> height) {
         int[] offsets = new int[rows.size() + 1];
-        for (int i = 0; i < rows.size(); i++) offsets[i + 1] = offsets[i] + (material.test(rows.get(i)) ? SLOT_HEIGHT : TEXT_HEIGHT);
+        for (int i = 0; i < rows.size(); i++) offsets[i + 1] = offsets[i] + Math.max(1, height.applyAsInt(rows.get(i)));
         return new DetailRowLayout(offsets);
     }
     public int size() { return offsets.length - 1; }

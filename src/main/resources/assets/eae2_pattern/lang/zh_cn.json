@@ -246,5 +246,7 @@
   "eae2_pattern.workbench.multiplier_input": "处理倍率",
   "eae2_pattern.workbench.default_multiplier": "默认 ×1",
   "eae2_pattern.workbench.multiplier_help": "默认 ×1。可选快捷档位，或直接输入 1–%s 的整数；只放大处理配方的消耗材料和产物。",
-  "eae2_pattern.workbench.multiplier_invalid": "倍率需为 1–%s 的整数"
+  "eae2_pattern.workbench.multiplier_invalid": "倍率需为 1–%s 的整数",
+  "eae2_pattern.workbench.notice_warning": "编码注意事项",
+  "eae2_pattern.workbench.notice_info": "说明"
 }
