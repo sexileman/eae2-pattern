@@ -227,7 +227,8 @@ public final class WildcardEditorScreen extends AeToolScreen implements Generati
         if (response.requestId() != previewRequest || response.operation() != 2) return;
         if (response.success() && !response.preview().isEmpty()) preview = response.preview().get(0);
         else {
-            status = response.details().isEmpty() ? tr("preview_failed") : Component.literal(response.details().get(0));
+            io.github.sexileman.eae2pattern.EAE2Pattern.LOGGER.warn("Wildcard preview rejected: {}",response.details());
+            status = response.details().isEmpty() ? tr("preview_failed") : EncodingMessages.explain(response.details().get(0));
             chosenCount=-1; previewError = status; if (focus != null) previewErrors.put(focus.recipeId(), status);
         }
         updateControls();
@@ -260,13 +261,13 @@ public final class WildcardEditorScreen extends AeToolScreen implements Generati
             if(dynamic&&specs.size()>1)specs=List.of(specs.get(0));
             PatternRequestSender.send(specs, operation, rules); writingHeld = held; sending = true; status = tr("preparing");
         }
-        catch (IllegalArgumentException e) { status = Component.literal(e.getMessage()); }
+        catch (IllegalArgumentException e) { status = EncodingMessages.explain(e.getMessage()); }
         updateControls();
     }
     @Override public void onGenerationFinished(GenerationReport report) {
         sending = false; status = ClientGenerationFeedback.describe(report);
         if (writingHeld && report.isSuccess()) { status = tr(heldTarget.snapshot().getCount()>1?"held_saved_inventory":"held_saved"); heldRefreshTicks = 2; }
-        if (!report.details().isEmpty()) status = status.copy().append(" · ").append(report.details().get(0));
+        if (!report.details().isEmpty()) status = status.copy().append(" · ").append(EncodingMessages.explain(report.details().get(0)));
         PacketHandler.sendToServer(new C2SQueryNetworkStatusPacket(0)); updateControls();
     }
     @Override public void render(GuiGraphics g, int mx, int my, float partial) {
@@ -297,15 +298,15 @@ public final class WildcardEditorScreen extends AeToolScreen implements Generati
                 else lines.add(visuals.name(hit.spec));
             } catch (RuntimeException malformedTooltip) { lines.add(visuals.name(hit.spec)); }
             lines.add(Component.literal(hit.spec.amount() + (hit.spec.isItem() ? "" : " mB")));
-            lines.add(hit.presentation.description()); g.renderComponentTooltip(font, lines, mx, my); break;
+            lines.add(hit.presentation.description()); Tooltips.show(g,font,width, lines, mx, my); break;
         }
         for (int i = 0; i < boxes.length; i++) if (boxes[i].visible && boxes[i].isMouseOver(mx, my))
-            g.renderComponentTooltip(font, List.of(tr("query_" + i), tr("syntax_help")), mx, my);
-        if (generate.isMouseOver(mx, my)) g.renderComponentTooltip(font, List.of(tr(dynamic?"dynamic_help":heldTarget == null ? "capacity_help" : "held_capacity_help")), mx, my);
+            Tooltips.show(g,font,width, List.of(tr("query_" + i), tr("syntax_help")), mx, my);
+        if (generate.isMouseOver(mx, my)) Tooltips.show(g,font,width, List.of(tr(dynamic?"dynamic_help":heldTarget == null ? "capacity_help" : "held_capacity_help")), mx, my);
         for (var control : controls) if (control != generate && control.visible && control.isMouseOver(mx, my))
-            g.renderComponentTooltip(font, List.of(control.getMessage()), mx, my);
+            Tooltips.show(g,font,width, List.of(control.getMessage()), mx, my);
         if (mx >= x + 10 && mx < x + w - 145 && my >= y + h - 30 && my < y + h - 2)
-            g.renderComponentTooltip(font, List.of(tr(heldTarget!=null?"summary_held":"summary", matches.size(), chosen(), ClientNetworkState.blankPatterns()), status), mx, my);
+            Tooltips.show(g,font,width, List.of(tr(heldTarget!=null?"summary_held":"summary", matches.size(), chosen(), ClientNetworkState.blankPatterns()), status), mx, my);
     }
     private void renderRecipes(GuiGraphics g, int mx, int my) {
         g.enableScissor(x + 10, listTop, split - 5, listBottom);
@@ -454,7 +455,7 @@ public final class WildcardEditorScreen extends AeToolScreen implements Generati
         @Override public void onPress() { action.run(); }
         @Override protected void renderWidget(GuiGraphics g, int mx, int my, float partial) {
             WorkbenchTheme.control(g, getX(), getY(), getWidth(), getHeight(), key.equals("tab_"+tab)?WorkbenchTheme.PRIMARY:isHoveredOrFocused() && active ? WorkbenchTheme.HOVER : WorkbenchTheme.SURFACE, WorkbenchTheme.LINE);
-            int tw = font.width(getMessage()); label(g, getMessage(), getX() + Math.max(5, (getWidth() - tw) / 2), getY() + 5, getWidth() - 10, active ? TEXT : DIM, 1);
+            int tw = font.width(getMessage()); label(g, getMessage(), getX() + Math.max(5, (getWidth() - tw) / 2), getY() + (getHeight() - font.lineHeight) / 2, getWidth() - 10, active ? TEXT : DIM, 1);
         }
         @Override protected void updateWidgetNarration(NarrationElementOutput output) { defaultButtonNarrationText(output); }
     }

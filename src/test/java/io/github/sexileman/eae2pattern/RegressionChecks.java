@@ -27,11 +27,21 @@ import java.util.List;
 public final class RegressionChecks {
     private static int checks;
     public static void main(String[] args) throws Exception {
-        policies(); wireFormat(); searches(); gtVersions(); layoutAndGrid(); manualMultiplier(); grouping(); inspectionPackets(); slotPresentation(); patternMetadata(); amountLabels(); machineWildcards(); heldWildcardWrites(); dynamicRules(); stackedCarriers(); wildcardTooltip(); materialPicker(); aeToolScreens();
+        policies(); wireFormat(); searches(); gtVersions(); layoutAndGrid(); manualMultiplier(); grouping(); inspectionPackets(); slotPresentation(); patternMetadata(); amountLabels(); machineWildcards(); heldWildcardWrites(); dynamicRules(); stackedCarriers(); wildcardTooltip(); materialPicker(); aeToolScreens(); encodingMessages();
         System.out.println("Passed " + checks + " regression checks");
     }
     private static void check(boolean condition, String message) {
         checks++; if (!condition) throw new AssertionError(message);
+    }
+    private static void encodingMessages() {
+        String raw="gtceu:macerator/macerate_titanium_buzzsaw: pattern has no ingredients after filtering: gtceu:macerator/macerate_titanium_buzzsaw";
+        check(io.github.sexileman.eae2pattern.client.EncodingMessages.key(raw).equals("filtered_input"),"duplicated source ID diagnostic is reduced to an actionable input-filter explanation");
+        var message=io.github.sexileman.eae2pattern.client.EncodingMessages.explain(raw);
+        check(message.getContents() instanceof net.minecraft.network.chat.contents.TranslatableContents t&&t.getArgs().length==0,"raw recipe IDs are not inserted into the player-facing error");
+        check(io.github.sexileman.eae2pattern.client.EncodingMessages.key("ME network unavailable or changed").equals("network"),"network failure has a concise localized explanation");
+        check(io.github.sexileman.eae2pattern.client.EncodingMessages.key("Held wildcard changed; no item was modified").equals("held_changed"),"changed carrier message asks to reopen");
+        check(io.github.sexileman.eae2pattern.client.EncodingMessages.key("unrecognized internal detail").equals("failed"),"unknown diagnostics do not leak raw exception text into the UI");
+        for(int width:new int[]{320,480,640})check(io.github.sexileman.eae2pattern.client.Tooltips.maxWidth(width)<=260&&io.github.sexileman.eae2pattern.client.Tooltips.maxWidth(width)<=width-32,"tooltips wrap within a bounded GUI width");
     }
     private static void aeToolScreens() throws Exception {
         for(int[] size:List.of(new int[]{320,180},new int[]{400,240},new int[]{480,270},new int[]{640,360},new int[]{960,540})){

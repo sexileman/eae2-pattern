@@ -42,7 +42,7 @@ public final class ClientGenerationFeedback {
             int shown = Math.min(MAX_CHAT_DETAILS, report.details().size());
             for (int i = 0; i < shown; i++) {
                 minecraft.player.displayClientMessage(
-                        Component.literal("  " + report.details().get(i)).withStyle(style), false);
+                        Component.literal("  ").append(EncodingMessages.explain(report.details().get(i))).withStyle(style), false);
             }
         }
 

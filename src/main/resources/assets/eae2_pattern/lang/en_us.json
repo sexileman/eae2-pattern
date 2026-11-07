@@ -402,5 +402,15 @@
   "eae2_pattern.editor.material_tag": "Tag: %s",
   "eae2_pattern.editor.example_item_id": "Example item: %s",
   "eae2_pattern.editor.example_fluid_id": "Example fluid: %s",
-  "eae2_pattern.workbench.stock_short": "Blanks %s / need %s"
+  "eae2_pattern.workbench.stock_short": "Blanks %s / need %s",
+  "eae2_pattern.error.filtered_input": "All inputs were filtered out. Check input filters or view the source recipe.",
+  "eae2_pattern.error.no_output": "No encodable outputs. Adjust output settings.",
+  "eae2_pattern.error.network": "The ME connection is unavailable or changed. Reconnect and retry.",
+  "eae2_pattern.error.held_changed": "The held pattern changed. Reopen its editor.",
+  "eae2_pattern.error.busy": "Another task is running. Try again shortly.",
+  "eae2_pattern.error.capacity": "Capacity exceeded. Narrow the filters or use fixed collection.",
+  "eae2_pattern.error.fixed_mode": "Use fixed collection for this machine.",
+  "eae2_pattern.error.no_match": "No recipes match these rules. Adjust the filters.",
+  "eae2_pattern.error.missing_recipe": "The recipe is unavailable. Reload this category.",
+  "eae2_pattern.error.failed": "Encoding failed. Check the source recipe or logs."
 }

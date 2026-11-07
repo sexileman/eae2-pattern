@@ -6,12 +6,12 @@ import net.minecraft.resources.ResourceLocation;
 /** AE2 15.x native palette and panel texture, using the installed AE2/resource-pack assets. */
 public final class WorkbenchTheme {
     private static final ResourceLocation PANEL=new ResourceLocation("ae2","textures/guis/background.png");
-    public static final int BACKGROUND=0xFFC6C6C6, SURFACE=0xFFB8B8B8, HOVER=0xFFDAD1E8;
-    public static final int LINE=0xFF747474, TEXT=0xFF404040, DIM=0xFF7E7E7E, ACCENT=0xFF563A7C;
+    public static final int BACKGROUND=0xFFAAAAAA, SURFACE=0xFFB0B0B0, HOVER=0xFFC4BCD0;
+    public static final int LINE=0xFF747474, TEXT=0xFF303030, DIM=0xFF606060, ACCENT=0xFF563A7C;
     public static final int WARNING=0xFFB34D00, PLACEHOLDER=0xFFAEAEAE, INPUT=0xFF252525;
-    public static final int INPUT_TEXT=0xFFFFFFFF, PRIMARY=0xFFC5B6D8, PRIMARY_HOVER=0xFFD9C8EF;
+    public static final int INPUT_TEXT=0xFFFFFFFF, PRIMARY=0xFFB5A6C8, PRIMARY_HOVER=0xFFC7B6DD;
     private WorkbenchTheme(){}
-    public static void panel(GuiGraphics g,int x,int y,int w,int h){g.blitNineSliced(PANEL,x,y,w,h,3,256,256,0,0);}
+    public static void panel(GuiGraphics g,int x,int y,int w,int h){g.blitNineSliced(PANEL,x,y,w,h,3,256,256,0,0);if(w>6&&h>6)g.fill(x+3,y+3,x+w-3,y+h-3,BACKGROUND);}
     public static void rounded(GuiGraphics g,int x,int y,int w,int h,int color){g.fill(x,y,x+w,y+h,color);}
     public static void control(GuiGraphics g,int x,int y,int w,int h,int fill,int border){
         if(w<2||h<2)return;

@@ -60,7 +60,7 @@ public final class WildcardChoiceScreen extends AeToolScreen {
         if(hovered!=null&&!hovered.detail().getString().isEmpty()) {
             var tooltip=new ArrayList<Component>();tooltip.add(hovered.label());tooltip.add(hovered.detail());
             if(hovered.icon()!=null)tooltip.add(WildcardEditorScreen.tr(hovered.icon().isItem()?"example_item_id":"example_fluid_id",hovered.icon().id().toString()));
-            g.renderComponentTooltip(font,tooltip,mx,my);
+            Tooltips.show(g,font,width,tooltip,mx,my);
         }
     }
     private void text(GuiGraphics g,Component value,int px,int py,int room,int color) {

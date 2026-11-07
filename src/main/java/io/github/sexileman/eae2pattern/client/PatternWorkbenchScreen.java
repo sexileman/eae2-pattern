@@ -230,7 +230,7 @@ public final class PatternWorkbenchScreen extends AeToolScreen implements Genera
         if (!generate.active) return;
         List<PatternSpec> specs = selectedSpecs();
         try { PatternRequestSender.send(specs); sending = true; notice = tr("sending"); }
-        catch (IllegalArgumentException e) { notice = Component.literal(e.getMessage()); }
+        catch (IllegalArgumentException e) { notice = EncodingMessages.explain(e.getMessage()); }
         updateButtons();
     }
     private List<PatternSpec> selectedSpecs() {
@@ -282,13 +282,14 @@ public final class PatternWorkbenchScreen extends AeToolScreen implements Genera
             rebuildDetails(); return;
         }
         try { previewRequest = PatternRequestSender.send(List.of(spec), 2); }
-        catch (IllegalArgumentException e) { previewNotice = Component.literal(e.getMessage()); }
+        catch (IllegalArgumentException e) { previewNotice = EncodingMessages.explain(e.getMessage()); }
         rebuildDetails();
     }
     private void inspectionFinished(S2CInspectionPacket result) {
         if (result.operation() == 2 && result.requestId() == previewRequest) {
             preview = !result.success() || result.preview().isEmpty() ? null : result.preview().get(0);
-            previewNotice = preview != null ? tr("server_preview") : result.details().isEmpty() ? tr("preview_failed") : Component.literal(result.details().get(0));
+            if(preview==null&&!result.details().isEmpty())io.github.sexileman.eae2pattern.EAE2Pattern.LOGGER.warn("Pattern preview rejected: {}",result.details());
+            previewNotice = preview != null ? tr("server_preview") : result.details().isEmpty() ? tr("preview_failed") : EncodingMessages.explain(result.details().get(0));
             if (preview == null) previewErrors.put(focused.recipeId(), previewNotice); else previewErrors.remove(focused.recipeId());
             recount(); rebuildDetails();
         } else if (result.operation() == 1 && result.requestId() == existingRequest) {
@@ -310,7 +311,7 @@ public final class PatternWorkbenchScreen extends AeToolScreen implements Genera
         try {
             existing.clear(); existingRequest = PatternRequestSender.send(selectedSpecs(), 1);
             checking = true; notice = tr("checking"); updateButtons();
-        } catch (IllegalArgumentException e) { notice = Component.literal(e.getMessage()); }
+        } catch (IllegalArgumentException e) { notice = EncodingMessages.explain(e.getMessage()); }
     }
     private void rebuildDetails() {
         details.clear(); referenceDetails.clear();
@@ -327,7 +328,8 @@ public final class PatternWorkbenchScreen extends AeToolScreen implements Genera
             sourceDetails(focused);
         } else {
             details.add(new DetailLine(focused.label(), null, TEXT));
-            details.add(new DetailLine(previewNotice, null, preview == null ? WorkbenchTheme.WARNING : DIM));
+            if(preview==null)details.add(DetailLine.notice(previewNotice,WorkbenchTheme.WARNING));
+            else details.add(new DetailLine(previewNotice,null,DIM));
             if (preview != null) {
                 details.add(new DetailLine(tr("encoded_inputs"), null, ACCENT));
                 for (StackSpec input : preview.inputs()) details.add(encodedLine(input, 0));
@@ -341,7 +343,7 @@ public final class PatternWorkbenchScreen extends AeToolScreen implements Genera
                 for (Ingredient input : focused.inputs()) if (input.neverConsumed()) addIngredient(input, false, false);
                 for (Ingredient input : focused.catalysts()) addIngredient(input, false, false);
             }
-            details.add(DetailLine.notice(tr("server_preview_help"), DIM));
+            if(preview!=null)details.add(DetailLine.notice(tr("server_preview_help"), DIM));
         }
         int detailWidth = left + panelWidth - 18 - (split + 12);
         if (!referenceDetails.isEmpty()) detailWidth = (left + panelWidth - split) / 2 - 24;
@@ -420,28 +422,28 @@ public final class PatternWorkbenchScreen extends AeToolScreen implements Genera
         super.render(g, mx, my, partial);
         if (choice != null) { choice.render(g, mx, my); return; }
         if (over(mx, my, left + 10, layout.statsY() - 2, left + panelWidth - 10, layout.statsY() + 11))
-            g.renderComponentTooltip(font, List.of(summary, tr("scope_help")), mx, my);
+            Tooltips.show(g,font,width, List.of(summary, tr("scope_help")), mx, my);
         if (over(mx, my, footerStatusX, footerStatusY - 2, footerStatusX + footerStatusWidth, footerStatusY + 11))
-            g.renderComponentTooltip(font, List.of(status), mx, my);
+            Tooltips.show(g,font,width, List.of(status), mx, my);
         if (inputBox.isMouseOver(mx, my) || outputBox.isMouseOver(mx, my)) {
             boolean exact = inputBox.isMouseOver(mx, my) ? exactInput != null : exactOutput != null;
-            g.renderComponentTooltip(font, exact ? List.of(tr("exact_filter"), tr("search_help")) : List.of(tr("search_help")), mx, my);
+            Tooltips.show(g,font,width, exact ? List.of(tr("exact_filter"), tr("search_help")) : List.of(tr("search_help")), mx, my);
         }
         for (var child : children()) if (child instanceof Action a && a.isHovered())
-            g.renderComponentTooltip(font, List.of(a.getMessage(), tr(a.helpKey != null ? a.helpKey : a == tools ? "tools_help" : a == multiplier ? "multiplier_help" : a == more ? "more_help" : a == grouping ? "group_help" : "option_help", ProcessingMultiplier.MAX)), mx, my);
+            Tooltips.show(g,font,width, List.of(a.getMessage(), tr(a.helpKey != null ? a.helpKey : a == tools ? "tools_help" : a == multiplier ? "multiplier_help" : a == more ? "more_help" : a == grouping ? "group_help" : "option_help", ProcessingMultiplier.MAX)), mx, my);
         IconHit hit = iconAt(mx, my);
         if (hit != null) {
             if (hit.spec.isItem()) {
                 var stack = visuals.item(hit.spec);
                 g.renderTooltip(font, iconTooltip(hit), stack.getTooltipImage(), stack, mx, my);
-            } else g.renderComponentTooltip(font, iconTooltip(hit), mx, my);
+            } else Tooltips.show(g,font,width, iconTooltip(hit), mx, my);
             return;
         }
         if (over(mx, my, left + 10, bodyTop, split - 12, bodyBottom)) {
             int index = (int) ((my - bodyTop + listScroll) / ROW);
             if (index < rows.size()) {
                 RecipeGroups.Row row = rows.get(index);
-                g.renderComponentTooltip(font, row.header() ? List.of(row.group().key().label(), tr("group_hint", row.group().entries().size())) : rowTooltip(row.entry()), mx, my);
+                Tooltips.show(g,font,width, row.header() ? List.of(row.group().key().label(), tr("group_hint", row.group().entries().size())) : rowTooltip(row.entry()), mx, my);
             }
         } else if (over(mx, my, split + 4, bodyTop, left + panelWidth - 18, bodyBottom)) {
             boolean reference = !referenceDetails.isEmpty() && mx < (split + left + panelWidth) / 2;
@@ -449,7 +451,7 @@ public final class PatternWorkbenchScreen extends AeToolScreen implements Genera
             List<DetailLine> hoveredDetails = reference ? referenceDetails : details;
             if (index >= 0 && index < hoveredDetails.size()) {
                 DetailLine line = hoveredDetails.get(index);
-                g.renderComponentTooltip(font, List.of(line.text), mx, my);
+                Tooltips.show(g,font,width, List.of(line.text), mx, my);
             }
         }
     }
@@ -808,11 +810,11 @@ public final class PatternWorkbenchScreen extends AeToolScreen implements Genera
             int reserve = this == multiplier ? 4 : state == null ? 10 : 25;
             String label = getMessage().getString();
             String value = font.width(label) <= getWidth() - reserve ? label : font.plainSubstrByWidth(label, Math.max(0, getWidth() - reserve - 6)) + "…";
-            if (state == null) g.drawString(font, value, getX() + (getWidth() - font.width(value)) / 2, getY() + 5, textColor, false);
+            if (state == null) g.drawString(font, value, getX() + (getWidth() - font.width(value)) / 2, getY() + (getHeight() - font.lineHeight) / 2, textColor, false);
             else {
-                g.drawString(font, value, getX() + 6, getY() + 5, textColor, false);
+                g.drawString(font, value, getX() + 6, getY() + (getHeight() - font.lineHeight) / 2, textColor, false);
                 boolean on = state.getAsBoolean();
-                int sx = getX() + getWidth() - 19, sy = getY() + 6;
+                int sx = getX() + getWidth() - 19, sy = getY() + (getHeight() - 8) / 2;
                 WorkbenchTheme.rounded(g, sx, sy, 14, 8, on ? WorkbenchTheme.ACCENT : WorkbenchTheme.LINE);
                 WorkbenchTheme.rounded(g, sx + (on ? 7 : 1), sy + 1, 6, 6, on ? 0xFFECECEC : WorkbenchTheme.BACKGROUND);
             }

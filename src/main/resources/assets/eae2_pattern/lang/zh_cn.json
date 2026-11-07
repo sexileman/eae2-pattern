@@ -402,5 +402,15 @@
   "eae2_pattern.editor.material_tag": "标签：%s",
   "eae2_pattern.editor.example_item_id": "示例物品：%s",
   "eae2_pattern.editor.example_fluid_id": "示例流体：%s",
-  "eae2_pattern.workbench.stock_short": "空白 %s / 需 %s"
+  "eae2_pattern.workbench.stock_short": "空白 %s / 需 %s",
+  "eae2_pattern.error.filtered_input": "输入材料已被过滤，无法编码。请检查输入过滤设置或查看原配方。",
+  "eae2_pattern.error.no_output": "没有可编码的输出，请调整输出设置。",
+  "eae2_pattern.error.network": "ME 连接不可用或已变化，请重新连接。",
+  "eae2_pattern.error.held_changed": "手持样板已变化，请重新打开编辑。",
+  "eae2_pattern.error.busy": "另一个任务正在进行，请稍后重试。",
+  "eae2_pattern.error.capacity": "超出当前容量，请缩小筛选范围或使用固定收录。",
+  "eae2_pattern.error.fixed_mode": "此机器请使用固定收录模式。",
+  "eae2_pattern.error.no_match": "没有符合规则的配方，请调整筛选。",
+  "eae2_pattern.error.missing_recipe": "配方已不可用，请重新读取此类别。",
+  "eae2_pattern.error.failed": "无法完成编码，请查看原配方或日志。"
 }
