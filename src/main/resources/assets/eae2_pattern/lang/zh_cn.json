@@ -330,5 +330,14 @@
   "item.eae2_pattern.machine_wildcard_pattern": "机器通配样板",
   "eae2_pattern.workbench.open_wildcard_editor": "通配编辑器 ↗",
   "eae2_pattern.wildcard.encoder": "由 %s 编码",
-  "eae2_pattern.editor.policy_empty": "当前策略未留下有效输入或输出，请调整编码设置。"
+  "eae2_pattern.editor.policy_empty": "当前策略未留下有效输入或输出，请调整编码设置。",
+  "eae2_pattern.editor.blank_help": "空白载体：右键选择机器、设置规则，再写入手持样板。无需 ME 网络；编码前不能放入供应器。",
+  "eae2_pattern.editor.write_held": "写入手持样板",
+  "eae2_pattern.editor.save_copy_network": "使用 ME 网络批量另存（消耗 AE2 空白样板）",
+  "eae2_pattern.editor.held_saved": "已写入手持样板；未消耗额外空白样板。",
+  "eae2_pattern.editor.summary_held": "匹配 %s · 已选 %s · 手持写入",
+  "eae2_pattern.editor.held_capacity_help": "直接写入当前手持载体，不要求 ME 网络，也不消耗额外空白。单张最多 2048 条；若载荷需要多张，请减少选择或改用网络批量。",
+  "eae2_pattern.editor.held_settings_help": "写入手持载体会原地更新该物品。服务端完成配方校验后才写入；若物品、槽位或数据已改变，则拒绝写入。超过单张容量时不会覆盖物品，可减少选择或通过网络另存多张。网络批量仍从 ME 存储消耗 AE2 空白样板。",
+  "item.eae2_pattern.machine_wildcard_pattern.blank": "空白机器通配样板",
+  "eae2_pattern.editor.blank_recipe": "工作台无序合成：1 个 AE2 空白样板 → 1 个空白机器通配样板。可在工具与实用物品创造栏中找到。"
 }

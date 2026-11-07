@@ -41,17 +41,23 @@ public final class PatternRequestSender {
         if (specs.size() > EAE2PatternConfig.MAX_PATTERNS_PER_REQUEST.get())
             throw new IllegalArgumentException("Too many patterns in one request: " + specs.size());
         int maxBytes = Math.max(4096, Math.min(EAE2PatternConfig.MAX_REQUEST_BYTES.get(), DEFAULT_CHUNK_BYTES));
+        int overhead = 32;
+        if (operation >= 4) {
+            FriendlyByteBuf header = new FriendlyByteBuf(Unpooled.buffer());
+            try { header.writeNbt(io.github.sexileman.eae2pattern.wildcard.WildcardEditorState.clean(rules)); overhead += header.readableBytes(); }
+            finally { header.release(); }
+        }
 
         List<List<PatternSpec>> chunks = new ArrayList<>();
         List<PatternSpec> current = new ArrayList<>();
-        int currentBytes = 32;
+        int currentBytes = overhead;
         for (PatternSpec spec : specs) {
             int specBytes = serializedSize(spec);
-            if (specBytes + 32 > maxBytes) throw new IllegalArgumentException("Recipe NBT exceeds packet limit: " + spec.recipeId());
+            if (specBytes + overhead > maxBytes) throw new IllegalArgumentException("Recipe NBT and rules exceed packet limit: " + spec.recipeId());
             if (!current.isEmpty() && currentBytes + specBytes > maxBytes) {
                 chunks.add(current);
                 current = new ArrayList<>();
-                currentBytes = 32;
+                currentBytes = overhead;
             }
             current.add(spec);
             currentBytes += specBytes;
@@ -64,7 +70,7 @@ public final class PatternRequestSender {
         for (int i = 0; i < chunks.size(); i++) {
             PacketHandler.sendToServer(new C2SGeneratePatternsPacket(requestId, i, chunks.size(), chunks.get(i), operation, rules));
         }
-        if (operation == 0 || operation == 4) EAE2Pattern.LOGGER.info("Sent {} pattern specs in {} chunk(s) (request {}, {} bytes max per chunk)",
+        if (operation == 0 || operation >= 4) EAE2Pattern.LOGGER.info("Sent {} pattern specs in {} chunk(s) (request {}, {} bytes max per chunk)",
                 specs.size(), chunks.size(), requestId, maxBytes);
         else EAE2Pattern.LOGGER.debug("Sent read-only pattern inspection {}: {} specs, operation {}", requestId, specs.size(), operation);
         return requestId;

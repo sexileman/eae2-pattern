@@ -24,6 +24,12 @@ public final class WildcardEditorState {
         }
         int multiplier = input.contains("multiplier") ? input.getInt("multiplier") : 1;
         if (multiplier < 1 || multiplier > 65536) throw new IllegalArgumentException("Invalid wildcard multiplier");
-        out.putInt("multiplier", multiplier); return out;
+        out.putInt("multiplier", multiplier);
+        if (input.contains("held_fingerprint")) {
+            if (!input.contains("held_fingerprint", 7) || input.getByteArray("held_fingerprint").length != 32)
+                throw new IllegalArgumentException("Invalid held wildcard fingerprint");
+            out.putByteArray("held_fingerprint", input.getByteArray("held_fingerprint").clone());
+        }
+        return out;
     }
 }

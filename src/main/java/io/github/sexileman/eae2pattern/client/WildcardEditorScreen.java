@@ -20,6 +20,12 @@ public final class WildcardEditorScreen extends Screen implements GenerationList
     private final RecipePlan plan;
     private final Screen parent;
     private final boolean savedCopy;
+    public record HeldTarget(net.minecraft.world.InteractionHand hand, ItemStack snapshot) {
+        public HeldTarget { snapshot = snapshot.copy(); }
+    }
+    private HeldTarget heldTarget;
+    private boolean writingHeld;
+    private int heldRefreshTicks;
     private final Set<ResourceLocation> selected = new HashSet<>();
     private final List<RecipePlan.Entry> matches = new ArrayList<>(), working = new ArrayList<>();
     private final List<Control> controls = new ArrayList<>();
@@ -38,10 +44,14 @@ public final class WildcardEditorScreen extends Screen implements GenerationList
     private final Map<ResourceLocation, Component> previewErrors = new HashMap<>();
     private Component status = Component.empty();
     private Control generate;
+    private Control generateNetwork;
     private static final int TEXT = WorkbenchTheme.TEXT, DIM = WorkbenchTheme.DIM, ROW = 42;
 
     public WildcardEditorScreen(RecipePlan plan, Screen parent, CompoundTag state, Set<ResourceLocation> included, boolean savedCopy) {
-        super(tr("title")); this.plan = plan; this.parent = parent; this.savedCopy = savedCopy;
+        this(plan, parent, state, included, savedCopy, null);
+    }
+    public WildcardEditorScreen(RecipePlan plan, Screen parent, CompoundTag state, Set<ResourceLocation> included, boolean savedCopy, HeldTarget heldTarget) {
+        super(tr("title")); this.plan = plan; this.parent = parent; this.savedCopy = savedCopy; this.heldTarget = heldTarget;
         if (included == null) for (var e : plan.entries()) { if (e.isSelected()) selected.add(e.recipeId()); }
         else selected.addAll(included);
         if (state != null && !state.isEmpty()) {
@@ -54,12 +64,16 @@ public final class WildcardEditorScreen extends Screen implements GenerationList
     }
     public static Component tr(String key, Object... args) { return Component.translatable("eae2_pattern.editor." + key, args); }
     public static void openStored(ItemStack stack) {
+        openStored(stack, net.minecraft.world.InteractionHand.MAIN_HAND);
+    }
+    public static void openStored(ItemStack stack, net.minecraft.world.InteractionHand hand) {
         var runtime = JeiRuntimeHolder.get(); var mc = net.minecraft.client.Minecraft.getInstance();
         if (runtime == null) return;
         CompoundTag root = stack.getTag() == null ? new CompoundTag() : stack.getTag().copy();
         CompoundTag state = root.getCompound("editor");
         try { if (!state.isEmpty()) state = WildcardEditorState.clean(state); } catch (IllegalArgumentException ignored) { state = new CompoundTag(); }
         final CompoundTag savedState = state;
+        final HeldTarget target = MachineWildcard.isOwnItem(stack) ? new HeldTarget(hand, stack) : null;
         String category = state.getString("category");
         if (category.isEmpty()) category = root.getCompound(MachineWildcardData.KEY).getString("machine");
         final String id = category;
@@ -71,8 +85,8 @@ public final class WildcardEditorScreen extends Screen implements GenerationList
             for (int i = 0; i < rows.size(); i++) ids.add(new ResourceLocation(rows.getCompound(i).getString("recipe")));
         } catch (RuntimeException ignored) { }
         if (found.isPresent()) mc.setScreen(new CollectingScreen(found.get(), mc.screen,
-                plan -> mc.setScreen(new WildcardEditorScreen(plan, null, savedState, ids.isEmpty() ? null : ids, true))));
-        else mc.setScreen(new WildcardMachineScreen(categories, mc.screen));
+                plan -> mc.setScreen(new WildcardEditorScreen(plan, null, savedState, ids.isEmpty() ? null : ids, true, target))));
+        else mc.setScreen(new WildcardMachineScreen(categories, mc.screen, target));
     }
     @Override protected void init() {
         controls.clear(); w = Math.min(900, width - 12); h = Math.min(530, height - 12); x = (width - w) / 2; y = (height - h) / 2;
@@ -102,7 +116,9 @@ public final class WildcardEditorScreen extends Screen implements GenerationList
         button(x + w / 2 + 5, y + 65, w / 2 - 15, 2, () -> { inScope = (inScope + 1) % 3; changedRules(); }, "input_scope");
         button(x + w / 2 + 5, y + 90, w / 2 - 15, 2, () -> { outScope = (outScope + 1) % 3; changedRules(); }, "output_scope");
         button(x + w / 2 + 5, y + 115, w / 2 - 15, 2, () -> { searchTools = !searchTools; changedRules(); }, "search_tools");
-        generate = button(x + w - 140, y + h - 27, 130, -1, this::generate, savedCopy ? "save_copy" : "generate");
+        generateNetwork = heldTarget != null && h > 210
+                ? button(x + 10, y + 140, w - 20, 2, () -> generate(false), "save_copy_network") : null;
+        generate = button(x + w - 140, y + h - 27, 130, -1, this::generate, heldTarget != null ? "write_held" : savedCopy ? "save_copy" : "generate");
         ClientGenerationFeedback.setListener(this); InspectionFeedback.setListener(this::inspected);
         ClientNetworkState.reset();
         PacketHandler.sendToServer(new C2SQueryNetworkStatusPacket(0)); startFilter(); sync();
@@ -136,8 +152,11 @@ public final class WildcardEditorScreen extends Screen implements GenerationList
             if (c.key.equals("double")) c.active &= multiplier < ProcessingMultiplier.MAX;
             if (c.key.equals("select_all") || c.key.equals("select_none")) c.active &= !filtering && delay == 0;
         }
-        generate.active = !sending && !filtering && delay == 0 && chosen > 0 && ClientNetworkState.hasNetwork()
-                && ClientNetworkState.blankPatterns() >= (chosen + 2047) / 2048;
+        boolean ready = !sending && !filtering && delay == 0 && heldRefreshTicks == 0 && chosen > 0;
+        boolean networkReady = ready && ClientNetworkState.hasNetwork() && ClientNetworkState.blankPatterns() >= (chosen + 2047) / 2048;
+        generate.active = heldTarget == null ? networkReady : ready && chosen <= MachineWildcardData.MAX_RECIPES
+                && minecraft.player != null && MachineWildcard.isOwnItem(minecraft.player.getItemInHand(heldTarget.hand()));
+        if (generateNetwork != null) generateNetwork.active = networkReady;
         for (var box : boxes) box.active = !sending;
     }
     private void changedRules() { delay = 5; filtering = true; preview = null; previewRequest = -1; updateControls(); }
@@ -148,6 +167,10 @@ public final class WildcardEditorScreen extends Screen implements GenerationList
     }
     @Override public void tick() {
         for (var box : boxes) box.tick();
+        if (heldRefreshTicks > 0 && --heldRefreshTicks == 0 && heldTarget != null && minecraft.player != null) {
+            var current = minecraft.player.getItemInHand(heldTarget.hand());
+            if (MachineWildcard.isOwnItem(current)) heldTarget = new HeldTarget(heldTarget.hand(), current);
+        }
         if (delay > 0 && --delay == 0) startFilter();
         if (filtering && delay == 0) {
             long end = System.nanoTime() + 3_000_000; int n = 0;
@@ -187,14 +210,28 @@ public final class WildcardEditorScreen extends Screen implements GenerationList
     }
     private void generate() {
         if (!generate.active) return;
+        generate(heldTarget != null);
+    }
+    private void generate(boolean held) {
+        if (sending || filtering || delay != 0) return;
+        if (!held && (generateNetwork != null ? !generateNetwork.active : !generate.active)) return;
         List<PatternSpec> specs = new ArrayList<>();
         for (var e : matches) if (selected.contains(e.recipeId()) && !previewErrors.containsKey(e.recipeId())) { var spec = e.specForPolicy(multiplier, outputPolicy, dropTools); if (spec != null) specs.add(spec); }
-        try { PatternRequestSender.send(specs, 4, state()); sending = true; status = tr("preparing"); }
+        try {
+            CompoundTag rules = state();
+            int operation = 4;
+            if (held) {
+                rules.putByteArray("held_fingerprint", HeldWildcardFingerprint.visible(heldTarget.snapshot()));
+                operation = heldTarget.hand() == net.minecraft.world.InteractionHand.MAIN_HAND ? 5 : 6;
+            }
+            PatternRequestSender.send(specs, operation, rules); writingHeld = held; sending = true; status = tr("preparing");
+        }
         catch (IllegalArgumentException e) { status = Component.literal(e.getMessage()); }
         updateControls();
     }
     @Override public void onGenerationFinished(GenerationReport report) {
         sending = false; status = ClientGenerationFeedback.describe(report);
+        if (writingHeld && report.isSuccess()) { status = tr("held_saved"); heldRefreshTicks = 2; }
         if (!report.details().isEmpty()) status = status.copy().append(" · ").append(report.details().get(0));
         PacketHandler.sendToServer(new C2SQueryNetworkStatusPacket(0)); updateControls();
     }
@@ -210,9 +247,9 @@ public final class WildcardEditorScreen extends Screen implements GenerationList
             for (var box : boxes) WorkbenchTheme.control(g, box.getX() - 5, box.getY() - 4, box.getWidth() + 10, 19, WorkbenchTheme.INPUT, WorkbenchTheme.LINE);
             if (h > 250) wrapped(g, tr("rule_help"), x + 14, y + 160, w - 28, DIM, .8f);
         } else if (tab == 1) renderRecipes(g, mx, my);
-        else if (h > 210) wrapped(g, tr("settings_help"), x + 14, y + 147, w - 28, DIM, .8f);
+        else if (h > 210) wrapped(g, tr(heldTarget == null ? "settings_help" : "held_settings_help"), x + 14, y + (heldTarget == null ? 147 : 169), w - 28, DIM, .8f);
         g.fill(x + 10, y + h - 34, x + w - 10, y + h - 33, WorkbenchTheme.LINE);
-        label(g, filtering ? tr("filtering", cursor, plan.entries().size()) : tr("summary", matches.size(), chosen(), ClientNetworkState.blankPatterns()), x + 10, y + h - 24, w - 160, DIM, .8f);
+        label(g, filtering ? tr("filtering", cursor, plan.entries().size()) : heldTarget != null ? tr("summary_held", matches.size(), chosen()) : tr("summary", matches.size(), chosen(), ClientNetworkState.blankPatterns()), x + 10, y + h - 24, w - 160, DIM, .8f);
         if (!status.getString().isEmpty()) label(g, status, x + 10, y + h - 13, w - 160, WorkbenchTheme.WARNING, .7f);
         super.render(g, mx, my, partial);
         for (var hit : hits) if (tab == 1 && my >= listTop && my < listBottom && mx >= hit.x && mx < hit.x + 18 && my >= hit.y && my < hit.y + 18) {
@@ -227,7 +264,7 @@ public final class WildcardEditorScreen extends Screen implements GenerationList
         }
         for (int i = 0; i < boxes.length; i++) if (boxes[i].visible && boxes[i].isMouseOver(mx, my))
             g.renderComponentTooltip(font, List.of(tr("query_" + i), tr("syntax_help")), mx, my);
-        if (generate.isMouseOver(mx, my)) g.renderComponentTooltip(font, List.of(tr("capacity_help")), mx, my);
+        if (generate.isMouseOver(mx, my)) g.renderComponentTooltip(font, List.of(tr(heldTarget == null ? "capacity_help" : "held_capacity_help")), mx, my);
         for (var control : controls) if (control != generate && control.visible && control.isMouseOver(mx, my))
             g.renderComponentTooltip(font, List.of(control.getMessage()), mx, my);
         if (mx >= x + 10 && mx < x + w - 145 && my >= y + h - 30 && my < y + h - 2)

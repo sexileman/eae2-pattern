@@ -29,6 +29,23 @@ public final class UniversalWildcardContracts {
             String config = new String(bytes(app, "eae2_pattern.mixins.json"), java.nio.charset.StandardCharsets.UTF_8);
             check(config.contains("UniversalMixinPlugin") && config.contains("GtlWildcardActivationMixin") && config.contains("GtlWildcardExpansionMixin"), "optional GTL discovery and both adapters are configured");
             check(app.getEntry("assets/eae2_pattern/models/item/machine_wildcard_pattern.json") != null, "independent item resources shipped");
+            var recipe = com.google.gson.JsonParser.parseString(new String(bytes(app, "data/eae2_pattern/recipes/machine_wildcard_pattern.json"), java.nio.charset.StandardCharsets.UTF_8)).getAsJsonObject();
+            check(recipe.get("type").getAsString().equals("minecraft:crafting_shapeless"), "blank wildcard uses a vanilla universal crafting recipe");
+            var ingredients = recipe.getAsJsonArray("ingredients");
+            check(ingredients.size() == 1 && ingredients.get(0).getAsJsonObject().get("item").getAsString().equals("ae2:blank_pattern"), "carrier recipe needs only the mandatory AE2 blank item");
+            check(recipe.getAsJsonObject("result").get("item").getAsString().equals("eae2_pattern:machine_wildcard_pattern")
+                    && recipe.getAsJsonObject("result").get("count").getAsInt() == 1, "recipe yields exactly one independent blank carrier");
+            check(!recipe.toString().contains("wildcard_pattern:wildcard_pattern") && !recipe.toString().contains("gtceu:"), "crafting does not require either optional mod");
+            check(app.getEntry("data/eae2_pattern/advancements/recipes/misc/machine_wildcard_pattern.json") != null, "vanilla recipe-book unlock is shipped");
+            var items = node(bytes(app, "io/github/sexileman/eae2pattern/wildcard/WildcardItems.class"));
+            check(items.methods.stream().anyMatch(m -> m.name.equals("creative")), "blank carrier has a creative-tab acquisition entry");
+            var jei = node(bytes(app, "io/github/sexileman/eae2pattern/compat/jei/EAE2PatternJeiPlugin.class"));
+            check(jei.methods.stream().anyMatch(m -> m.name.equals("registerRecipes")), "JEI usage information is registered");
+            var writer = node(bytes(app, "io/github/sexileman/eae2pattern/net/server/MachineWildcardWriter.class"));
+            var heldStart = writer.methods.stream().filter(m -> m.name.equals("startHeld")).findFirst().orElseThrow();
+            boolean needsNetwork = false;
+            for (var insn : heldStart.instructions) if (insn instanceof MethodInsnNode call && call.owner.endsWith("/NetworkAccess")) needsNetwork = true;
+            check(!needsNetwork, "handheld configuration has no ME access precondition");
             for (String name : List.of("MachineWildcardProviderMixin", "GtlWildcardActivationMixin", "GtlWildcardExpansionMixin"))
                 check(app.getEntry("io/github/sexileman/eae2pattern/mixin/" + name + ".class") != null, "universal hook exists: " + name);
             var expansion = node(bytes(app, "io/github/sexileman/eae2pattern/mixin/GtlWildcardExpansionMixin.class"));

@@ -330,5 +330,14 @@
   "item.eae2_pattern.machine_wildcard_pattern": "Machine Wildcard Pattern",
   "eae2_pattern.workbench.open_wildcard_editor": "Wildcard editor ↗",
   "eae2_pattern.wildcard.encoder": "Encoded by %s",
-  "eae2_pattern.editor.policy_empty": "No valid input or output remains under this policy. Change the encoding settings."
+  "eae2_pattern.editor.policy_empty": "No valid input or output remains under this policy. Change the encoding settings.",
+  "eae2_pattern.editor.blank_help": "Blank carrier: right-click, choose a machine, configure rules, then write the held item. No ME network required; encode it before placing in a provider.",
+  "eae2_pattern.editor.write_held": "Write held pattern",
+  "eae2_pattern.editor.save_copy_network": "Save a network batch (uses AE2 blank patterns)",
+  "eae2_pattern.editor.held_saved": "Held pattern written; no additional blank was consumed.",
+  "eae2_pattern.editor.summary_held": "Matched %s · Selected %s · Held-item write",
+  "eae2_pattern.editor.held_capacity_help": "Writes the held carrier without an ME network or an additional blank. Up to 2048 recipes per item; reduce selection or use network batch generation if more than one item is required.",
+  "eae2_pattern.editor.held_settings_help": "Writing updates the held carrier in place only after server validation. A changed item, slot or data rejects the write. If multiple items are required nothing is overwritten; reduce the selection or save a network batch. Network batch generation consumes AE2 blank patterns from ME storage.",
+  "item.eae2_pattern.machine_wildcard_pattern.blank": "Blank Machine Wildcard Pattern",
+  "eae2_pattern.editor.blank_recipe": "Shapeless crafting: 1 AE2 blank pattern → 1 blank machine wildcard. Also available in the Tools & Utilities creative tab."
 }

@@ -34,6 +34,23 @@ public final class MachineWildcardWriter {
         if (network == null) { callback.accept(failed(specs.size(), "ME network unavailable")); return; }
         JOBS.add(new Job(player, List.copyOf(specs), network, WildcardEditorState.clean(rules), callback));
     }
+    public static void startHeld(ServerPlayer player, List<PatternSpec> specs, CompoundTag rules,
+                                 net.minecraft.world.InteractionHand hand, Consumer<GenerationReport> callback) {
+        if (specs.isEmpty()) { callback.accept(GenerationReport.nothingToDo()); return; }
+        if (specs.size() > MachineWildcardData.MAX_RECIPES) {
+            callback.accept(failed(specs.size(), "Held wildcard supports at most 2048 recipes; use network batch generation for more")); return;
+        }
+        CompoundTag clean = WildcardEditorState.clean(rules);
+        ItemStack held = player.getItemInHand(hand);
+        if (!MachineWildcard.isOwnItem(held) || held.getCount() != 1 || clean.getByteArray("held_fingerprint").length != 32
+                || !java.security.MessageDigest.isEqual(clean.getByteArray("held_fingerprint"), HeldWildcardFingerprint.visible(held))) {
+            callback.accept(failed(specs.size(), "Held wildcard changed; reopen its editor")); return;
+        }
+        Job job = new Job(player, List.copyOf(specs), null, clean, callback);
+        job.hand = hand; job.slot = hand == net.minecraft.world.InteractionHand.MAIN_HAND ? player.getInventory().selected : -1;
+        job.expected = HeldWildcardFingerprint.visible(held);
+        job.rules.remove("held_fingerprint"); JOBS.add(job);
+    }
     private static GenerationReport failed(int n, String message) {
         return new GenerationReport(n, 0, 0, 0, 0, GenerationReport.StopReason.ENCODE_FAILED, List.of(message));
     }
@@ -60,10 +77,13 @@ public final class MachineWildcardWriter {
         final List<ItemStack> prepared = new ArrayList<>();
         final List<CompoundTag> rows = new ArrayList<>();
         final CompoundTag rules;
+        net.minecraft.world.InteractionHand hand;
+        int slot;
+        byte[] expected;
         ResourceLocation machine;
         int cursor, bytes, totalBytes;
         Job(ServerPlayer player, List<PatternSpec> specs, NetworkAccess network, CompoundTag rules, Consumer<GenerationReport> callback) {
-            this.player = player; this.specs = specs; this.network = network; this.rules = rules; this.callback = callback;
+            this.player = player; this.specs = specs; this.network = network; this.rules = rules.copy(); this.rules.remove("held_fingerprint"); this.callback = callback;
         }
         void flush() {
             if (rows.isEmpty()) return;
@@ -81,8 +101,10 @@ public final class MachineWildcardWriter {
             }
         }
         boolean step() throws Exception {
-            NetworkAccess current = NetworkAccess.resolve(player);
-            if (current == null || !network.sameNetwork(current)) throw new IllegalArgumentException("ME network changed; no blanks consumed");
+            if (hand == null) {
+                NetworkAccess current = NetworkAccess.resolve(player);
+                if (current == null || !network.sameNetwork(current)) throw new IllegalArgumentException("ME network changed; no blanks consumed");
+            } else verifyHeld(false);
             PatternSpec spec = specs.get(cursor++);
             if (spec.kind() != PatternKind.PROCESSING) throw new IllegalArgumentException("Machine wildcard supports processing recipes only");
             var recipe = player.serverLevel().getRecipeManager().byKey(spec.recipeId())
@@ -100,8 +122,25 @@ public final class MachineWildcardWriter {
             machine = type; rows.add(row); bytes += size;
             if (cursor < specs.size()) return false;
             flush();
-            PatternWriter.startPrepared(player, prepared, network, callback);
+            if (hand == null) PatternWriter.startPrepared(player, prepared, network, callback);
+            else {
+                if (prepared.size() != 1) throw new IllegalArgumentException("Selection needs multiple wildcard items; reduce it or use network batch generation");
+                verifyHeld(true);
+                var updated = player.getItemInHand(hand).copy();
+                updated.setTag(HeldWildcardFingerprint.mergeEncodingTags(updated.getOrCreateTag(), prepared.get(0).getOrCreateTag()));
+                player.setItemInHand(hand, updated); player.getInventory().setChanged();
+                player.inventoryMenu.broadcastChanges();
+                if (player.containerMenu != player.inventoryMenu) player.containerMenu.broadcastChanges();
+                callback.accept(new GenerationReport(1, 1, 1, 0, 0, GenerationReport.StopReason.COMPLETED, List.of()));
+            }
             return true;
+        }
+        void verifyHeld(boolean checkData) {
+            ItemStack current = player.getItemInHand(hand);
+            if (!HeldWildcardFingerprint.positionMatches(hand == net.minecraft.world.InteractionHand.MAIN_HAND, slot,
+                    player.getInventory().selected, MachineWildcard.isOwnItem(current), current.getCount())
+                    || (checkData && !java.security.MessageDigest.isEqual(expected, HeldWildcardFingerprint.visible(current))))
+                throw new IllegalArgumentException("Held wildcard changed; no item was modified");
         }
     }
 }

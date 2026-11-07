@@ -73,7 +73,7 @@ public final class BatchRequestManager {
         try { complete = state.addChunk(requestId, chunkIndex, chunkCount, specs); }
         catch (IllegalArgumentException e) {
             STATES.remove(player.getUUID());
-            if (operation == 0 || operation == 4) PacketHandler.sendToPlayer(player, new S2CGenerationResultPacket(
+            if (operation == 0 || operation >= 4) PacketHandler.sendToPlayer(player, new S2CGenerationResultPacket(
                     new GenerationReport(specs.size(), 0, 0, 0, 0, GenerationReport.StopReason.TOO_MANY_PATTERNS, List.of(e.getMessage()))));
             else PacketHandler.sendToPlayer(player, new io.github.sexileman.eae2pattern.net.S2CInspectionPacket(
                     requestId, operation, false, 0, 0, List.of(), List.of(), List.of(e.getMessage())));
@@ -82,7 +82,10 @@ public final class BatchRequestManager {
         if (complete == null) {
             return;
         }
-        if (operation == 4) MachineWildcardWriter.start(player, complete, state.rules,
+        if (operation == 5 || operation == 6) MachineWildcardWriter.startHeld(player, complete, state.rules,
+                operation == 5 ? net.minecraft.world.InteractionHand.MAIN_HAND : net.minecraft.world.InteractionHand.OFF_HAND,
+                report -> PacketHandler.sendToPlayer(player, new S2CGenerationResultPacket(report)));
+        else if (operation == 4) MachineWildcardWriter.start(player, complete, state.rules,
                 report -> PacketHandler.sendToPlayer(player, new S2CGenerationResultPacket(report)));
         else if (operation == 0) execute(player, complete);
         else if (!complete.isEmpty()) PatternInspection.start(player, complete, requestId, operation);

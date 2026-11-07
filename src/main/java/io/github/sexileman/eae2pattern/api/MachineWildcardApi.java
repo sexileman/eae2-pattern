@@ -9,7 +9,7 @@ import java.util.List;
 /** Stable optional integration surface. Consumers may discover it reflectively. */
 public final class MachineWildcardApi {
     private MachineWildcardApi() {}
-    public static boolean isPattern(ItemStack stack) { return MachineWildcard.isOwnItem(stack); }
+    public static boolean isPattern(ItemStack stack) { return MachineWildcard.isOwnItem(stack) && MachineWildcard.isBound(stack); }
     public static List<IPatternDetails> expand(ItemStack stack, Level level) {
         return isPattern(stack) && MachineWildcard.isBound(stack) ? MachineWildcard.expand(stack, level).toList() : List.of();
     }

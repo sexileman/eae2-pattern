@@ -31,14 +31,14 @@ public record C2SGeneratePatternsPacket(int requestId, int chunkIndex, int chunk
         for (PatternSpec spec : specs) {
             spec.write(buf);
         }
-        if (operation == 4) buf.writeNbt(io.github.sexileman.eae2pattern.wildcard.WildcardEditorState.clean(rules));
+        if (operation >= 4) buf.writeNbt(io.github.sexileman.eae2pattern.wildcard.WildcardEditorState.clean(rules));
     }
 
     public static C2SGeneratePatternsPacket decode(FriendlyByteBuf buf) {
         if (buf.readableBytes() > io.github.sexileman.eae2pattern.config.EAE2PatternConfig.MAX_REQUEST_BYTES.get())
             throw new IllegalArgumentException("Pattern packet exceeds byte limit");
         int operation = buf.readUnsignedByte();
-        if (operation > 4) throw new IllegalArgumentException("Unknown pattern operation");
+        if (operation > 6) throw new IllegalArgumentException("Unknown pattern operation");
         int requestId = buf.readVarInt();
         int chunkIndex = buf.readVarInt();
         int chunkCount = buf.readVarInt();
@@ -49,7 +49,7 @@ public record C2SGeneratePatternsPacket(int requestId, int chunkIndex, int chunk
         for (int i = 0; i < size; i++) {
             specs.add(PatternSpec.read(buf));
         }
-        var rules = operation == 4 ? io.github.sexileman.eae2pattern.wildcard.WildcardEditorState.clean(buf.readNbt()) : new net.minecraft.nbt.CompoundTag();
+        var rules = operation >= 4 ? io.github.sexileman.eae2pattern.wildcard.WildcardEditorState.clean(buf.readNbt()) : new net.minecraft.nbt.CompoundTag();
         return new C2SGeneratePatternsPacket(requestId, chunkIndex, chunkCount, specs, operation, rules);
     }
 

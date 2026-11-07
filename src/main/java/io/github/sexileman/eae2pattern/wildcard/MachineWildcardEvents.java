@@ -20,7 +20,7 @@ public final class MachineWildcardEvents {
     }
     @SubscribeEvent public static void tooltip(ItemTooltipEvent event) {
         if (MachineWildcard.isOwnItem(event.getItemStack()) && !MachineWildcard.isBound(event.getItemStack())) {
-            event.getToolTip().add(Component.translatable("eae2_pattern.editor.legacy_help").withStyle(ChatFormatting.GOLD)); return;
+            event.getToolTip().add(Component.translatable("eae2_pattern.editor.blank_help").withStyle(ChatFormatting.GOLD)); return;
         }
         if (!MachineWildcard.isBound(event.getItemStack())) return;
         var data = event.getItemStack().getTag().getCompound(MachineWildcardData.KEY);
@@ -38,7 +38,7 @@ public final class MachineWildcardEvents {
         event.setCancellationResult(InteractionResult.SUCCESS); event.setCanceled(true);
         if (event.getLevel().isClientSide)
             net.minecraftforge.fml.DistExecutor.unsafeRunWhenOn(net.minecraftforge.api.distmarker.Dist.CLIENT,
-                    () -> () -> io.github.sexileman.eae2pattern.client.WildcardEditorScreen.openStored(stack.copy()));
+                    () -> () -> io.github.sexileman.eae2pattern.client.WildcardEditorScreen.openStored(stack.copy(), event.getHand()));
     }
     @SubscribeEvent public static void missing(net.minecraftforge.registries.MissingMappingsEvent event) {
         if (net.minecraftforge.fml.ModList.get().isLoaded("wildcard_pattern")) return;

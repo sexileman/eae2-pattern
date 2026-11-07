@@ -1,0 +1,11 @@
+{
+  "type": "minecraft:crafting_shapeless",
+  "category": "misc",
+  "ingredients": [
+    { "item": "ae2:blank_pattern" }
+  ],
+  "result": {
+    "item": "eae2_pattern:machine_wildcard_pattern",
+    "count": 1
+  }
+}

@@ -12,11 +12,15 @@ import java.util.Locale;
 public final class WildcardMachineScreen extends Screen {
     private final List<IRecipeCategory<?>> categories;
     private final Screen parent;
+    private final WildcardEditorScreen.HeldTarget heldTarget;
     private List<IRecipeCategory<?>> visible;
     private EditBox search;
     private int scroll, x, y, w, h;
     public WildcardMachineScreen(List<IRecipeCategory<?>> categories, Screen parent) {
-        super(WildcardEditorScreen.tr("pick_machine")); this.categories = categories; this.parent = parent; visible = categories;
+        this(categories, parent, null);
+    }
+    public WildcardMachineScreen(List<IRecipeCategory<?>> categories, Screen parent, WildcardEditorScreen.HeldTarget heldTarget) {
+        super(WildcardEditorScreen.tr("pick_machine")); this.categories = categories; this.parent = parent; visible = categories; this.heldTarget = heldTarget;
     }
     @Override protected void init() {
         w = Math.min(480, width - 20); h = Math.min(360, height - 20); x = (width - w) / 2; y = (height - h) / 2;
@@ -44,7 +48,7 @@ public final class WildcardMachineScreen extends Screen {
         if (mx < x || mx >= x + w || my < y + 55 || my >= y + h || button != 0) return false;
         int index = scroll + (int) (my - y - 55) / 25;
         if (index < visible.size()) minecraft.setScreen(new CollectingScreen(visible.get(index), this,
-                plan -> minecraft.setScreen(new WildcardEditorScreen(plan, this, new CompoundTag(), null, true))));
+                plan -> minecraft.setScreen(new WildcardEditorScreen(plan, this, new CompoundTag(), null, true, heldTarget))));
         return true;
     }
     @Override public void onClose() { minecraft.setScreen(parent); }

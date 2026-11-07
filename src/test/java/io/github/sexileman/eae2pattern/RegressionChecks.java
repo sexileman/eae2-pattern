@@ -27,11 +27,46 @@ import java.util.List;
 public final class RegressionChecks {
     private static int checks;
     public static void main(String[] args) throws Exception {
-        policies(); wireFormat(); searches(); gtVersions(); layoutAndGrid(); manualMultiplier(); grouping(); inspectionPackets(); slotPresentation(); patternMetadata(); amountLabels(); machineWildcards();
+        policies(); wireFormat(); searches(); gtVersions(); layoutAndGrid(); manualMultiplier(); grouping(); inspectionPackets(); slotPresentation(); patternMetadata(); amountLabels(); machineWildcards(); heldWildcardWrites();
         System.out.println("Passed " + checks + " regression checks");
     }
     private static void check(boolean condition, String message) {
         checks++; if (!condition) throw new AssertionError(message);
+    }
+    private static void heldWildcardWrites() {
+        CompoundTag first = new CompoundTag(); first.putString("id", "eae2_pattern:machine_wildcard_pattern"); first.putByte("Count", (byte) 1);
+        CompoundTag second = new CompoundTag(); second.putByte("Count", (byte) 1); second.putString("id", "eae2_pattern:machine_wildcard_pattern");
+        byte[] token = io.github.sexileman.eae2pattern.wildcard.HeldWildcardFingerprint.ofTag(first);
+        check(java.util.Arrays.equals(token, io.github.sexileman.eae2pattern.wildcard.HeldWildcardFingerprint.ofTag(second)), "client/server NBT insertion order does not change the held token");
+        second.putString("different", "changed");
+        check(!java.util.Arrays.equals(token, io.github.sexileman.eae2pattern.wildcard.HeldWildcardFingerprint.ofTag(second)), "changed held NBT cannot reuse the old write token");
+        check(io.github.sexileman.eae2pattern.wildcard.HeldWildcardFingerprint.positionMatches(true, 2, 2, true, 1), "original main-hand carrier can be written");
+        check(!io.github.sexileman.eae2pattern.wildcard.HeldWildcardFingerprint.positionMatches(true, 2, 3, true, 1), "switched hotbar slot rejects main-hand write");
+        check(io.github.sexileman.eae2pattern.wildcard.HeldWildcardFingerprint.positionMatches(false, -1, 3, true, 1), "off-hand writes are independent of selected hotbar slot");
+        check(!io.github.sexileman.eae2pattern.wildcard.HeldWildcardFingerprint.positionMatches(false, -1, 3, false, 1), "unrelated item cannot be overwritten");
+        check(!io.github.sexileman.eae2pattern.wildcard.HeldWildcardFingerprint.positionMatches(true, 2, 2, true, 2), "stacked carriers cannot create duplicated encoded items");
+        CompoundTag old = new CompoundTag(); old.putInt("other_mod", 42);
+        CompoundTag oldDisplay = new CompoundTag(); oldDisplay.putString("Lore", "keep"); old.put("display", oldDisplay);
+        CompoundTag oldGtl = new CompoundTag(); oldGtl.putInt("other_gtl", 7); old.put("gtlcore", oldGtl);
+        CompoundTag encoded = new CompoundTag(); encoded.put(io.github.sexileman.eae2pattern.wildcard.MachineWildcardData.KEY, new CompoundTag());
+        encoded.put("editor", new CompoundTag()); encoded.putString("encodePlayer", "serverPlayer");
+        CompoundTag display = new CompoundTag(); display.putString("Name", "new"); encoded.put("display", display);
+        var merged = io.github.sexileman.eae2pattern.wildcard.HeldWildcardFingerprint.mergeEncodingTags(old, encoded);
+        check(merged.getInt("other_mod") == 42 && merged.getCompound("gtlcore").getInt("other_gtl") == 7, "writing preserves unrelated addon data");
+        check(merged.getCompound("display").getString("Lore").equals("keep") && merged.getCompound("display").getString("Name").equals("new"), "writing replaces owned title while preserving other display data");
+        check(!old.contains(io.github.sexileman.eae2pattern.wildcard.MachineWildcardData.KEY), "encoding merge does not mutate the original snapshot");
+        CompoundTag rules = new CompoundTag(); rules.putByteArray("held_fingerprint", token);
+        for (int operation : new int[]{5, 6}) {
+            FriendlyByteBuf buffer = new FriendlyByteBuf(Unpooled.buffer());
+            try {
+                new C2SGeneratePatternsPacket(10, 0, 1, List.of(), operation, rules).encode(buffer);
+                var decoded = C2SGeneratePatternsPacket.decode(buffer);
+                check(decoded.operation() == operation && java.util.Arrays.equals(decoded.rules().getByteArray("held_fingerprint"), token), "held target survives operation " + operation);
+            } finally { buffer.release(); }
+        }
+        rules.putByteArray("held_fingerprint", new byte[31]); boolean rejected = false;
+        try { io.github.sexileman.eae2pattern.wildcard.WildcardEditorState.clean(rules); } catch (IllegalArgumentException expected) { rejected = true; }
+        check(rejected, "malformed held target is rejected");
     }
     private static void machineWildcards() {
         java.util.function.Predicate<List<String>> iron = list -> list.contains("iron");

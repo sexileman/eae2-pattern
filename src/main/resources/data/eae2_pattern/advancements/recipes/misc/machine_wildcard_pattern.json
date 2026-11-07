@@ -1,0 +1,15 @@
+{
+  "parent": "minecraft:recipes/root",
+  "criteria": {
+    "has_blank_pattern": {
+      "trigger": "minecraft:inventory_changed",
+      "conditions": { "items": [{ "items": ["ae2:blank_pattern"] }] }
+    },
+    "has_the_recipe": {
+      "trigger": "minecraft:recipe_unlocked",
+      "conditions": { "recipe": "eae2_pattern:machine_wildcard_pattern" }
+    }
+  },
+  "requirements": [["has_blank_pattern", "has_the_recipe"]],
+  "rewards": { "recipes": ["eae2_pattern:machine_wildcard_pattern"] }
+}
