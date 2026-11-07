@@ -25,14 +25,20 @@ public final class WildcardTooltip {
         if(!MachineWildcard.isBound(stack)){
             lines.add(Component.translatable("eae2_pattern.editor.blank_help").withStyle(ChatFormatting.GRAY));return;
         }
-        if(!lines.isEmpty()&&WildcardTooltipText.isGeneratedName(stack.getHoverName()))
-            lines.set(0,Component.translatable("item.eae2_pattern.machine_wildcard_pattern").withStyle(ChatFormatting.WHITE));
+        if(!lines.isEmpty()&&((MachineWildcard.isOwnItem(stack)&&!stack.hasCustomHoverName())||WildcardTooltipText.isGeneratedName(stack.getHoverName())))
+            lines.set(0,WildcardTooltipText.name(stack));
         var root=stack.getTag();var data=root.getCompound(MachineWildcardData.KEY);
         String category=root.getCompound("editor").getString("category");
         if(data.getInt("version")==3)category=data.getCompound("rules").getString("category");
         var content=WildcardTooltipText.lines(typeName(data.getString("machine"),category),MachineWildcardData.count(data),
                 data.getInt("version")==3,root.getString("encodePlayer"));
         lines.addAll(Math.min(1,lines.size()),content);
+    }
+    @Mod.EventBusSubscriber(modid=EAE2Pattern.MOD_ID,value=Dist.CLIENT,bus=Mod.EventBusSubscriber.Bus.MOD)
+    public static final class Setup {
+        @SubscribeEvent public static void setup(net.minecraftforge.fml.event.lifecycle.FMLClientSetupEvent event) {
+            event.enqueueWork(() -> WildcardTooltipText.setTypeNames(WildcardTooltip::typeName));
+        }
     }
     private static Component typeName(String machine,String category) {
         var runtime=JeiRuntimeHolder.get();

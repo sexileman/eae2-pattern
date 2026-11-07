@@ -14,7 +14,7 @@ import net.minecraftforge.network.simple.SimpleChannel;
  */
 public final class PacketHandler {
 
-    private static final String PROTOCOL = "6";
+    private static final String PROTOCOL = "7";
 
     public static final SimpleChannel CHANNEL = NetworkRegistry.ChannelBuilder
             .named(new ResourceLocation(EAE2Pattern.MOD_ID, "main"))

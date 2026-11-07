@@ -41,7 +41,8 @@ public record GenerationReport(
         /** Nothing was selected or the request was cancelled. */
         NOTHING_TO_DO,
         /** The player has no AE2 network in reach (no open terminal, no linked wireless terminal). */
-        NO_NETWORK;
+        NO_NETWORK,
+        NOT_ENOUGH_WILDCARD_PATTERNS;
 
         public boolean isFailure() {
             return this != COMPLETED;
@@ -75,6 +76,7 @@ public record GenerationReport(
     public String summaryKey() {
         return switch (reason) {
             case COMPLETED -> "eae2_pattern.report.completed";
+            case NOT_ENOUGH_WILDCARD_PATTERNS -> "eae2_pattern.report.no_wildcards";
             case NOT_ENOUGH_BLANK_PATTERNS -> "eae2_pattern.report.no_blanks";
             case STORAGE_FULL -> "eae2_pattern.report.storage_full";
             case ENCODE_FAILED -> "eae2_pattern.report.encode_failed";

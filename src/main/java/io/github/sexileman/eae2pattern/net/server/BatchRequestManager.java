@@ -93,9 +93,11 @@ public final class BatchRequestManager {
 
     public static void sendNetworkStatus(ServerPlayer player, int requestId) {
         long blanks = PatternWriter.countBlankPatterns(player);
+        var network = NetworkAccess.resolve(player);
+        long wildcardBlanks = network == null ? 0 : network.blankWildcards();
         boolean hasNetwork = PatternWriter.hasNetwork(player);
         String detail = hasNetwork ? "" : "player has no addressable AE2 network";
-        PacketHandler.sendToPlayer(player, new S2CNetworkStatusPacket(requestId, hasNetwork, blanks, detail));
+        PacketHandler.sendToPlayer(player, new S2CNetworkStatusPacket(requestId, hasNetwork, blanks, wildcardBlanks, detail));
     }
 
     private static void execute(ServerPlayer player, List<PatternSpec> specs) {

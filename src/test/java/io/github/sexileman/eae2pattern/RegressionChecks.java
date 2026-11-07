@@ -27,11 +27,29 @@ import java.util.List;
 public final class RegressionChecks {
     private static int checks;
     public static void main(String[] args) throws Exception {
-        policies(); wireFormat(); searches(); gtVersions(); layoutAndGrid(); manualMultiplier(); grouping(); inspectionPackets(); slotPresentation(); patternMetadata(); amountLabels(); machineWildcards(); heldWildcardWrites(); dynamicRules(); stackedCarriers(); wildcardTooltip(); materialPicker(); aeToolScreens(); encodingMessages(); recipeStripColumns(); searchDebounce();
+        policies(); wireFormat(); searches(); gtVersions(); layoutAndGrid(); manualMultiplier(); grouping(); inspectionPackets(); slotPresentation(); patternMetadata(); amountLabels(); machineWildcards(); heldWildcardWrites(); dynamicRules(); stackedCarriers(); wildcardTooltip(); materialPicker(); aeToolScreens(); encodingMessages(); recipeStripColumns(); searchDebounce(); wildcardStockStatus();
         System.out.println("Passed " + checks + " regression checks");
     }
     private static void check(boolean condition, String message) {
         checks++; if (!condition) throw new AssertionError(message);
+    }
+    private static void wildcardStockStatus() {
+        var buffer=new FriendlyByteBuf(Unpooled.buffer());
+        var sent=new io.github.sexileman.eae2pattern.net.S2CNetworkStatusPacket(9,true,1234,0,"");
+        sent.encode(buffer);
+        var read=io.github.sexileman.eae2pattern.net.S2CNetworkStatusPacket.decode(buffer);
+        check(read.equals(sent), "ordinary stock and absent wildcard stock roundtrip independently");
+        io.github.sexileman.eae2pattern.client.ClientNetworkState.accept(read);
+        check(io.github.sexileman.eae2pattern.client.ClientNetworkState.blankPatterns()==1234 && io.github.sexileman.eae2pattern.client.ClientNetworkState.blankWildcards()==0, "ordinary blanks cannot satisfy wildcard UI stock");
+        buffer.clear();
+        sent=new io.github.sexileman.eae2pattern.net.S2CNetworkStatusPacket(10,true,0,12,"");sent.encode(buffer);
+        io.github.sexileman.eae2pattern.client.ClientNetworkState.accept(io.github.sexileman.eae2pattern.net.S2CNetworkStatusPacket.decode(buffer));
+        check(io.github.sexileman.eae2pattern.client.ClientNetworkState.blankWildcards()==12 && io.github.sexileman.eae2pattern.client.ClientNetworkState.blankPatterns()==0, "wildcard blanks do not satisfy normal pattern stock");
+        io.github.sexileman.eae2pattern.client.ClientNetworkState.reset();buffer.release();
+        var title=io.github.sexileman.eae2pattern.wildcard.WildcardTooltipText.boundName(Component.literal("Wiremill"));
+        check(title.getContents() instanceof net.minecraft.network.chat.contents.TranslatableContents t && t.getKey().equals("eae2_pattern.wildcard.bound_name") && ((Component)t.getArgs()[0]).getString().equals("Wiremill"), "bound name includes the machine and no recipe count");
+        check(title.getStyle().getColor().getValue()==0x9DBCD4 && !title.getStyle().isItalic(), "bound name uses restrained blue-silver text without italics");
+        check(new GenerationReport(1,0,0,0,0,GenerationReport.StopReason.NOT_ENOUGH_WILDCARD_PATTERNS,List.of()).summaryKey().equals("eae2_pattern.report.no_wildcards"), "wildcard shortage has a distinct explanation");
     }
     private static void searchDebounce() {
         var debounce = new io.github.sexileman.eae2pattern.client.SearchDebounce();

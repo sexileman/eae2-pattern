@@ -7,6 +7,17 @@ import java.util.*;
 
 /** Presentation only; counts are stored observations, never a client-side scan of source recipes. */
 public final class WildcardTooltipText {
+    private static java.util.function.BiFunction<String,String,Component> typeNames = (machine, category) -> Component.literal(machine);
+    public static void setTypeNames(java.util.function.BiFunction<String,String,Component> resolver) { typeNames = resolver; }
+    public static Component name(net.minecraft.world.item.ItemStack stack) {
+        if (!MachineWildcard.isBound(stack)) return Component.translatable("item.eae2_pattern.machine_wildcard_pattern.blank");
+        var root = stack.getTag(); var data = root.getCompound(MachineWildcardData.KEY);
+        String category = data.getInt("version") == 3 ? data.getCompound("rules").getString("category") : root.getCompound("editor").getString("category");
+        return boundName(typeNames.apply(data.getString("machine"), category));
+    }
+    public static Component boundName(Component type) {
+        return Component.translatable("eae2_pattern.wildcard.bound_name", type.copy()).withStyle(style -> style.withColor(0x9DBCD4).withItalic(false));
+    }
     private WildcardTooltipText() {}
     public static boolean isGeneratedName(Component name) {
         return name.getContents() instanceof TranslatableContents content && content.getKey().equals("eae2_pattern.wildcard.name");

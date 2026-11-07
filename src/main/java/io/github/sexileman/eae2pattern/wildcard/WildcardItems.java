@@ -12,8 +12,7 @@ public final class WildcardItems {
     public static final RegistryObject<Item> MACHINE_PATTERN = ITEMS.register("machine_wildcard_pattern", () -> new Item(new Item.Properties().stacksTo(64)) {
         @Override public int getMaxStackSize(net.minecraft.world.item.ItemStack stack) { return WildcardCarrierRules.maxStackSize(stack.hasTag()); }
         @Override public net.minecraft.network.chat.Component getName(net.minecraft.world.item.ItemStack stack) {
-            return net.minecraft.network.chat.Component.translatable(MachineWildcard.isBound(stack)
-                    ? "item.eae2_pattern.machine_wildcard_pattern" : "item.eae2_pattern.machine_wildcard_pattern.blank");
+            return WildcardTooltipText.name(stack);
         }
     });
     public static boolean writable(net.minecraft.world.item.ItemStack stack) {

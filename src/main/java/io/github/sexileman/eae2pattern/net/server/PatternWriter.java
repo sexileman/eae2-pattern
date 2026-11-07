@@ -53,10 +53,10 @@ public final class PatternWriter {
     static void startPrepared(ServerPlayer player, List<ItemStack> items, NetworkAccess expected, Consumer<GenerationReport> callback) {
         NetworkAccess network = NetworkAccess.resolve(player);
         StopReason reason = network == null || !expected.sameNetwork(network) ? StopReason.NO_NETWORK
-                : network.blankPatterns() < items.size() ? StopReason.NOT_ENOUGH_BLANK_PATTERNS : null;
+                : network.blankWildcards() < items.size() ? StopReason.NOT_ENOUGH_WILDCARD_PATTERNS : null;
         if (reason != null) {
             callback.accept(new GenerationReport(items.size(), 0, 0, 0, 0, reason,
-                    List.of("Machine wildcard requires " + items.size() + " blank patterns; none consumed")));
+                    List.of("Machine wildcard requires " + items.size() + " blank wildcard patterns; none consumed")));
             return;
         }
         Job job = new Job(player, List.of(), network, callback);
@@ -113,9 +113,9 @@ public final class PatternWriter {
             }
             MEStorage storage = current.storage();
             IActionSource source = current.actionSource(player);
-            AEItemKey blank = NetworkAccess.blankPatternKey();
+            AEItemKey blank = prepared == null ? NetworkAccess.blankPatternKey() : NetworkAccess.blankWildcardKey();
             if (storage.extract(blank, 1, Actionable.MODULATE, source) < 1) {
-                finish(StopReason.NOT_ENOUGH_BLANK_PATTERNS); return true;
+                finish(prepared == null ? StopReason.NOT_ENOUGH_BLANK_PATTERNS : StopReason.NOT_ENOUGH_WILDCARD_PATTERNS); return true;
             }
             encoded++;
             // Every exit after extraction refunds the blank if the encoded item was not inserted.

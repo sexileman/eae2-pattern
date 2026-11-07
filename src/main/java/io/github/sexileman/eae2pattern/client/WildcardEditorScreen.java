@@ -179,7 +179,7 @@ public final class WildcardEditorScreen extends AeToolScreen implements Generati
             if (c.key.equals("material") || c.key.equals("select_all") || c.key.equals("select_none")) c.active &= !filtering && !searchDebounce.pending();
         }
         boolean ready = !sending && !filtering && !searchDebounce.pending() && heldRefreshTicks == 0 && chosen > 0 && (!dynamic||chosen<=MachineWildcardData.MAX_RECIPES) && ruleError==null;
-        boolean networkReady = ready && ClientNetworkState.hasNetwork() && ClientNetworkState.blankPatterns() >= (dynamic ? 1 : (chosen + 2047) / 2048);
+        boolean networkReady = ready && ClientNetworkState.hasNetwork() && ClientNetworkState.blankWildcards() >= (dynamic ? 1 : (chosen + 2047) / 2048);
         generate.active = heldTarget == null ? networkReady : ready && chosen <= MachineWildcardData.MAX_RECIPES
                 && minecraft.player != null && WildcardItems.writable(minecraft.player.getItemInHand(heldTarget.hand()));
         if (generateNetwork != null) generateNetwork.active = networkReady;
@@ -288,7 +288,7 @@ public final class WildcardEditorScreen extends AeToolScreen implements Generati
         } else if (tab == 1) renderRecipes(g, mx, my);
         else if (h > 210) wrapped(g, tr(heldTarget == null ? "settings_help" : "held_settings_help"), x + 14, y + (heldTarget == null ? 147 : 169), w - 28, DIM, .8f);
         g.fill(x + 10, y + h - 34, x + w - 10, y + h - 33, WorkbenchTheme.LINE);
-        label(g, filtering ? tr("filtering", cursor, plan.entries().size()) : heldTarget != null ? tr("summary_held", matches.size(), chosen()) : tr("summary", matches.size(), chosen(), ClientNetworkState.blankPatterns()), x + 10, y + h - 24, w - 160, DIM, .8f);
+        label(g, filtering ? tr("filtering", cursor, plan.entries().size()) : heldTarget != null ? tr("summary_held", matches.size(), chosen()) : tr("summary", matches.size(), chosen(), ClientNetworkState.blankWildcards()), x + 10, y + h - 24, w - 160, DIM, .8f);
         if (!status.getString().isEmpty()) label(g, status, x + 10, y + h - 13, w - 160, WorkbenchTheme.WARNING, .7f);
         super.render(g, mx, my, partial);
         for (var hit : hits) if (tab == 1 && my >= listTop && my < listBottom && mx >= hit.x && mx < hit.x + 18 && my >= hit.y && my < hit.y + 18) {
@@ -307,7 +307,7 @@ public final class WildcardEditorScreen extends AeToolScreen implements Generati
         for (var control : controls) if (control != generate && control.visible && control.isMouseOver(mx, my))
             Tooltips.show(g,font,width, List.of(control.getMessage()), mx, my);
         if (mx >= x + 10 && mx < x + w - 145 && my >= y + h - 30 && my < y + h - 2)
-            Tooltips.show(g,font,width, List.of(tr(heldTarget!=null?"summary_held":"summary", matches.size(), chosen(), ClientNetworkState.blankPatterns()), status), mx, my);
+            Tooltips.show(g,font,width, List.of(tr(heldTarget!=null?"summary_held":"summary", matches.size(), chosen(), ClientNetworkState.blankWildcards()), status), mx, my);
     }
     private void renderRecipes(GuiGraphics g, int mx, int my) {
         g.enableScissor(x + 10, listTop, split - 5, listBottom);
