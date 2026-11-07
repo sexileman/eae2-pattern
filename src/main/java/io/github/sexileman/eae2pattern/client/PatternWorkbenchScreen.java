@@ -25,7 +25,7 @@ import java.util.function.IntConsumer;
 import org.lwjgl.glfw.GLFW;
 
 /** Virtual recipe list and independent inspector: work per frame depends on viewport size, not recipe count. */
-public final class PatternWorkbenchScreen extends Screen implements GenerationListener {
+public final class PatternWorkbenchScreen extends AeToolScreen implements GenerationListener {
     private static final int BG = WorkbenchTheme.BACKGROUND, SURFACE = WorkbenchTheme.SURFACE, LINE = WorkbenchTheme.LINE;
     private static final int TEXT = WorkbenchTheme.TEXT, DIM = WorkbenchTheme.DIM, ACCENT = WorkbenchTheme.ACCENT, ROW = 38;
     private final RecipePlan plan;
@@ -91,15 +91,16 @@ public final class PatternWorkbenchScreen extends Screen implements GenerationLi
         outputBox = addRenderableWidget(new WorkbenchSearchBox(font, left + 24 + half, top + searchY + 5, half - 12, tr("output")));
         inputBox.setMaxLength(160); outputBox.setMaxLength(160);
         inputBox.setBordered(false); outputBox.setBordered(false);
-        inputBox.setTextColor(TEXT); outputBox.setTextColor(TEXT);
+        inputBox.setTextColor(WorkbenchTheme.INPUT_TEXT); outputBox.setTextColor(WorkbenchTheme.INPUT_TEXT);
         inputBox.setValue(inputText); outputBox.setValue(outputText);
         inputBox.setResponder(value -> { inputText = value; exactInput = null; searchDelay = 3; });
         outputBox.setResponder(value -> { outputText = value; exactOutput = null; searchDelay = 3; });
-        int q = (panelWidth - 32) / 4;
-        inputFilter = action(left + 10, top + filterY, q, () -> choose(inputFilter, "input_mode.", 4, inputMode, value -> { inputMode = value; refresh(); }));
-        outputFilter = action(left + 14 + q, top + filterY, q, () -> choose(outputFilter, "output_mode.", 6, outputMode, value -> { outputMode = value; refresh(); }));
-        tools = action(left + 18 + q * 2, top + filterY, q, () -> { dropTools = !dropTools; optionsChanged(); }).toggle(() -> dropTools);
-        products = action(left + 22 + q * 3, top + filterY, q, () -> choose(products, "policy.", 3, outputPolicy, value -> { outputPolicy = value; optionsChanged(); }));
+        boolean stacked=panelWidth<420&&panelHeight>=260;
+        int q=stacked?(panelWidth-24)/2:(panelWidth-32)/4;
+        inputFilter=action(left+10,top+filterY,q,()->choose(inputFilter,"input_mode.",4,inputMode,value->{inputMode=value;refresh();}));
+        outputFilter=action(left+14+q,top+filterY,q,()->choose(outputFilter,"output_mode.",6,outputMode,value->{outputMode=value;refresh();}));
+        tools=action(stacked?left+10:left+18+q*2,top+filterY+(stacked?22:0),q,()->{dropTools=!dropTools;optionsChanged();}).toggle(()->dropTools);
+        products=action(stacked?left+14+q:left+22+q*3,top+filterY+(stacked?22:0),q,()->choose(products,"policy.",3,outputPolicy,value->{outputPolicy=value;optionsChanged();}));
         int w = (split - left - 30) / 5;
         grouping = action(left + 10, top + toolbarY, w * 2, () -> choose(grouping, "grouping.", 4, groupingMode, value -> {
             groupingMode = value; expanded.clear(); refresh();
@@ -120,20 +121,20 @@ public final class PatternWorkbenchScreen extends Screen implements GenerationLi
         }).help("jei_help").setMessage(Component.literal("JEI ↗"));
         generationMode = null;
         if (layout.footerTitle()) {
-            generationMode = action(left + 18, layout.footerTop() + 1, 128, this::toggleWildcard).help("wildcard_mode_help");
+            generationMode = action(left + 18, layout.footerTop() + 1, panelWidth<420?96:128, this::toggleWildcard).help("wildcard_mode_help");
             generationMode.setHeight(14);
         }
-        halveMultiplier = action(left + 18, layout.footerControlsY(), 26,
+        halveMultiplier = action(left + 18, layout.footerControlsY(), panelWidth<300?22:26,
                 () -> changeMultiplier(ProcessingMultiplier.halveAmount(ProcessingMultiplier.parse(multiplierText))))
                 .help("multiplier_halve_help");
-        multiplier = action(left + 47, layout.footerControlsY(), 42, () -> {}).help("multiplier_help");
-        doubleMultiplier = action(left + 92, layout.footerControlsY(), 26,
+        multiplier = action(left + (panelWidth<300?43:47), layout.footerControlsY(), panelWidth<300?34:42, () -> {}).help("multiplier_help");
+        doubleMultiplier = action(left + (panelWidth<300?80:92), layout.footerControlsY(), panelWidth<300?22:26,
                 () -> changeMultiplier(ProcessingMultiplier.doubleAmount(ProcessingMultiplier.parse(multiplierText))))
                 .help("multiplier_double_help");
         resetMultiplier = action(left + 121, layout.footerControlsY(), 38,
                 () -> changeMultiplier(ProcessingMultiplier.DEFAULT)).help("multiplier_reset_help");
         action(left + panelWidth - 62, top + 9, 52, this::onClose).help("close_help").setMessage(tr("close"));
-        generate = action(left + panelWidth - 138, layout.footerControlsY(), 120, this::generate).help("scope_help");
+        generate = action(left + panelWidth - (panelWidth<300?118:138), layout.footerControlsY(), panelWidth<300?100:120, this::generate).help("scope_help");
         choice = null; navigatingToJei = false;
         ClientGenerationFeedback.setListener(this); InspectionFeedback.setListener(this::inspectionFinished);
         ClientNetworkState.reset(); queryNetwork(); queuePreview(); rebuildDetails(); updateButtons();
@@ -404,8 +405,8 @@ public final class PatternWorkbenchScreen extends Screen implements GenerationLi
     }
     @Override public void render(GuiGraphics g, int mx, int my, float partial) {
         iconHits.clear();
-        g.fill(0, 0, width, height, 0xCC000000);
-        WorkbenchTheme.rounded(g, left, top, panelWidth, panelHeight, BG);
+
+        WorkbenchTheme.panel(g, left, top, panelWidth, panelHeight);
         text(g, tr("title").copy().append(" / ").append(plan.machineName()), left + 10, top + 10, panelWidth - 86, TEXT);
         if (panelHeight >= 230) g.fill(left + 10, top + 27, left + panelWidth - 10, top + 28, LINE);
         searchSurface(g, inputBox); searchSurface(g, outputBox);
@@ -453,13 +454,13 @@ public final class PatternWorkbenchScreen extends Screen implements GenerationLi
         }
     }
     private void renderFooter(GuiGraphics g, Component status) {
-        WorkbenchTheme.control(g, left + 8, layout.footerTop(), panelWidth - 16, layout.footerHeight(), 0xFF202020, LINE);
+        WorkbenchTheme.control(g, left + 8, layout.footerTop(), panelWidth - 16, layout.footerHeight(), WorkbenchTheme.BACKGROUND, LINE);
         boolean ready = ClientNetworkState.hasNetwork() && ClientNetworkState.blankPatterns() >= requiredBlanks()
                 && ProcessingMultiplier.parse(multiplierText) > 0;
-        footerStatusX = left + 168;
+        footerStatusX = left + (panelWidth<420?130:168);
         if (layout.footerTitle()) {
             footerStatusY = layout.footerTop() + (layout.footerHeight() >= 50 ? 9 : 4);
-            footerStatusWidth = panelWidth - 186;
+            footerStatusWidth = panelWidth - (panelWidth<420?148:186);
 
             int room = panelWidth - 314;
             if (room >= 70) text(g, tr("processing_only"), left + 168, layout.footerControlsY() + 5, room, DIM);
@@ -468,7 +469,7 @@ public final class PatternWorkbenchScreen extends Screen implements GenerationLi
             footerStatusWidth = Math.max(0, panelWidth - 314);
         }
         if (footerStatusWidth < 12) return;
-        text(g, !layout.footerTitle() && footerStatusWidth < 70 ? Component.literal(ready ? "✓" : "!") : status,
+        text(g, !layout.footerTitle() && footerStatusWidth < 70 ? Component.literal(ready ? "✓" : "!") : panelWidth<420&&ClientNetworkState.hasNetwork()?tr("stock_short",ClientNetworkState.blankPatterns(),requiredBlanks()):status,
                 footerStatusX, footerStatusY, footerStatusWidth, ready ? DIM : WorkbenchTheme.WARNING);
     }
     private void searchSurface(GuiGraphics g, EditBox box) {
@@ -502,7 +503,7 @@ public final class PatternWorkbenchScreen extends Screen implements GenerationLi
             int flagWidth = flag.isEmpty() ? 0 : font.width(flag) + 5;
             text(g, e.label(), x + 19, y + 3, right - x - 23 - flagWidth, e.isSelected() ? TEXT : DIM);
             if (!flag.isEmpty()) g.drawString(font, flag, right - flagWidth, y + 3, DIM, false);
-            int inputMax = right - x >= 220 ? 3 : 2, outputMax = right - x >= 220 ? 2 : 1;
+            int inputMax = right - x >= 220 ? 3 : right-x>=170 ? 2 : 1, outputMax = right - x >= 220 ? 2 : 1;
             List<Ingredient> inputs = new ArrayList<>(e.inputs()); inputs.addAll(e.catalysts());
             while (ingredientStripWidth(inputs.size(), inputMax) + ingredientStripWidth(e.outputs().size(), outputMax) + 24 > right - x - 19
                     && (inputMax > 1 || outputMax > 1)) {
@@ -526,6 +527,7 @@ public final class PatternWorkbenchScreen extends Screen implements GenerationLi
     private int drawIngredients(GuiGraphics g, List<Ingredient> ingredients, int x, int y, int max, int side) {
         for (int i = 0; i < Math.min(max, ingredients.size()); i++) {
             Ingredient ingredient = ingredients.get(i);
+            WorkbenchTheme.slot(g,x-1,y-1,IngredientPresentation.of(ingredient,side));
             visuals.draw(g, ingredient.spec(), x, y);
             visuals.drawRule(g, IngredientPresentation.of(ingredient, side), x, y);
             iconHits.add(new IconHit(x, y, ingredient.spec(), side, IngredientPresentation.of(ingredient, side))); x += 22;
@@ -545,7 +547,7 @@ public final class PatternWorkbenchScreen extends Screen implements GenerationLi
     }
     private int detailHeight(DetailLine line, int width) {
         if (line.spec != null) return line.presentation.kind() == IngredientPresentation.Kind.REGULAR ? 30 : 42;
-        if (line.notice) return 32 + font.split(line.text, Math.max(1, (int) ((width - 16) / .75f))).size() * 9;
+        if (line.notice) return 32 + font.split(line.text, Math.max(1, (int) (width - 16))).size() * 9;
         return DetailRowLayout.TEXT_HEIGHT;
     }
     private int detailContentHeight() { return Math.max(detailRows.height(), referenceRows.height()); }
@@ -559,28 +561,28 @@ public final class PatternWorkbenchScreen extends Screen implements GenerationLi
             DetailLine line = lines.get(n);
             if (line.spec != null) {
                 WorkbenchTheme.slot(g, x, y + 2, line.presentation);
-                visuals.draw(g, line.spec, x + 4, y + 6);
-                visuals.drawRule(g, line.presentation, x + 4, y + 6);
-                iconHits.add(new IconHit(x, y + 2, line.spec, line.side, line.presentation, 24));
-                text(g, line.text, x + 30, y + 3, right - x - 30, line.color);
+                visuals.draw(g, line.spec, x + 1, y + 3);
+                visuals.drawRule(g, line.presentation, x + 1, y + 3);
+                iconHits.add(new IconHit(x, y + 2, line.spec, line.side, line.presentation, 18));
+                text(g, line.text, x + 24, y + 3, right - x - 24, line.color);
                 Component amount = amountText(line.spec);
                 Component state = line.presentation.description();
-                int room = right - x - 30;
-                smallText(g, amount, x + 30, y + 16, room, DIM, .8f);
+                int room = right - x - 24;
+                smallText(g, amount, x + 24, y + 16, room, DIM, .8f);
                 if (line.presentation.kind() != IngredientPresentation.Kind.REGULAR)
-                    smallText(g, state, x + 30, y + 28, room, line.presentation.color(), .8f);
+                    smallText(g, state, x + 24, y + 28, room, line.presentation.color(), .8f);
             } else if (line.notice) {
                 int bottom = bodyTop + positions.top(n + 1) - (int) detailScroll - 4;
                 int color = line.color == WorkbenchTheme.WARNING ? WorkbenchTheme.WARNING : DIM;
-                g.fill(x, y + 5, right, bottom, WorkbenchTheme.INPUT);
+                g.fill(x, y + 5, right, bottom, WorkbenchTheme.SURFACE);
                 g.fill(x, y + 5, x + 2, bottom, color);
                 smallText(g, tr(line.color == WorkbenchTheme.WARNING ? "notice_warning" : "notice_info"), x + 8, y + 10, right - x - 16, color, .9f);
                 int ty = y + 24;
-                for (var part : font.split(line.text, Math.max(1, (int) ((right - x - 16) / .75f)))) {
+                for (var part : font.split(line.text, Math.max(1, (int) (right - x - 16)))) {
                     g.pose().pushPose();
                     try {
                         g.pose().translate(x + 8, ty, 0);
-                        g.pose().scale(.75f, .75f, 1);
+                        g.pose().scale(1, 1, 1);
                         g.drawString(font, part, 0, 0, DIM, false);
                     } finally { g.pose().popPose(); }
                     ty += 9;
@@ -637,16 +639,14 @@ public final class PatternWorkbenchScreen extends Screen implements GenerationLi
         IngredientPresentation presentation = IngredientPresentation.of(ingredient, side);
         return presentation.kind() == IngredientPresentation.Kind.REGULAR ? text : text.copy().append(" · ").append(presentation.description());
     }
-    private void smallText(GuiGraphics g, Component value, int x, int y, int room, int color, float scale) {
-        g.pose().pushPose();
-        try {
-            g.pose().translate(x, y, 0);
-            g.pose().scale(scale, scale, 1);
-            text(g, value, 0, 0, Math.max(1, (int) (room / scale)), color);
-        } finally { g.pose().popPose(); }
+    private void smallText(GuiGraphics g,Component value,int x,int y,int room,int color,float ignoredScale) {
+        text(g,value,x,y,room,color);
     }
-    private void text(GuiGraphics g, Component value, int x, int y, int room, int color) {
-        String s = value.getString(); g.drawString(font, font.width(s) <= room ? s : font.plainSubstrByWidth(s, Math.max(0, room - 6)) + "…", x, y, color, false);
+    private void text(GuiGraphics g,Component value,int x,int y,int room,int color) {
+        if(room<1)return;
+        if(font.width(value)<=room){g.drawString(font,value,x,y,color,false);return;}
+        var clipped=net.minecraft.network.chat.FormattedText.composite(font.substrByWidth(value,Math.max(0,room-6)),Component.literal("…"));
+        g.drawString(font,net.minecraft.locale.Language.getInstance().getVisualOrder(clipped),x,y,color,false);
     }
     private int thumbHeight(int content) { int h = Math.max(1, bodyBottom - bodyTop); return Math.min(h, Math.max(16, h * h / Math.max(1, content))); }
     private void scrollbar(GuiGraphics g, int x, double offset, int content) {
@@ -659,12 +659,13 @@ public final class PatternWorkbenchScreen extends Screen implements GenerationLi
     private static boolean over(double x, double y, int l, int t, int r, int b) { return x >= l && x < r && y >= t && y < b; }
     private double clamp(double value, int content) { return Math.max(0, Math.min(value, Math.max(0, content - (bodyBottom - bodyTop)))); }
     @Override public boolean mouseScrolled(double mx, double my, double delta) {
-        if (choice != null) return true;
+        if (choice != null) return insidePanel(mx,my);
         if (over(mx, my, left + 8, bodyTop, split, bodyBottom)) { listScroll = clamp(listScroll - delta * ROW * 2, rows.size() * ROW); return true; }
         if (over(mx, my, split, bodyTop, left + panelWidth, bodyBottom)) { detailScroll = clamp(detailScroll - delta * 36, detailContentHeight()); return true; }
         return super.mouseScrolled(mx, my, delta);
     }
     @Override public boolean mouseClicked(double mx, double my, int button) {
+        if (!insidePanel(mx,my) && (choice==null || !new net.minecraft.client.renderer.Rect2i(choice.x,choice.y,choice.w,choice.h).contains((int)mx,(int)my))) {choice=null;return false;}
         if (choice != null) {
             Choice current = choice; choice = null;
             if (button == 0) current.click(mx, my);
@@ -724,6 +725,10 @@ public final class PatternWorkbenchScreen extends Screen implements GenerationLi
             }
         }
         return super.keyPressed(key, scan, modifiers);
+    }
+    public void prepareTransition(Screen next){
+        var runtime=io.github.sexileman.eae2pattern.compat.jei.JeiRuntimeHolder.get();
+        navigatingToJei=next instanceof AeToolScreen || runtime!=null&&runtime.getRecipesGui()==next;
     }
     @Override public void onClose() { if (jeiReturn != null) jeiReturn.restore(); minecraft.setScreen(parent); }
     @Override public void removed() {
@@ -797,9 +802,9 @@ public final class PatternWorkbenchScreen extends Screen implements GenerationLi
         @Override protected void renderWidget(GuiGraphics g, int mx, int my, float partial) {
             boolean primary = this == generate, hovered = isHoveredOrFocused() && active;
             int color = primary && active ? (hovered ? WorkbenchTheme.PRIMARY_HOVER : WorkbenchTheme.PRIMARY) : hovered ? WorkbenchTheme.HOVER : SURFACE;
-            int border = primary && active ? 0xFF686868 : hovered ? 0xFF494949 : color;
+            int border = LINE;
             WorkbenchTheme.control(g, getX(), getY(), getWidth(), getHeight(), color, border);
-            int textColor = !active && this != multiplier ? 0xFF707070 : TEXT;
+            int textColor = !active && this != multiplier ? WorkbenchTheme.DIM : TEXT;
             int reserve = this == multiplier ? 4 : state == null ? 10 : 25;
             String label = getMessage().getString();
             String value = font.width(label) <= getWidth() - reserve ? label : font.plainSubstrByWidth(label, Math.max(0, getWidth() - reserve - 6)) + "…";
@@ -808,10 +813,23 @@ public final class PatternWorkbenchScreen extends Screen implements GenerationLi
                 g.drawString(font, value, getX() + 6, getY() + 5, textColor, false);
                 boolean on = state.getAsBoolean();
                 int sx = getX() + getWidth() - 19, sy = getY() + 6;
-                WorkbenchTheme.rounded(g, sx, sy, 14, 8, on ? 0xFFBFBFBF : 0xFF484848);
-                WorkbenchTheme.rounded(g, sx + (on ? 7 : 1), sy + 1, 6, 6, on ? BG : DIM);
+                WorkbenchTheme.rounded(g, sx, sy, 14, 8, on ? WorkbenchTheme.ACCENT : WorkbenchTheme.LINE);
+                WorkbenchTheme.rounded(g, sx + (on ? 7 : 1), sy + 1, 6, 6, on ? 0xFFECECEC : WorkbenchTheme.BACKGROUND);
             }
         }
         @Override protected void updateWidgetNarration(NarrationElementOutput out) { defaultButtonNarrationText(out); }
     }
+    @Override public net.minecraft.client.renderer.Rect2i toolBounds(){return new net.minecraft.client.renderer.Rect2i(left,top,panelWidth,panelHeight);}
+
+    @Override public java.util.Optional<IngredientArea> jeiIngredientAt(double mx,double my){
+        if(choice!=null)return java.util.Optional.empty();
+        var hit=iconAt(mx,my);
+        return hit==null?java.util.Optional.empty():java.util.Optional.of(new IngredientArea(hit.spec,new net.minecraft.client.renderer.Rect2i(hit.x,hit.y,hit.size,hit.size)));
+    }
+    @Override public List<GhostField> jeiGhostFields(){
+        if(sending||checking||choice!=null)return List.of();
+        return List.of(ghostField(inputBox,s->{inputBox.setValue("&"+s.id());exactInput=s;searchDelay=3;}),ghostField(outputBox,s->{outputBox.setValue("&"+s.id());exactOutput=s;searchDelay=3;}));
+    }
+    @Override public List<net.minecraft.client.renderer.Rect2i> jeiExtraAreas(){return choice==null?List.of():List.of(new net.minecraft.client.renderer.Rect2i(choice.x,choice.y,choice.w,choice.h));}
+
 }

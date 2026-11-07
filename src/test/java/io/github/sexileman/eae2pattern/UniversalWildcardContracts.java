@@ -60,6 +60,14 @@ public final class UniversalWildcardContracts {
             check(node(bytes(app,"io/github/sexileman/eae2pattern/wildcard/WildcardItems$1.class")).methods.stream().anyMatch(m->m.name.equals("getMaxStackSize")&&m.desc.equals("(Lnet/minecraft/world/item/ItemStack;)I")),"per-stack Forge limit distinguishes blank and NBT carriers");
             check(items.methods.stream().anyMatch(m -> m.name.equals("creative")), "blank carrier has a creative-tab acquisition entry");
             var jei = node(bytes(app, "io/github/sexileman/eae2pattern/compat/jei/EAE2PatternJeiPlugin.class"));
+            check(jei.methods.stream().anyMatch(m->m.name.equals("registerGuiHandlers")),"tool screens register native JEI screen/ingredient/ghost integration");
+            for(String screen:List.of("PatternWorkbenchScreen","WildcardEditorScreen","WildcardChoiceScreen","WildcardMachineScreen","MachinePickerScreen","CollectingScreen")){
+                var ui=node(bytes(app,"io/github/sexileman/eae2pattern/client/"+screen+".class"));
+                check(ui.superName.equals("io/github/sexileman/eae2pattern/client/AeToolScreen")&&ui.methods.stream().anyMatch(m->m.name.equals("toolBounds")),"every tool page reports its bounded footprint: "+screen);
+            }
+            var theme=new String(bytes(app,"io/github/sexileman/eae2pattern/client/WorkbenchTheme.class"),java.nio.charset.StandardCharsets.ISO_8859_1);
+            check(theme.contains("textures/guis/background.png"),"AE2 native panel asset is referenced rather than embedded or redrawn as full-screen overlay");
+
             check(jei.methods.stream().anyMatch(m -> m.name.equals("registerRecipes")), "JEI usage information is registered");
             var writer = node(bytes(app, "io/github/sexileman/eae2pattern/net/server/MachineWildcardWriter.class"));
             var heldStart = writer.methods.stream().filter(m -> m.name.equals("startHeld")).findFirst().orElseThrow();

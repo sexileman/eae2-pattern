@@ -8,7 +8,7 @@ import java.util.*;
 import java.util.function.Consumer;
 
 /** Virtual option list with optional icon and complete identity on a second line. */
-final class WildcardChoiceScreen extends Screen {
+public final class WildcardChoiceScreen extends AeToolScreen {
     private final Screen parent;
     private final List<PickerOption> choices;
     private final Consumer<String> select;
@@ -24,15 +24,15 @@ final class WildcardChoiceScreen extends Screen {
         rowHeight=choices.stream().anyMatch(c->!c.detail().getString().isEmpty())?32:24;
     }
     @Override protected void init() {
-        w=Math.min(420,width-24);h=Math.min(330,height-24);x=(width-w)/2;y=(height-h)/2;top=y+57;
+        var frame=ToolViewport.measure(width,height,420,330);w=frame.width();h=frame.height();x=frame.left();y=frame.top();top=y+57;
         search=addRenderableWidget(new WorkbenchSearchBox(font,x+12,y+32,w-24,
                 Component.translatable("eae2_pattern.editor.choice_search"),Component.translatable("eae2_pattern.editor.choice_search")));
         search.setBordered(false);
         search.setResponder(q->{visible=choices.stream().filter(c->c.matches(q)).toList();scroll=0;});visible=choices;
-        addRenderableWidget(Button.builder(Component.translatable("gui.back"),b->onClose()).bounds(x+w-54,y+6,46,18).build());
+        addRenderableWidget(new AeTextButton(x+w-54,y+6,46,18,Component.translatable("gui.back"),this::onClose));
     }
     @Override public void render(GuiGraphics g,int mx,int my,float partial) {
-        g.fill(0,0,width,height,0xDD101010);g.fill(x,y,x+w,y+h,WorkbenchTheme.BACKGROUND);
+        WorkbenchTheme.panel(g,x,y,w,h);
         g.drawString(font,title,x+12,y+11,WorkbenchTheme.TEXT,false);
         WorkbenchTheme.control(g,x+8,y+27,w-16,23,WorkbenchTheme.INPUT,WorkbenchTheme.LINE);
         int first=Math.max(0,(int)scroll/rowHeight),last=Math.min(visible.size(),first+viewport()/rowHeight+2);
@@ -81,7 +81,18 @@ final class WildcardChoiceScreen extends Screen {
     private void drag(double my){scroll=Math.max(0,Math.min(Math.max(0,visible.size()*rowHeight-viewport()),(my-top)/Math.max(1,viewport())*visible.size()*rowHeight));}
     @Override public boolean mouseDragged(double mx,double my,int b,double dx,double dy){if(dragging){drag(my);return true;}return super.mouseDragged(mx,my,b,dx,dy);}
     @Override public boolean mouseReleased(double mx,double my,int b){dragging=false;return super.mouseReleased(mx,my,b);}
-    @Override public boolean mouseScrolled(double mx,double my,double delta){scroll=Math.max(0,Math.min(Math.max(0,visible.size()*rowHeight-viewport()),scroll-delta*rowHeight));return true;}
+    @Override public boolean mouseScrolled(double mx,double my,double delta){if(!insidePanel(mx,my))return false;scroll=Math.max(0,Math.min(Math.max(0,visible.size()*rowHeight-viewport()),scroll-delta*rowHeight));return true;}
     @Override public void onClose(){minecraft.setScreen(parent);}
     @Override public boolean isPauseScreen(){return false;}
+    @Override public net.minecraft.client.renderer.Rect2i toolBounds(){return new net.minecraft.client.renderer.Rect2i(x,y,w,h);}
+
+    @Override public java.util.Optional<IngredientArea> jeiIngredientAt(double mx,double my){
+        if(!insidePanel(mx,my)||my<top||my>=y+h-8)return java.util.Optional.empty();
+        int index=(int)((my-top+scroll)/rowHeight);if(index<0||index>=visible.size())return java.util.Optional.empty();
+        var option=visible.get(index);int iconY=top+index*rowHeight-(int)scroll+(rowHeight-16)/2;
+        if(option.icon()==null||mx<x+14||mx>=x+30||my<iconY||my>=iconY+16)return java.util.Optional.empty();
+        return java.util.Optional.of(new IngredientArea(option.icon(),new net.minecraft.client.renderer.Rect2i(x+14,iconY,16,16)));
+    }
+    @Override public List<GhostField> jeiGhostFields(){return search==null?List.of():List.of(ghostField(search,s->search.setValue(s.id().toString())));}
+
 }

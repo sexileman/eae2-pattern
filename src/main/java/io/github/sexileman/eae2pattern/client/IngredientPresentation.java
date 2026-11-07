@@ -32,7 +32,7 @@ public record IngredientPresentation(Kind kind, String chance) {
     public String badge() {
         return switch (kind) { case NOT_CONSUMED -> "∞"; case CHANCE_INPUT, CHANCE_OUTPUT -> "%"; case MIXED -> "?"; default -> ""; };
     }
-    public int color() { return kind == Kind.NOT_CONSUMED ? 0xFFFF8E87 : WorkbenchTheme.WARNING; }
+    public int color() { return kind == Kind.NOT_CONSUMED ? 0xFFBE2424 : WorkbenchTheme.WARNING; }
     public Component description() {
         String key = switch (kind) {
             case NOT_CONSUMED -> "slot_not_consumed";

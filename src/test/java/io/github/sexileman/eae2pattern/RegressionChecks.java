@@ -27,11 +27,42 @@ import java.util.List;
 public final class RegressionChecks {
     private static int checks;
     public static void main(String[] args) throws Exception {
-        policies(); wireFormat(); searches(); gtVersions(); layoutAndGrid(); manualMultiplier(); grouping(); inspectionPackets(); slotPresentation(); patternMetadata(); amountLabels(); machineWildcards(); heldWildcardWrites(); dynamicRules(); stackedCarriers(); wildcardTooltip(); materialPicker();
+        policies(); wireFormat(); searches(); gtVersions(); layoutAndGrid(); manualMultiplier(); grouping(); inspectionPackets(); slotPresentation(); patternMetadata(); amountLabels(); machineWildcards(); heldWildcardWrites(); dynamicRules(); stackedCarriers(); wildcardTooltip(); materialPicker(); aeToolScreens();
         System.out.println("Passed " + checks + " regression checks");
     }
     private static void check(boolean condition, String message) {
         checks++; if (!condition) throw new AssertionError(message);
+    }
+    private static void aeToolScreens() throws Exception {
+        for(int[] size:List.of(new int[]{320,180},new int[]{400,240},new int[]{480,270},new int[]{640,360},new int[]{960,540})){
+            var frame=io.github.sexileman.eae2pattern.client.ToolViewport.measure(size[0],size[1],552,440);
+            check(frame.left()>=0&&frame.top()>=0&&frame.left()+frame.width()<=size[0]&&frame.top()+frame.height()<=size[1],"AE tool stays within logical canvas "+size[0]);
+            check(frame.contains(frame.left(),frame.top())&&!frame.contains(frame.left()-1,frame.top())&&!frame.contains(frame.left()+frame.width(),frame.top()),"JEI side lanes do not belong to tool input area");
+            if(size[0]>=400)check(frame.left()>=72&&size[0]-frame.left()-frame.width()>=72,"both JEI side lanes retain four ingredient columns");
+            if(size[1]>=220)check(size[1]-frame.top()-frame.height()>=26,"JEI bottom search field has reserved space");
+        }
+        var screens=new java.util.LinkedHashMap<Class<?>,mezz.jei.api.gui.handlers.IScreenHandler<?>>();
+        var ghosts=new java.util.LinkedHashMap<Class<?>,mezz.jei.api.gui.handlers.IGhostIngredientHandler<?>>();
+        var globals=new java.util.ArrayList<mezz.jei.api.gui.handlers.IGlobalGuiHandler>();
+        var registration=(mezz.jei.api.registration.IGuiHandlerRegistration)java.lang.reflect.Proxy.newProxyInstance(RegressionChecks.class.getClassLoader(),new Class[]{mezz.jei.api.registration.IGuiHandlerRegistration.class},(proxy,method,args)->{
+            switch(method.getName()){
+                case "addGuiScreenHandler"->screens.put((Class<?>)args[0],(mezz.jei.api.gui.handlers.IScreenHandler<?>)args[1]);
+                case "addGhostIngredientHandler"->ghosts.put((Class<?>)args[0],(mezz.jei.api.gui.handlers.IGhostIngredientHandler<?>)args[1]);
+                case "addGlobalGuiHandler"->globals.add((mezz.jei.api.gui.handlers.IGlobalGuiHandler)args[0]);
+                default->throw new AssertionError("Unexpected JEI registration call "+method.getName());
+            }return null;
+        });
+        io.github.sexileman.eae2pattern.compat.jei.ToolJeiHandlers.register(registration);
+        check(screens.size()==6&&ghosts.size()==6&&globals.size()==1,"all six tool pages register screen, ghost and shared ingredient integration");
+        check(screens.keySet().equals(ghosts.keySet()),"every JEI-visible page participates in ghost drag lifecycle");
+        for(Class<?> type:screens.keySet())check(io.github.sexileman.eae2pattern.client.AeToolScreen.class.isAssignableFrom(type),"JEI page implements bounded panel/input contract: "+type.getSimpleName());
+        var unsupported=new mezz.jei.api.ingredients.ITypedIngredient<String>(){
+            public mezz.jei.api.ingredients.IIngredientType<String> getType(){return ()->String.class;}
+            public String getIngredient(){return "unsupported";}
+            public java.util.Optional<ItemStack> getItemStack(){return java.util.Optional.empty();}
+            public <V> java.util.Optional<V> getIngredient(mezz.jei.api.ingredients.IIngredientType<V> type){return java.util.Optional.empty();}
+        };
+        for(var handler:ghosts.values())check(handler.getTargetsTyped(null,unsupported,false).isEmpty(),"unsupported JEI ingredient produces no mutable drag targets");
     }
     private static void materialPicker() {
         var source=StackSpec.of(StackType.ITEM,new ResourceLocation("gtceu:iron_ingot"),64);

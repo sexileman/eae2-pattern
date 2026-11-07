@@ -16,7 +16,7 @@ import net.minecraft.world.item.ItemStack;
 import java.util.*;
 
 /** Independent wildcard workflow: rules, virtualized recipe preview, encoding settings. */
-public final class WildcardEditorScreen extends Screen implements GenerationListener {
+public final class WildcardEditorScreen extends AeToolScreen implements GenerationListener {
     private final RecipePlan plan;
     private final Screen parent;
     private final boolean savedCopy;
@@ -103,8 +103,8 @@ public final class WildcardEditorScreen extends Screen implements GenerationList
         else mc.setScreen(new WildcardMachineScreen(categories, mc.screen, target));
     }
     @Override protected void init() {
-        controls.clear(); w = Math.min(900, width - 12); h = Math.min(530, height - 12); x = (width - w) / 2; y = (height - h) / 2;
-        split = x + w * 3 / 5; listTop = y + 76; listBottom = y + h - 36;
+        controls.clear(); var frame=ToolViewport.measure(width,height,552,420);w=frame.width();h=frame.height();x=frame.left();y=frame.top();
+        split = x + w * 11 / 20; listTop = y + 76; listBottom = y + h - 36;
         button(x + w - 58, y + 7, 48, -1, () -> onClose(), "back");
         for (int i = 0; i < 4; i++) { final int n = i; int tw=Math.min(94,(w-20)/4); button(x + 10 + i * tw, y + 30, tw-6, -1, () -> { tab = n; sync(); }, "tab_" + i); }
         boxes = new EditBox[4]; int col = (w - 34) / 2, first = h < 220 ? 57 : 70;
@@ -125,7 +125,7 @@ public final class WildcardEditorScreen extends Screen implements GenerationList
         button(x+10,quickY+75,w-20,0,()->{dynamic=!dynamic;changedRules();},"mode");
         button(x + 10, y + 53, 62, 1, () -> { matches.forEach(e -> selected.add(e.recipeId())); chosenCount=-1; updateControls(); }, "select_all");
         button(x + 78, y + 53, 62, 1, () -> { matches.forEach(e -> selected.remove(e.recipeId())); chosenCount=-1; updateControls(); }, "select_none");
-        int modeWidth = Math.max(48, Math.min(82, w - (split - x) - 70));
+        int modeWidth = Math.max(36, Math.min(82, w - (split - x) - 70));
         button(split + 10, y + 53, modeWidth, 1, () -> { sourceView = !sourceView; detailScroll = 0; updateControls(); }, "source");
         button(split + 16 + modeWidth, y + 53, 44, 1, () -> { if (focus != null) RecipeNavigation.show(plan, focus); }, "jei");
         button(x + 10, y + 65, Math.min(240, w / 2 - 15), 2, () -> { dropTools = !dropTools; changedPolicy(); }, "drop_tools");
@@ -270,7 +270,7 @@ public final class WildcardEditorScreen extends Screen implements GenerationList
         PacketHandler.sendToServer(new C2SQueryNetworkStatusPacket(0)); updateControls();
     }
     @Override public void render(GuiGraphics g, int mx, int my, float partial) {
-        hits.clear(); g.fill(0, 0, width, height, 0xCC000000); g.fill(x, y, x + w, y + h, WorkbenchTheme.BACKGROUND);
+        hits.clear();  WorkbenchTheme.panel(g,x,y,w,h);
         label(g, title.copy().append(" / ").append(plan.machineName()), x + 10, y + 10, w - 80, TEXT, 1);
         g.fill(x + 10, y + 26, x + w - 10, y + 27, WorkbenchTheme.LINE);
         if (tab == 0) {
@@ -316,7 +316,7 @@ public final class WildcardEditorScreen extends Screen implements GenerationList
             g.fill(x + 14, ry + 12, x + 22, ry + 20, selected.contains(e.recipeId()) ? WorkbenchTheme.TEXT : WorkbenchTheme.LINE);
             label(g, e.label(), x + 29, ry + 2, split - x - 47, TEXT, 1);
             var in = new ArrayList<>(e.inputs()); in.addAll(e.catalysts()); int ix = x + 29;
-            int maxIn = split - x > 230 ? 3 : 2;
+            int maxIn = split - x > 230 ? 3 : split-x>185 ? 2 : 1;
             ix = strip(g, in, ix, ry + 18, maxIn, 0);
             label(g, Component.literal("→"), ix + 4, ry + 22, 14, DIM, 1);
             strip(g, e.outputs(), ix + 26, ry + 18, 1, 1);
@@ -341,6 +341,7 @@ public final class WildcardEditorScreen extends Screen implements GenerationList
     private int strip(GuiGraphics g, List<Ingredient> slots, int px, int py, int max, int side) {
         for (int i = 0; i < Math.min(max, slots.size()); i++) {
             var item = slots.get(i); var presentation = IngredientPresentation.of(item, side);
+            WorkbenchTheme.slot(g,px-1,py-1,presentation);
             visuals.draw(g, item.spec(), px, py); visuals.drawRule(g, presentation, px, py);
             hits.add(new Hit(px, py, item.spec(), presentation, side)); px += 22;
         }
@@ -352,11 +353,11 @@ public final class WildcardEditorScreen extends Screen implements GenerationList
         for (var ingredient : ingredients) {
             var p = sourceView ? IngredientPresentation.of(ingredient, side) : IngredientPresentation.encoded(focus, ingredient.spec(), side, dropTools);
             if (dy + 40 >= listTop && dy < listBottom) {
-                WorkbenchTheme.slot(g, dx, dy + 2, p); visuals.draw(g, ingredient.spec(), dx + 4, dy + 6); visuals.drawRule(g, p, dx + 4, dy + 6);
-                label(g, visuals.name(ingredient.spec()), dx + 30, dy + 3, room - 30, TEXT, 1);
-                label(g, Component.literal(ingredient.spec().amount() + (ingredient.spec().isItem() ? "" : " mB")), dx + 30, dy + 16, room - 30, DIM, .8f);
-                if (p.kind() != IngredientPresentation.Kind.REGULAR) label(g, p.description(), dx + 30, dy + 27, room - 30, p.color(), .8f);
-                hits.add(new Hit(dx + 4, dy + 6, ingredient.spec(), p, side));
+                WorkbenchTheme.slot(g, dx, dy + 2, p); visuals.draw(g, ingredient.spec(), dx + 1, dy + 3); visuals.drawRule(g, p, dx + 1, dy + 3);
+                label(g, visuals.name(ingredient.spec()), dx + 24, dy + 3, room - 24, TEXT, 1);
+                label(g, Component.literal(ingredient.spec().amount() + (ingredient.spec().isItem() ? "" : " mB")), dx + 24, dy + 16, room - 24, DIM, .8f);
+                if (p.kind() != IngredientPresentation.Kind.REGULAR) label(g, p.description(), dx + 24, dy + 27, room - 24, p.color(), .8f);
+                hits.add(new Hit(dx + 1, dy + 3, ingredient.spec(), p, side));
             }
             dy += 40;
         }
@@ -368,25 +369,24 @@ public final class WildcardEditorScreen extends Screen implements GenerationList
         int thumb = Math.max(12, size * size / content), sy = top + (int) ((size - thumb) * amount / Math.max(1, content - size));
         g.fill(sx, top, sx + 3, bottom, WorkbenchTheme.LINE); g.fill(sx, sy, sx + 3, sy + thumb, DIM);
     }
-    private void label(GuiGraphics g, Component text, int px, int py, int room, int color, float scale) {
-        if (room < 1) return; g.pose().pushPose();
-        try { g.pose().translate(px, py, 0); g.pose().scale(scale, scale, 1); g.drawString(font, net.minecraft.locale.Language.getInstance().getVisualOrder(font.substrByWidth(text, (int) (room / scale))), 0, 0, color, false); }
-        finally { g.pose().popPose(); }
+    private void label(GuiGraphics g,Component text,int px,int py,int room,int color,float ignoredScale) {
+        if(room<1)return;
+        g.drawString(font,net.minecraft.locale.Language.getInstance().getVisualOrder(font.substrByWidth(text,room)),px,py,color,false);
     }
-    private void wrapped(GuiGraphics g, Component text, int px, int py, int room, int color, float scale) {
-        for (var part : font.split(text, Math.max(1, (int) (room / scale)))) {
-            if (py + font.lineHeight * scale > y + h - 36) break;
-            g.pose().pushPose(); try { g.pose().translate(px, py, 0); g.pose().scale(scale, scale, 1); g.drawString(font, part, 0, 0, color, false); }
-            finally { g.pose().popPose(); } py += 10;
+    private void wrapped(GuiGraphics g,Component text,int px,int py,int room,int color,float ignoredScale) {
+        for(var part:font.split(text,Math.max(1,room))){
+            if(py+font.lineHeight>y+h-36)break;
+            g.drawString(font,part,px,py,color,false);py+=font.lineHeight+1;
         }
     }
     private static double clamp(double value, int content, int viewport) { return Math.max(0, Math.min(value, Math.max(0, content - viewport))); }
     @Override public boolean mouseScrolled(double mx, double my, double delta) {
-        if (tab != 1 || my < listTop || my > listBottom) return super.mouseScrolled(mx, my, delta);
+        if (!insidePanel(mx,my) || tab != 1 || my < listTop || my > listBottom) return super.mouseScrolled(mx, my, delta);
         if (mx < split) scroll = clamp(scroll - delta * ROW, matches.size() * ROW, listBottom - listTop);
         else detailScroll = clamp(detailScroll - delta * 30, detailHeight(), listBottom - listTop); return true;
     }
     @Override public boolean mouseClicked(double mx, double my, int button) {
+        if(!insidePanel(mx,my))return false;
         if (super.mouseClicked(mx, my, button)) return true;
         if(tab==1&&button==0&&!sending&&my>=listTop&&my<listBottom)for(var hit:hits)if(mx>=hit.x&&mx<hit.x+18&&my>=hit.y&&my<hit.y+18){chooseIngredient(hit);return true;}
         if (tab != 1 || my < listTop || my >= listBottom || button != 0) return false;
@@ -453,9 +453,21 @@ public final class WildcardEditorScreen extends Screen implements GenerationList
         Control(int x, int y, int width, int page, Runnable action, String key) { super(x, y, width, 18, tr(key)); this.page = page; this.action = action; this.key = key; }
         @Override public void onPress() { action.run(); }
         @Override protected void renderWidget(GuiGraphics g, int mx, int my, float partial) {
-            WorkbenchTheme.control(g, getX(), getY(), getWidth(), getHeight(), isHoveredOrFocused() && active ? WorkbenchTheme.HOVER : WorkbenchTheme.SURFACE, WorkbenchTheme.LINE);
+            WorkbenchTheme.control(g, getX(), getY(), getWidth(), getHeight(), key.equals("tab_"+tab)?WorkbenchTheme.PRIMARY:isHoveredOrFocused() && active ? WorkbenchTheme.HOVER : WorkbenchTheme.SURFACE, WorkbenchTheme.LINE);
             int tw = font.width(getMessage()); label(g, getMessage(), getX() + Math.max(5, (getWidth() - tw) / 2), getY() + 5, getWidth() - 10, active ? TEXT : DIM, 1);
         }
         @Override protected void updateWidgetNarration(NarrationElementOutput output) { defaultButtonNarrationText(output); }
     }
+    @Override public net.minecraft.client.renderer.Rect2i toolBounds(){return new net.minecraft.client.renderer.Rect2i(x,y,w,h);}
+
+    @Override public java.util.Optional<IngredientArea> jeiIngredientAt(double mx,double my){
+        if(tab!=1||my<listTop||my>=listBottom)return java.util.Optional.empty();
+        for(var hit:hits)if(mx>=hit.x&&mx<hit.x+18&&my>=hit.y&&my<hit.y+18)return java.util.Optional.of(new IngredientArea(hit.spec,new net.minecraft.client.renderer.Rect2i(hit.x,hit.y,18,18)));
+        return java.util.Optional.empty();
+    }
+    @Override public List<GhostField> jeiGhostFields(){
+        if(tab!=3||sending)return List.of();
+        var targets=new ArrayList<GhostField>();for(var box:boxes)if(box.visible&&box.active)targets.add(ghostField(box,s->box.setValue("&"+s.id())));return targets;
+    }
+
 }

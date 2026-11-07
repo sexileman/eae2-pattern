@@ -90,6 +90,7 @@ dependencies {
     // JEI (optional at runtime, but needed to compile the client plugin)
     compileOnly fg.deobf("mezz.jei:jei-${minecraft_version}-forge:${jei_version}")
     runtimeOnly fg.deobf("mezz.jei:jei-${minecraft_version}-forge:${jei_version}")
+    testImplementation fg.deobf("mezz.jei:jei-${minecraft_version}-forge:${jei_version}")
 
 }
 

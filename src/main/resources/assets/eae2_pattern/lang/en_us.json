@@ -271,8 +271,8 @@
   "eae2_pattern.editor.title": "Wildcard encoding",
   "eae2_pattern.editor.back": "Back",
   "eae2_pattern.editor.tab_0": "Quick filters",
-  "eae2_pattern.editor.tab_1": "Recipe preview",
-  "eae2_pattern.editor.tab_2": "Encoding settings",
+  "eae2_pattern.editor.tab_1": "Preview",
+  "eae2_pattern.editor.tab_2": "Encoding",
   "eae2_pattern.editor.query_0": "Include inputs: $tag, &ID, @mod…",
   "eae2_pattern.editor.query_1": "Exclude inputs…",
   "eae2_pattern.editor.query_2": "Include outputs: $tag, &ID, @mod…",
@@ -401,5 +401,6 @@
   "eae2_pattern.wildcard.matched_patterns_dynamic": "Matched patterns: %s (last encoded)",
   "eae2_pattern.editor.material_tag": "Tag: %s",
   "eae2_pattern.editor.example_item_id": "Example item: %s",
-  "eae2_pattern.editor.example_fluid_id": "Example fluid: %s"
+  "eae2_pattern.editor.example_fluid_id": "Example fluid: %s",
+  "eae2_pattern.workbench.stock_short": "Blanks %s / need %s"
 }

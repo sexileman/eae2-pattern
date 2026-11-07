@@ -401,5 +401,6 @@
   "eae2_pattern.wildcard.matched_patterns_dynamic": "已匹配样板：%s（上次编码）",
   "eae2_pattern.editor.material_tag": "标签：%s",
   "eae2_pattern.editor.example_item_id": "示例物品：%s",
-  "eae2_pattern.editor.example_fluid_id": "示例流体：%s"
+  "eae2_pattern.editor.example_fluid_id": "示例流体：%s",
+  "eae2_pattern.workbench.stock_short": "空白 %s / 需 %s"
 }

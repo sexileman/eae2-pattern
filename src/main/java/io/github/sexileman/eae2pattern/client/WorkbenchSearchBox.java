@@ -15,7 +15,7 @@ public final class WorkbenchSearchBox extends EditBox {
     public WorkbenchSearchBox(Font font, int x, int y, int width, Component label, Component placeholder) {
         super(font, x, y, width, 14, label);
         this.textFont = font; this.placeholder = placeholder;
-        setBordered(false);
+        setBordered(false);setTextColor(WorkbenchTheme.INPUT_TEXT);setTextColorUneditable(WorkbenchTheme.PLACEHOLDER);
     }
     @Override public void renderWidget(GuiGraphics g, int mouseX, int mouseY, float partialTick) {
         if (getValue().isEmpty()) g.drawString(textFont,
