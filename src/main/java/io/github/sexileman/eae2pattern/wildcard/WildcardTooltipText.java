@@ -12,13 +12,11 @@ public final class WildcardTooltipText {
         return name.getContents() instanceof TranslatableContents content && content.getKey().equals("eae2_pattern.wildcard.name");
     }
     public static List<Component> lines(Component type,int count,boolean dynamic,String encoder) {
-        var lines=new ArrayList<Component>();lines.add(Component.empty());
-        lines.add(Component.translatable("eae2_pattern.wildcard.encoding_type",type.copy().withStyle(ChatFormatting.AQUA)).withStyle(ChatFormatting.GRAY));
-        lines.add(Component.translatable("eae2_pattern.wildcard.matched_patterns",Component.literal(Integer.toString(count)).withStyle(ChatFormatting.WHITE)).withStyle(ChatFormatting.GRAY));
-        lines.add(Component.translatable(dynamic?"eae2_pattern.wildcard.dynamic_note":"eae2_pattern.wildcard.fixed_note").withStyle(ChatFormatting.DARK_GRAY));
-        lines.add(Component.empty());
+        var lines=new ArrayList<Component>();
         if(!encoder.isEmpty())lines.add(Component.translatable("eae2_pattern.wildcard.encoder",encoder).withStyle(ChatFormatting.GRAY));
+        lines.add(Component.translatable("eae2_pattern.wildcard.encoding_type",type.copy().withStyle(ChatFormatting.LIGHT_PURPLE)).withStyle(ChatFormatting.GRAY));
+        lines.add(Component.translatable(dynamic?"eae2_pattern.wildcard.matched_patterns_dynamic":"eae2_pattern.wildcard.matched_patterns",Component.literal(Integer.toString(count)).withStyle(ChatFormatting.WHITE)).withStyle(ChatFormatting.GRAY));
         lines.add(Component.translatable("eae2_pattern.wildcard.edit_hint").withStyle(ChatFormatting.DARK_GRAY));
-        lines.add(Component.empty());return lines;
+        return lines;
     }
 }

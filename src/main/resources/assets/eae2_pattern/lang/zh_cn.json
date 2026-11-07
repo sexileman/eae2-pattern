@@ -263,7 +263,7 @@
   "eae2_pattern.workbench.wildcard_stock": "空白样板：%s / 至少需要 %s",
   "eae2_pattern.workbench.wildcard_mode_help": "将同类机器配方收录到通配样板，每张最多 2048 条。可按形态、材料或搜索条件筛选。",
   "eae2_pattern.wildcard.name": "通配样板 · %s · %s 条配方",
-  "eae2_pattern.wildcard.machine": "编码类型：%s",
+  "eae2_pattern.wildcard.machine": "配方类型：%s",
   "eae2_pattern.wildcard.recipes": "已匹配样板：%s",
   "eae2_pattern.wildcard.bound_help": "右键编辑 · 每张最多 2048 条配方",
   "eae2_pattern.wildcard.edit_help": "右键编辑规则，或从机器配方页面重新编码。",
@@ -327,7 +327,7 @@
   "eae2_pattern.editor.pick_machine": "选择编码类型",
   "eae2_pattern.editor.machine_search": "搜索机器名称或类型 ID…",
   "eae2_pattern.editor.legacy_help": "请右键选择机器并设置编码规则。",
-  "item.eae2_pattern.machine_wildcard_pattern": "处理样板（通配）",
+  "item.eae2_pattern.machine_wildcard_pattern": "通配样板",
   "eae2_pattern.workbench.open_wildcard_editor": "通配样板 ↗",
   "eae2_pattern.wildcard.encoder": "由 %s 编码",
   "eae2_pattern.editor.policy_empty": "没有符合编码设置的输入或输出，请调整设置。",
@@ -393,9 +393,10 @@
   "eae2_pattern.editor.reset_help": "将一张通配样板单独放入工作台、背包合成栏或 AE 合成终端，可清除全部数据并取回空白通配样板。",
   "eae2_pattern.editor.held_saved_inventory": "已编码 1 张并放入背包，剩余空白保留在手中。",
   "eae2_pattern.editor.pinyin_help": "安装 Just Enough Characters 后，名称及候选搜索支持拼音和首字母，如 tieding、td。动态规则可用拼音查找形态或材料，再点选。",
-  "eae2_pattern.wildcard.encoding_type": "编码类型：%s",
+  "eae2_pattern.wildcard.encoding_type": "配方类型：%s",
   "eae2_pattern.wildcard.matched_patterns": "已匹配样板：%s",
   "eae2_pattern.wildcard.dynamic_note": "动态规则 · 数量以上次编码为准",
   "eae2_pattern.wildcard.fixed_note": "固定收录 · 已保存的配方数量",
-  "eae2_pattern.wildcard.edit_hint": "右键编辑 · 每张最多 2048 条配方"
+  "eae2_pattern.wildcard.edit_hint": "右键编辑",
+  "eae2_pattern.wildcard.matched_patterns_dynamic": "已匹配样板：%s（上次编码）"
 }

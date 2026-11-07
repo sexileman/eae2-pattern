@@ -263,7 +263,7 @@
   "eae2_pattern.workbench.wildcard_stock": "Blank patterns: %s / at least %s needed",
   "eae2_pattern.workbench.wildcard_mode_help": "Collect recipes for one machine type in wildcard patterns, up to 2048 per pattern. Filter by form, material or search terms.",
   "eae2_pattern.wildcard.name": "Wildcard pattern · %s · %s recipes",
-  "eae2_pattern.wildcard.machine": "Encoding type: %s",
+  "eae2_pattern.wildcard.machine": "Recipe type: %s",
   "eae2_pattern.wildcard.recipes": "Matched patterns: %s",
   "eae2_pattern.wildcard.bound_help": "Right-click to edit · up to 2048 recipes per pattern",
   "eae2_pattern.wildcard.edit_help": "Right-click to edit rules, or encode again from the machine recipe page.",
@@ -327,7 +327,7 @@
   "eae2_pattern.editor.pick_machine": "Choose encoding type",
   "eae2_pattern.editor.machine_search": "Search machine name or type ID…",
   "eae2_pattern.editor.legacy_help": "Right-click to choose a machine and set encoding rules.",
-  "item.eae2_pattern.machine_wildcard_pattern": "Processing Pattern (Wildcard)",
+  "item.eae2_pattern.machine_wildcard_pattern": "Wildcard Pattern",
   "eae2_pattern.workbench.open_wildcard_editor": "Wildcard patterns ↗",
   "eae2_pattern.wildcard.encoder": "Encoded by %s",
   "eae2_pattern.editor.policy_empty": "No valid inputs or outputs remain. Adjust encoding settings.",
@@ -393,9 +393,10 @@
   "eae2_pattern.editor.reset_help": "Craft a wildcard pattern on its own in a crafting grid or ME crafting terminal to clear all its data and recover a blank wildcard pattern.",
   "eae2_pattern.editor.held_saved_inventory": "One pattern encoded into your inventory. Remaining blanks stay in hand.",
   "eae2_pattern.editor.pinyin_help": "With Just Enough Characters, name and option searches accept pinyin or initials, such as tieding or td. For dynamic rules, search for a form or material, then select it.",
-  "eae2_pattern.wildcard.encoding_type": "Encoding type: %s",
+  "eae2_pattern.wildcard.encoding_type": "Recipe type: %s",
   "eae2_pattern.wildcard.matched_patterns": "Matched patterns: %s",
   "eae2_pattern.wildcard.dynamic_note": "Dynamic rules · count at last encoding",
   "eae2_pattern.wildcard.fixed_note": "Fixed collection · stored recipe count",
-  "eae2_pattern.wildcard.edit_hint": "Right-click to edit · up to 2048 recipes per pattern"
+  "eae2_pattern.wildcard.edit_hint": "Right-click to edit",
+  "eae2_pattern.wildcard.matched_patterns_dynamic": "Matched patterns: %s (last encoded)"
 }

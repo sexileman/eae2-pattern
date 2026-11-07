@@ -11,7 +11,7 @@
 | 通配界面 | 通配样板编码 | Wildcard encoding |
 | AE2 基础消耗品 | 空白样板 | Blank pattern |
 | 未编码通配物品 | 空白通配样板 | Blank wildcard pattern |
-| 已编码通配物品 | 处理样板（通配） | Processing Pattern (Wildcard) |
+| 已编码通配物品 | 通配样板 | Wildcard Pattern |
 | 确定的输出 | 必定产出 | Guaranteed output |
 | 配方两侧 | 输入 / 输出 | Inputs / outputs |
 | 不消耗的输入 | 不消耗材料 | Reusable inputs |
@@ -36,3 +36,5 @@
 ## 校对
 
 保留语言键、参数数量和参数顺序。Minecraft 翻译中的字面 `%` 用 `%%`，避免被当作格式符。发布前核对中英文键集合、格式参数、特殊符号和最终 jar 中的资源。
+
+物品提示使用“配方类型”，与处理样板一致。通配样板提示不添加空白分隔行；动态数量的统计时点紧随数量，不再独占一行。

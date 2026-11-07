@@ -38,15 +38,15 @@ public final class RegressionChecks {
         check(io.github.sexileman.eae2pattern.wildcard.WildcardTooltipText.isGeneratedName(generated),"old generated item names normalize without rewriting saved NBT");
         check(!io.github.sexileman.eae2pattern.wildcard.WildcardTooltipText.isGeneratedName(Component.literal("My custom pattern")),"player-chosen literal names remain untouched");
         var type=Component.literal("Wiremill");var lines=io.github.sexileman.eae2pattern.wildcard.WildcardTooltipText.lines(type,325,true,"player");
-        check(lines.size()==8&&lines.get(0).getString().isEmpty()&&lines.get(4).getString().isEmpty(),"primary fields and metadata have explicit spacing");
+        check(lines.size()==4&&lines.stream().noneMatch(c->c.getString().isEmpty()),"compact tooltip has no blank spacer or redundant mode lines");
         var encoding=(net.minecraft.network.chat.contents.TranslatableContents)lines.get(1).getContents();
         check(encoding.getKey().endsWith("encoding_type")&&((Component)encoding.getArgs()[0]).getString().equals("Wiremill"),"encoding type displays the local category title, not a GT-only metadata field");
         var count=(net.minecraft.network.chat.contents.TranslatableContents)lines.get(2).getContents();
-        check(count.getKey().endsWith("matched_patterns")&&((Component)count.getArgs()[0]).getString().equals("325"),"matched count is a separate primary field");
-        check(((net.minecraft.network.chat.contents.TranslatableContents)lines.get(3).getContents()).getKey().endsWith("dynamic_note"),"dynamic count is marked as last-encoding observation");
+        check(count.getKey().endsWith("matched_patterns_dynamic")&&((Component)count.getArgs()[0]).getString().equals("325"),"matched count is a separate primary field");
+        check(((Component)encoding.getArgs()[0]).getStyle().getColor().equals(net.minecraft.network.chat.TextColor.fromLegacyFormat(net.minecraft.ChatFormatting.LIGHT_PURPLE)),"recipe type uses the native processing-pattern purple");
         check(type.getStyle().getColor()==null,"tooltip styling does not mutate cached JEI titles");
         var fixed=io.github.sexileman.eae2pattern.wildcard.WildcardTooltipText.lines(Component.literal("test:machine"),20,false,"");
-        check(fixed.size()==7&&((net.minecraft.network.chat.contents.TranslatableContents)fixed.get(3).getContents()).getKey().endsWith("fixed_note"),"non-GT fallback and fixed snapshot count remain available without encoder metadata");
+        check(fixed.size()==3&&((net.minecraft.network.chat.contents.TranslatableContents)fixed.get(1).getContents()).getKey().endsWith("matched_patterns"),"fixed tooltip has three useful lines when encoder is absent");
     }
     private static void stackedCarriers() {
         check(io.github.sexileman.eae2pattern.wildcard.WildcardCarrierRules.isResetRecipe("eae2_pattern:machine_wildcard_pattern_reset"),"reset recipe is excluded from generic blank-to-blank batch encoding");
