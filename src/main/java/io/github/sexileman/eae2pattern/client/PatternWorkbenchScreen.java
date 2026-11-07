@@ -203,6 +203,7 @@ public final class PatternWorkbenchScreen extends AeToolScreen implements Genera
         doubleMultiplier.active = !checking && !sending && ProcessingMultiplier.parse(multiplierText) < ProcessingMultiplier.MAX;
         resetMultiplier.active = !checking && !sending && ProcessingMultiplier.parse(multiplierText) != 1;
         more.active = !checking && !sending;
+        generate.setMessage(sending ? tr("sending") : tr("generate", requiredBlanks()));
         generate.active = !sending && !checking && !filtering && !searchDebounce.pending() && ProcessingMultiplier.parse(multiplierText) > 0
                 && eligibleCount > 0 && ClientNetworkState.hasNetwork() && ClientNetworkState.blankPatterns() >= requiredBlanks();
     }
