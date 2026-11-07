@@ -56,4 +56,23 @@ public final class StackVisuals {
             } finally { g.pose().popPose(); }
         }
     }
+
+    /** JEI-style rule annotation: small text at the top, quantities stay at the bottom. */
+    public void drawRule(GuiGraphics g, IngredientPresentation presentation, int x, int y) {
+        String label = switch (presentation.kind()) {
+            case NOT_CONSUMED -> Component.translatable("eae2_pattern.workbench.slot_overlay_not_consumed").getString();
+            case CHANCE_INPUT, CHANCE_OUTPUT -> presentation.chance();
+            case MIXED -> "?";
+            default -> "";
+        };
+        if (label.isEmpty()) return;
+        var font = Minecraft.getInstance().font;
+        float scale = Math.min(.5f, 16f / Math.max(1, font.width(label)));
+        g.pose().pushPose();
+        try {
+            g.pose().translate(x, y, 210);
+            g.pose().scale(scale, scale, 1);
+            g.drawString(font, label, 0, 0, presentation.color(), true);
+        } finally { g.pose().popPose(); }
+    }
 }

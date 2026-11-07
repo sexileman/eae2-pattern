@@ -475,9 +475,13 @@ public final class PatternWorkbenchScreen extends Screen implements GenerationLi
             if (!flag.isEmpty()) g.drawString(font, flag, right - flagWidth, y + 3, DIM, false);
             int inputMax = right - x >= 220 ? 3 : 2, outputMax = right - x >= 220 ? 2 : 1;
             List<Ingredient> inputs = new ArrayList<>(e.inputs()); inputs.addAll(e.catalysts());
+            while (ingredientStripWidth(inputs.size(), inputMax) + ingredientStripWidth(e.outputs().size(), outputMax) + 24 > right - x - 19
+                    && (inputMax > 1 || outputMax > 1)) {
+                if (inputMax > 1) inputMax--; else outputMax--;
+            }
             int iconX = drawIngredients(g, inputs, x + 19, y + 17, inputMax, 0);
-            g.drawString(font, ">", iconX + 1, y + 22, DIM, false);
-            drawIngredients(g, e.outputs(), iconX + 10, y + 17, outputMax, 1);
+            g.drawString(font, ">", iconX + 6, y + 22, DIM, false);
+            drawIngredients(g, e.outputs(), iconX + 24, y + 17, outputMax, 1);
         }
         if (visible.isEmpty()) text(g, tr("empty"), x + 6, bodyTop + 12, right - x - 12, DIM);
         g.disableScissor(); scrollbar(g, split - 10, listScroll, rows.size() * ROW);
@@ -487,13 +491,17 @@ public final class PatternWorkbenchScreen extends Screen implements GenerationLi
         g.fill(x + 1, y + 1, x + 8, y + 8, checked ? WorkbenchTheme.PRIMARY : BG);
         if (checked) { g.fill(x + 2, y + 4, x + 4, y + 6, TEXT); g.fill(x + 4, y + 2, x + 6, y + 6, TEXT); }
     }
+    private int ingredientStripWidth(int count, int max) {
+        return Math.min(count, max) * 22 + (count > max ? font.width("+" + (count - max)) + 8 : 0);
+    }
     private int drawIngredients(GuiGraphics g, List<Ingredient> ingredients, int x, int y, int max, int side) {
         for (int i = 0; i < Math.min(max, ingredients.size()); i++) {
             Ingredient ingredient = ingredients.get(i);
             visuals.draw(g, ingredient.spec(), x, y);
-            iconHits.add(new IconHit(x, y, ingredient.spec(), side, IngredientPresentation.of(ingredient, side))); x += 18;
+            visuals.drawRule(g, IngredientPresentation.of(ingredient, side), x, y);
+            iconHits.add(new IconHit(x, y, ingredient.spec(), side, IngredientPresentation.of(ingredient, side))); x += 22;
         }
-        if (ingredients.size() > max) { String extra = "+" + (ingredients.size() - max); g.drawString(font, extra, x, y + 5, DIM, false); x += font.width(extra) + 3; }
+        if (ingredients.size() > max) { String extra = "+" + (ingredients.size() - max); g.drawString(font, extra, x + 3, y + 5, DIM, false); x += font.width(extra) + 8; }
         return x;
     }
     private void renderDetails(GuiGraphics g) {
@@ -508,7 +516,7 @@ public final class PatternWorkbenchScreen extends Screen implements GenerationLi
     }
     private int detailHeight(DetailLine line, int width) {
         if (line.spec != null) return line.presentation.kind() == IngredientPresentation.Kind.REGULAR ? 30 : 42;
-        if (line.notice) return 32 + font.split(line.text, Math.max(1, width - 16)).size() * (font.lineHeight + 2);
+        if (line.notice) return 32 + font.split(line.text, Math.max(1, (int) ((width - 16) / .75f))).size() * 9;
         return DetailRowLayout.TEXT_HEIGHT;
     }
     private int detailContentHeight() { return Math.max(detailRows.height(), referenceRows.height()); }
@@ -523,24 +531,30 @@ public final class PatternWorkbenchScreen extends Screen implements GenerationLi
             if (line.spec != null) {
                 WorkbenchTheme.slot(g, x, y + 2, line.presentation);
                 visuals.draw(g, line.spec, x + 4, y + 6);
+                visuals.drawRule(g, line.presentation, x + 4, y + 6);
                 iconHits.add(new IconHit(x, y + 2, line.spec, line.side, line.presentation, 24));
                 text(g, line.text, x + 30, y + 3, right - x - 30, line.color);
                 Component amount = amountText(line.spec);
                 Component state = line.presentation.description();
                 int room = right - x - 30;
-                text(g, amount, x + 30, y + 16, room, DIM);
+                smallText(g, amount, x + 30, y + 16, room, DIM, .8f);
                 if (line.presentation.kind() != IngredientPresentation.Kind.REGULAR)
-                    text(g, state, x + 30, y + 28, room, line.presentation.color());
+                    smallText(g, state, x + 30, y + 28, room, line.presentation.color(), .8f);
             } else if (line.notice) {
                 int bottom = bodyTop + positions.top(n + 1) - (int) detailScroll - 4;
                 int color = line.color == WorkbenchTheme.WARNING ? WorkbenchTheme.WARNING : DIM;
                 g.fill(x, y + 5, right, bottom, WorkbenchTheme.INPUT);
                 g.fill(x, y + 5, x + 2, bottom, color);
-                g.drawString(font, tr(line.color == WorkbenchTheme.WARNING ? "notice_warning" : "notice_info"), x + 8, y + 10, color, false);
+                smallText(g, tr(line.color == WorkbenchTheme.WARNING ? "notice_warning" : "notice_info"), x + 8, y + 10, right - x - 16, color, .9f);
                 int ty = y + 24;
-                for (var part : font.split(line.text, Math.max(1, right - x - 16))) {
-                    g.drawString(font, part, x + 8, ty, DIM, false);
-                    ty += font.lineHeight + 2;
+                for (var part : font.split(line.text, Math.max(1, (int) ((right - x - 16) / .75f)))) {
+                    g.pose().pushPose();
+                    try {
+                        g.pose().translate(x + 8, ty, 0);
+                        g.pose().scale(.75f, .75f, 1);
+                        g.drawString(font, part, 0, 0, DIM, false);
+                    } finally { g.pose().popPose(); }
+                    ty += 9;
                 }
             } else text(g, line.text, x, y + 4, right - x, line.color);
         }
@@ -593,6 +607,14 @@ public final class PatternWorkbenchScreen extends Screen implements GenerationLi
         Component text = Component.literal(ingredient.spec().amount() + (ingredient.spec().isItem() ? " × " : " mB ")).append(name(ingredient.spec()));
         IngredientPresentation presentation = IngredientPresentation.of(ingredient, side);
         return presentation.kind() == IngredientPresentation.Kind.REGULAR ? text : text.copy().append(" · ").append(presentation.description());
+    }
+    private void smallText(GuiGraphics g, Component value, int x, int y, int room, int color, float scale) {
+        g.pose().pushPose();
+        try {
+            g.pose().translate(x, y, 0);
+            g.pose().scale(scale, scale, 1);
+            text(g, value, 0, 0, Math.max(1, (int) (room / scale)), color);
+        } finally { g.pose().popPose(); }
     }
     private void text(GuiGraphics g, Component value, int x, int y, int room, int color) {
         String s = value.getString(); g.drawString(font, font.width(s) <= room ? s : font.plainSubstrByWidth(s, Math.max(0, room - 6)) + "…", x, y, color, false);
