@@ -4,6 +4,16 @@
   "package": "io.github.sexileman.eae2pattern.mixin",
   "compatibilityLevel": "JAVA_17",
   "plugin": "io.github.sexileman.eae2pattern.mixin.UniversalMixinPlugin",
-  "mixins": ["MachineWildcardProviderMixin", "WildcardExpansionMixin", "GtlWildcardActivationMixin", "GtlWildcardExpansionMixin"],
-  "injectors": {"defaultRequire": 1}
+  "mixins": [
+    "MachineWildcardProviderMixin",
+    "WildcardExpansionMixin",
+    "GtlWildcardActivationMixin",
+    "GtlWildcardExpansionMixin",
+    "CycleProcessAccessor",
+    "CraftingCycleNodeMixin",
+    "CraftingCycleCalculationMixin"
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  }
 }

@@ -27,11 +27,24 @@ import java.util.List;
 public final class RegressionChecks {
     private static int checks;
     public static void main(String[] args) throws Exception {
-        policies(); wireFormat(); searches(); gtVersions(); layoutAndGrid(); manualMultiplier(); grouping(); inspectionPackets(); slotPresentation(); patternMetadata(); amountLabels(); machineWildcards(); heldWildcardWrites(); dynamicRules(); stackedCarriers(); wildcardTooltip(); materialPicker(); aeToolScreens(); encodingMessages(); recipeStripColumns(); searchDebounce(); wildcardStockStatus(); guidePages(); moreMenuLayout();
+        policies(); wireFormat(); searches(); gtVersions(); layoutAndGrid(); manualMultiplier(); grouping(); inspectionPackets(); slotPresentation(); patternMetadata(); amountLabels(); machineWildcards(); heldWildcardWrites(); dynamicRules(); stackedCarriers(); wildcardTooltip(); materialPicker(); aeToolScreens(); encodingMessages(); recipeStripColumns(); searchDebounce(); wildcardStockStatus(); guidePages(); moreMenuLayout(); cyclePaths();
         System.out.println("Passed " + checks + " regression checks");
     }
     private static void check(boolean condition, String message) {
         checks++; if (!condition) throw new AssertionError(message);
+    }
+    private static void cyclePaths() {
+        check(io.github.sexileman.eae2pattern.cycle.CyclePath.close(List.of("A","B"),List.of("A")).equals(List.of("A","B","A")),"two-material input back-edge closes A-B-A");
+        check(io.github.sexileman.eae2pattern.cycle.CyclePath.close(List.of("A","B","C"),List.of("A")).equals(List.of("A","B","C","A")),"longer cycles retain ordered ancestry");
+        check(io.github.sexileman.eae2pattern.cycle.CyclePath.close(List.of("X","A","B"),List.of("A")).equals(List.of("A","B","A")),"unrelated target prefix is excluded");
+        check(io.github.sexileman.eae2pattern.cycle.CyclePath.close(List.of("A"),List.of("A")).equals(List.of("A","A")),"direct recursive processing is identified");
+        check(io.github.sexileman.eae2pattern.cycle.CyclePath.close(List.of("A","B"),List.of("C")).isEmpty(),"acyclic dependencies do not become cycles");
+        check(io.github.sexileman.eae2pattern.cycle.CyclePath.close(List.of("A","B"),List.of()).isEmpty(),"co-output overlap alone is not reported as an input cycle");
+        check(io.github.sexileman.eae2pattern.cycle.CyclePath.close(List.of("A","B","C"),List.of("A","B")).equals(List.of("B","C","B")),"nearest ancestor gives the shortest witnessed cycle");
+        check(io.github.sexileman.eae2pattern.cycle.CyclePath.close(java.util.Collections.nCopies(65,"A"),List.of("A")).isEmpty(),"diagnostic depth is bounded");
+        var tagA=new CompoundTag();tagA.putInt("mode",1);var tagB=new CompoundTag();tagB.putInt("mode",2);
+        var a=new StackSpec(StackType.ITEM,new ResourceLocation("test:part"),tagA,1);var b=new StackSpec(StackType.ITEM,new ResourceLocation("test:part"),tagB,1);
+        check(io.github.sexileman.eae2pattern.cycle.CyclePath.close(List.of(a),List.of(b)).isEmpty(),"NBT-distinct materials do not form a false cycle");
     }
     private static void moreMenuLayout() {
         var actions=io.github.sexileman.eae2pattern.client.WorkbenchMoreAction.values();
