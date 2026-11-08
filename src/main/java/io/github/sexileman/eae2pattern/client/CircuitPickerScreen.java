@@ -14,17 +14,22 @@ final class CircuitPickerScreen extends AeToolScreen {
     private final Consumer<CircuitCondition> apply;
     private final Set<Integer> selected = new TreeSet<>();
     private final StackVisuals visuals = new StackVisuals();
-    private List<Integer> numbers;
+    private final List<Integer> numbers;
     private int mode, x,y,w,h,columns, rows;
     private double scroll;
     CircuitPickerScreen(Screen parent,CircuitCatalog catalog,CircuitCondition condition,Consumer<CircuitCondition> apply) {
         super(Component.translatable("eae2_pattern.circuit.title"));
         this.parent=parent;this.catalog=catalog;this.apply=apply;mode=condition.mode();selected.addAll(condition.configurations());
-        var values=new TreeSet<Integer>();for(int i=0;i<=32;i++)values.add(i);values.addAll(catalog.icons.keySet());values.addAll(selected);numbers=List.copyOf(values);
+        numbers=List.copyOf(catalog.icons.keySet());
     }
     @Override protected void init() {
-        var frame=ToolViewport.measure(width,height,300,230);x=frame.left();y=frame.top();w=frame.width();h=frame.height();
-        columns=Math.max(1,(w-24)/26);rows=Math.max(1,(h-91)/26);
+        var frame=ToolViewport.measure(width,height,300,230);
+        columns=Math.max(1,(frame.width()-24)/26);
+        int contentRows=Math.max(1,(numbers.size()+columns-1)/columns);
+        frame=ToolViewport.measure(width,height,300,Math.min(230,91+contentRows*26));
+        x=frame.left();y=frame.top();w=frame.width();h=frame.height();
+        rows=Math.max(1,(h-91)/26);
+        scroll=Math.min(scroll,Math.max(0,contentRows-rows));
         addRenderableWidget(new AeTextButton(x+10,y+31,(w-26)/2,18,Component.translatable("eae2_pattern.circuit.all"),()->{mode=0;selected.clear();}));
         addRenderableWidget(new AeTextButton(x+16+(w-26)/2,y+31,(w-26)/2,18,Component.translatable("eae2_pattern.circuit.none"),()->{mode=1;selected.clear();}));
         addRenderableWidget(new AeTextButton(x+w-62,y+5,52,18,Component.translatable("gui.done"),this::onClose));
