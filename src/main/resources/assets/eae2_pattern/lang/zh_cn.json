@@ -443,5 +443,10 @@
   "eae2_pattern.circuit.configuration": "电路配置：%s",
   "eae2_pattern.circuit.matches": "当前机器匹配 %s 条配方",
   "eae2_pattern.circuit.hint": "选择电路编号，或从 JEI 拖入已配置的电路。",
-  "eae2_pattern.workbench.input_consumption_help": "仅判断电路以外的输入材料；电路使用独立条件筛选。"
+  "eae2_pattern.workbench.input_consumption_help": "仅判断电路以外的输入材料；电路使用独立条件筛选。",
+  "eae2_pattern.cycle.alpha.ready": "循环实验：已规划 %s 个阶段；提交时将复核并占用全部启动材料和外部耗材。",
+  "eae2_pattern.cycle.alpha.seed": "循环实验：当前库存不足以启动并完成首轮周转，保留原生缺料结果。",
+  "eae2_pattern.cycle.alpha.external": "循环实验：外部材料不足（材料 ID / 缺少数量）：%s；未启动循环。",
+  "eae2_pattern.cycle.alpha.unsupported": "循环实验：配方结构、数量或规划上限不符合首版条件，保留原生缺料结果。",
+  "eae2_pattern.cycle.alpha.cpu": "循环实验：网络包含尚未适配的独立 CPU 实现，保留原生缺料结果。"
 }

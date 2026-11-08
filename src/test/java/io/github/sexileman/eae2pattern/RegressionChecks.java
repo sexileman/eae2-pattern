@@ -28,6 +28,7 @@ public final class RegressionChecks {
     private static int checks;
     public static void main(String[] args) throws Exception {
         circuitConditions(); policies(); wireFormat(); searches(); gtVersions(); layoutAndGrid(); manualMultiplier(); grouping(); inspectionPackets(); slotPresentation(); patternMetadata(); amountLabels(); machineWildcards(); heldWildcardWrites(); dynamicRules(); stackedCarriers(); wildcardTooltip(); materialPicker(); aeToolScreens(); encodingMessages(); recipeStripColumns(); searchDebounce(); wildcardStockStatus(); guidePages(); moreMenuLayout(); cyclePaths(); generationSafety();
+        checks+=CycleAlphaChecks.run();
         System.out.println("Passed " + checks + " regression checks");
     }
     private static void circuitConditions() throws Exception {

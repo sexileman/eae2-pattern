@@ -443,5 +443,10 @@
   "eae2_pattern.circuit.configuration": "Circuit configuration: %s",
   "eae2_pattern.circuit.matches": "%s recipes for this machine",
   "eae2_pattern.circuit.hint": "Select configurations; drag a configured circuit here from JEI.",
-  "eae2_pattern.workbench.input_consumption_help": "Checks inputs other than programmed circuits. Filter circuits separately."
+  "eae2_pattern.workbench.input_consumption_help": "Checks inputs other than programmed circuits. Filter circuits separately.",
+  "eae2_pattern.cycle.alpha.ready": "Cycle alpha: planned %s stages. Submission will recheck and reserve all startup and external materials.",
+  "eae2_pattern.cycle.alpha.seed": "Cycle alpha: insufficient startup stock for a complete first round. Native missing-material result retained.",
+  "eae2_pattern.cycle.alpha.external": "Cycle alpha: external material missing (ID / amount): %s. Cycle not started.",
+  "eae2_pattern.cycle.alpha.unsupported": "Cycle alpha: unsupported recipes, quantities or planning limits. Native missing-material result retained.",
+  "eae2_pattern.cycle.alpha.cpu": "Cycle alpha: this network contains an unsupported independent crafting CPU implementation. Native result retained."
 }

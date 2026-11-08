@@ -16,7 +16,7 @@ import java.util.Set;
 public final class UniversalMixinPlugin implements IMixinConfigPlugin {
     public static final String GTL = "org.gtlcore.gtlcore.integration.wildcard.";
     private final java.util.function.Supplier<IClassBytecodeProvider> bytecode;
-    private Boolean gtlSupported, cyclesSupported;
+    private Boolean gtlSupported, cyclesSupported, growthSupported;
     public UniversalMixinPlugin() { this(() -> MixinService.getService().getBytecodeProvider()); }
     public UniversalMixinPlugin(java.util.function.Supplier<IClassBytecodeProvider> bytecode) { this.bytecode = bytecode; }
     public static boolean supportedPair(ClassNode activation, ClassNode expansion) {
@@ -63,7 +63,7 @@ public final class UniversalMixinPlugin implements IMixinConfigPlugin {
                 ||!method(calculation,"run","()Lappeng/api/networking/crafting/ICraftingPlan;"))return false;
         if(!field(node,"what","Lappeng/api/stacks/AEKey;")||!field(node,"parent","Lappeng/crafting/CraftingTreeProcess;")||!field(node,"job","Lappeng/crafting/CraftingCalculation;")
                 ||!field(process,"parent","Lappeng/crafting/CraftingTreeNode;")||!field(process,"details","Lappeng/api/crafting/IPatternDetails;")
-                ||!field(calculation,"level","Lnet/minecraft/world/level/Level;")||!field(calculation,"simRequester","Lappeng/api/networking/crafting/ICraftingSimulationRequester;"))return false;
+                ||!field(calculation,"networkInv","Lappeng/crafting/inv/NetworkCraftingSimulationState;")||!field(calculation,"level","Lnet/minecraft/world/level/Level;")||!field(calculation,"simRequester","Lappeng/api/networking/crafting/ICraftingSimulationRequester;"))return false;
         int calls=0;
         for(var m:node.methods)if(m.name.equals("buildChildPatterns"))for(var insn:m.instructions)
             if(insn instanceof MethodInsnNode call&&call.owner.equals("appeng/crafting/CraftingTreeProcess")&&call.name.equals("notRecursive")&&call.desc.equals("(Lappeng/api/crafting/IPatternDetails;)Z"))calls++;
@@ -74,7 +74,26 @@ public final class UniversalMixinPlugin implements IMixinConfigPlugin {
     private static boolean has(ClassNode node, String name, String descriptor) {
         return node.methods.stream().anyMatch(m -> m.name.equals(name) && m.desc.equals(descriptor) && (m.access & Opcodes.ACC_STATIC) != 0);
     }
+    public static boolean supportedGrowth(ClassNode cpu,ClassNode job,ClassNode progress,ClassNode tracker){
+        if(cpu==null||job==null||progress==null||tracker==null)return false;
+        return field(cpu,"inventory","Lappeng/crafting/inv/ListCraftingInventory;")&&field(cpu,"job","Lappeng/crafting/execution/ExecutingCraftingJob;")&&field(cpu,"cluster","Lappeng/me/cluster/implementations/CraftingCPUCluster;")
+            &&method(cpu,"executeCrafting","(ILappeng/me/service/CraftingService;Lappeng/api/networking/energy/IEnergyService;Lnet/minecraft/world/level/Level;)I")
+            &&method(cpu,"insert","(Lappeng/api/stacks/AEKey;JLappeng/api/config/Actionable;)J")&&method(cpu,"finishJob","(Z)V")
+            &&method(cpu,"trySubmitJob","(Lappeng/api/networking/IGrid;Lappeng/api/networking/crafting/ICraftingPlan;Lappeng/api/networking/security/IActionSource;Lappeng/api/networking/crafting/ICraftingRequester;)Lappeng/api/networking/crafting/ICraftingSubmitResult;")
+            &&method(cpu,"writeToNBT","(Lnet/minecraft/nbt/CompoundTag;)V")&&method(cpu,"readFromNBT","(Lnet/minecraft/nbt/CompoundTag;)V")
+            &&field(job,"waitingFor","Lappeng/crafting/inv/ListCraftingInventory;")&&field(job,"tasks","Ljava/util/Map;")&&field(job,"timeTracker","Lappeng/crafting/execution/ElapsedTimeTracker;")
+            &&field(job,"link","Lappeng/crafting/CraftingLink;")&&field(job,"finalOutput","Lappeng/api/stacks/GenericStack;")&&field(job,"remainingAmount","J")
+            &&field(progress,"value","J")&&method(tracker,"decrementItems","(JLappeng/api/stacks/AEKeyType;)V");
+    }
     @Override public boolean shouldApplyMixin(String target, String mixin) {
+        if(mixin.endsWith("GrowthCpuMixin")||mixin.endsWith("GrowthJobAccessor")||mixin.endsWith("GrowthProgressAccessor")||mixin.endsWith("GrowthTrackerInvoker")){
+            try{
+                if(growthSupported==null){var provider=bytecode.get();growthSupported=supportedGrowth(provider.getClassNode("appeng.crafting.execution.CraftingCpuLogic"),provider.getClassNode("appeng.crafting.execution.ExecutingCraftingJob"),provider.getClassNode("appeng.crafting.execution.ExecutingCraftingJob$TaskProgress"),provider.getClassNode("appeng.crafting.execution.ElapsedTimeTracker"));
+                    io.github.sexileman.eae2pattern.cycle.CycleRuntimeGate.supported=growthSupported;
+                    if(!growthSupported)com.mojang.logging.LogUtils.getLogger().warn("Experimental cycle execution disabled together: unsupported AE2 CPU shape");
+                }return growthSupported;
+            }catch(ClassNotFoundException|java.io.IOException|RuntimeException|LinkageError unsupported){growthSupported=false;io.github.sexileman.eae2pattern.cycle.CycleRuntimeGate.supported=false;return false;}
+        }
         if(mixin.endsWith("CraftingCycleNodeMixin")||mixin.endsWith("CraftingCycleCalculationMixin")||mixin.endsWith("CycleProcessAccessor")) {
             try {
                 if(cyclesSupported==null){var provider=bytecode.get();cyclesSupported=supportedCycles(provider.getClassNode("appeng.crafting.CraftingTreeNode"),provider.getClassNode("appeng.crafting.CraftingTreeProcess"),provider.getClassNode("appeng.crafting.CraftingCalculation"));

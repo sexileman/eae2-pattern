@@ -48,6 +48,7 @@ public final class EAE2PatternCommands {
         Setting.bool("filters.strip_container_items", EAE2PatternConfig.STRIP_CONTAINER_ITEMS);
         Setting.list("filters.ignored_stacks", EAE2PatternConfig.IGNORED_STACKS);
         Setting.bool("encoding.allow_substitutes", EAE2PatternConfig.ALLOW_SUBSTITUTES);
+        Setting.bool("cycles.experimental_execution", EAE2PatternConfig.EXPERIMENTAL_CYCLES);
         Setting.bool("encoding.allow_fluid_substitutes", EAE2PatternConfig.ALLOW_FLUID_SUBSTITUTES);
         Setting.bool("encoding.require_network_source", EAE2PatternConfig.REQUIRE_ENCODING_TERMINAL);
         Setting.integer("limits.max_patterns_per_request", EAE2PatternConfig.MAX_PATTERNS_PER_REQUEST, 1, 65536);

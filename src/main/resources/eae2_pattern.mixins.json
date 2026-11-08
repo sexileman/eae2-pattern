@@ -11,7 +11,11 @@
     "GtlWildcardExpansionMixin",
     "CycleProcessAccessor",
     "CraftingCycleNodeMixin",
-    "CraftingCycleCalculationMixin"
+    "CraftingCycleCalculationMixin",
+    "GrowthJobAccessor",
+    "GrowthProgressAccessor",
+    "GrowthTrackerInvoker",
+    "GrowthCpuMixin"
   ],
   "injectors": {
     "defaultRequire": 1

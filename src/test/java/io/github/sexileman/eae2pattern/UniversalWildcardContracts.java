@@ -36,6 +36,16 @@ public final class UniversalWildcardContracts {
                 check(opaque==5&&hardEdges,"overlay has exactly five hard pixels and no soft alpha edges");
             }
             check(itemModel.getAsJsonArray("overrides").get(0).getAsJsonObject().getAsJsonObject("predicate").has("eae2_pattern:encoded"),"encoded appearance has its own model predicate");
+            var growth=node(bytes(app,"io/github/sexileman/eae2pattern/cycle/GrowthRun.class"));
+            boolean providerRoute=false,nativeInputs=false,physicalReserve=false;
+            for(var method:growth.methods)for(var insn:method.instructions)if(insn instanceof MethodInsnNode call){
+                if(call.owner.equals("appeng/me/service/CraftingService")&&call.name.equals("getProviders"))providerRoute=true;
+                if(call.owner.equals("appeng/crafting/execution/CraftingCpuHelper")&&call.name.equals("extractPatternInputs"))nativeInputs=true;
+                if(call.owner.equals("appeng/crafting/inv/ListCraftingInventory")&&call.name.equals("insert"))physicalReserve=true;
+            }
+            check(providerRoute&&nativeInputs&&physicalReserve,"growth transport reuses native provider routing, exact input extraction and CPU inventory");
+            var mixins=new String(bytes(app,"eae2_pattern.mixins.json"),java.nio.charset.StandardCharsets.UTF_8);
+            for(String adapter:List.of("GrowthCpuMixin","GrowthJobAccessor","GrowthProgressAccessor","GrowthTrackerInvoker"))check(mixins.contains(adapter),"complete experimental CPU adapter is packaged: "+adapter);
             var encoder=node(bytes(app,"io/github/sexileman/eae2pattern/pattern/PatternEncoder.class"));
             boolean nativeFluids=false;
             for(var method:encoder.methods)if(method.name.equals("encodeCrafting"))for(var instruction:method.instructions)
@@ -107,11 +117,18 @@ public final class UniversalWildcardContracts {
         try(var n=loader.getResourceAsStream("appeng/crafting/CraftingTreeNode.class");var p=loader.getResourceAsStream("appeng/crafting/CraftingTreeProcess.class");var c=loader.getResourceAsStream("appeng/crafting/CraftingCalculation.class")){
             check(UniversalMixinPlugin.supportedCycles(node(n.readAllBytes()),node(p.readAllBytes()),node(c.readAllBytes())),"compile-baseline AE2 planner supports the same diagnostic hook set");
         }
+        try(var cpu=loader.getResourceAsStream("appeng/crafting/execution/CraftingCpuLogic.class");var job=loader.getResourceAsStream("appeng/crafting/execution/ExecutingCraftingJob.class");var progress=loader.getResourceAsStream("appeng/crafting/execution/ExecutingCraftingJob$TaskProgress.class");var tracker=loader.getResourceAsStream("appeng/crafting/execution/ElapsedTimeTracker.class")){
+            check(UniversalMixinPlugin.supportedGrowth(node(cpu.readAllBytes()),node(job.readAllBytes()),node(progress.readAllBytes()),node(tracker.readAllBytes())),"compile-baseline AE2 supports the complete experimental CPU hook set");
+        }
         Path aeJar;
         try(var files=Files.list(mods)){aeJar=files.filter(p->p.getFileName().toString().startsWith("appliedenergistics2-")&&p.toString().endsWith(".jar")).findFirst().orElseThrow();}
         try(var ae=new ZipFile(aeJar.toFile())){
             var tree=node(bytes(ae,"appeng/crafting/CraftingTreeNode.class"));var process=node(bytes(ae,"appeng/crafting/CraftingTreeProcess.class"));var calc=node(bytes(ae,"appeng/crafting/CraftingCalculation.class"));
             check(UniversalMixinPlugin.supportedCycles(tree,process,calc),"installed AE2 planner supports the diagnostic hook set");
+            var cpu=node(bytes(ae,"appeng/crafting/execution/CraftingCpuLogic.class"));var job=node(bytes(ae,"appeng/crafting/execution/ExecutingCraftingJob.class"));var progress=node(bytes(ae,"appeng/crafting/execution/ExecutingCraftingJob$TaskProgress.class"));var tracker=node(bytes(ae,"appeng/crafting/execution/ElapsedTimeTracker.class"));
+            check(UniversalMixinPlugin.supportedGrowth(cpu,job,progress,tracker),"installed AE2 supports the complete experimental CPU hook set");
+            check(!UniversalMixinPlugin.supportedGrowth(cpu,job,null,tracker),"incomplete runtime adapters fail closed");
+            progress.fields.clear();check(!UniversalMixinPlugin.supportedGrowth(cpu,job,progress,tracker),"changed task progress shape disables experimental CPU execution");
             check(!UniversalMixinPlugin.supportedCycles(tree,null,calc),"missing planner accessor disables all diagnostics");
             var changed=node(bytes(ae,"appeng/crafting/CraftingTreeNode.class"));changed.methods.removeIf(m->m.name.equals("buildChildPatterns"));
             check(!UniversalMixinPlugin.supportedCycles(changed,process,calc),"changed planner shape disables diagnostics safely");

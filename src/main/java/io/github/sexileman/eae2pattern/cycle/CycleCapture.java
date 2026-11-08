@@ -8,6 +8,9 @@ import java.util.*;
 public final class CycleCapture {
     public record Pattern(List<GenericStack> inputs,List<GenericStack> outputs,List<String> recipeTypes){}
     public record Witness(List<AEKey> path,List<Pattern> patterns){}
+    public record Candidate(List<AEKey> path,List<IPatternDetails> patterns){}
+    private final List<Candidate> candidates=new ArrayList<>();
+    public List<Candidate> candidates(){return List.copyOf(candidates);}
     private final List<Witness> witnesses=new ArrayList<>();
     private int rejections;
     private boolean truncated;
@@ -38,6 +41,8 @@ public final class CycleCapture {
             var patterns=new ArrayList<Pattern>();
             for(int i=Math.max(0,first);i<selected.size();i++)patterns.add(snapshot(selected.get(i)));
             patterns.add(snapshot(candidate));witnesses.add(new Witness(path,List.copyOf(patterns)));
+            var originals=new ArrayList<IPatternDetails>();for(int i=Math.max(0,first);i<selected.size();i++)originals.add(selected.get(i));originals.add(candidate);
+            candidates.add(new Candidate(List.copyOf(path),List.copyOf(originals)));
         }catch(RuntimeException | LinkageError invalid){truncated=true;}
     }
     private static Pattern snapshot(IPatternDetails details){

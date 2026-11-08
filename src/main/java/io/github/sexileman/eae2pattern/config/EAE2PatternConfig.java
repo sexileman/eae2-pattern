@@ -11,6 +11,7 @@ import java.util.List;
 public final class EAE2PatternConfig {
 
     public static final ForgeConfigSpec SPEC;
+    public static final ForgeConfigSpec.BooleanValue EXPERIMENTAL_CYCLES;
 
     public static final ForgeConfigSpec.ConfigValue<List<? extends String>> IGNORED_STACKS;
     public static final ForgeConfigSpec.BooleanValue STRIP_CONTAINER_ITEMS;
@@ -69,6 +70,9 @@ public final class EAE2PatternConfig {
                 .defineInRange("max_request_bytes", 1_000_000, 8192, 8_000_000);
         builder.pop();
 
+        builder.comment("Experimental two-recipe growth cycles; enable explicitly in test worlds.").push("cycles");
+        EXPERIMENTAL_CYCLES=builder.comment("Requires deterministic processing patterns and all external materials in stock. Existing jobs finish even if disabled.").define("experimental_execution",false);
+        builder.pop();
         SPEC = builder.build();
     }
 
