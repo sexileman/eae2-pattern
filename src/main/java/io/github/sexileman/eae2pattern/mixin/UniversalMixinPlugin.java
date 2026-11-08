@@ -16,7 +16,7 @@ import java.util.Set;
 public final class UniversalMixinPlugin implements IMixinConfigPlugin {
     public static final String GTL = "org.gtlcore.gtlcore.integration.wildcard.";
     private final java.util.function.Supplier<IClassBytecodeProvider> bytecode;
-    private Boolean gtlSupported;
+    private Boolean gtlSupported, cyclesSupported;
     public UniversalMixinPlugin() { this(() -> MixinService.getService().getBytecodeProvider()); }
     public UniversalMixinPlugin(java.util.function.Supplier<IClassBytecodeProvider> bytecode) { this.bytecode = bytecode; }
     public static boolean supportedPair(ClassNode activation, ClassNode expansion) {
@@ -57,10 +57,31 @@ public final class UniversalMixinPlugin implements IMixinConfigPlugin {
             return has(node, "decodePatterns", "(Lnet/minecraft/world/item/ItemStack;Lnet/minecraft/world/level/Level;)Ljava/util/stream/Stream;");
         return true;
     }
+    public static boolean supportedCycles(ClassNode node,ClassNode process,ClassNode calculation) {
+        if(node==null||process==null||calculation==null)return false;
+        if(!method(node,"buildChildPatterns","()V")||!method(process,"notRecursive","(Lappeng/api/crafting/IPatternDetails;)Z")
+                ||!method(calculation,"run","()Lappeng/api/networking/crafting/ICraftingPlan;"))return false;
+        if(!field(node,"what","Lappeng/api/stacks/AEKey;")||!field(node,"parent","Lappeng/crafting/CraftingTreeProcess;")||!field(node,"job","Lappeng/crafting/CraftingCalculation;")
+                ||!field(process,"parent","Lappeng/crafting/CraftingTreeNode;")||!field(process,"details","Lappeng/api/crafting/IPatternDetails;")
+                ||!field(calculation,"level","Lnet/minecraft/world/level/Level;")||!field(calculation,"simRequester","Lappeng/api/networking/crafting/ICraftingSimulationRequester;"))return false;
+        int calls=0;
+        for(var m:node.methods)if(m.name.equals("buildChildPatterns"))for(var insn:m.instructions)
+            if(insn instanceof MethodInsnNode call&&call.owner.equals("appeng/crafting/CraftingTreeProcess")&&call.name.equals("notRecursive")&&call.desc.equals("(Lappeng/api/crafting/IPatternDetails;)Z"))calls++;
+        return calls==1;
+    }
+    private static boolean method(ClassNode n,String name,String desc){return n.methods.stream().anyMatch(m->m.name.equals(name)&&m.desc.equals(desc));}
+    private static boolean field(ClassNode n,String name,String desc){return n.fields.stream().anyMatch(f->f.name.equals(name)&&f.desc.equals(desc));}
     private static boolean has(ClassNode node, String name, String descriptor) {
         return node.methods.stream().anyMatch(m -> m.name.equals(name) && m.desc.equals(descriptor) && (m.access & Opcodes.ACC_STATIC) != 0);
     }
     @Override public boolean shouldApplyMixin(String target, String mixin) {
+        if(mixin.endsWith("CraftingCycleNodeMixin")||mixin.endsWith("CraftingCycleCalculationMixin")||mixin.endsWith("CycleProcessAccessor")) {
+            try {
+                if(cyclesSupported==null){var provider=bytecode.get();cyclesSupported=supportedCycles(provider.getClassNode("appeng.crafting.CraftingTreeNode"),provider.getClassNode("appeng.crafting.CraftingTreeProcess"),provider.getClassNode("appeng.crafting.CraftingCalculation"));
+                    if(!cyclesSupported)com.mojang.logging.LogUtils.getLogger().warn("EAE2 cycle diagnostics disabled together: unsupported AE2 planner interfaces");}
+                return cyclesSupported;
+            }catch(ClassNotFoundException|java.io.IOException|RuntimeException|LinkageError unsupported){cyclesSupported=false;com.mojang.logging.LogUtils.getLogger().warn("EAE2 cycle diagnostics unavailable",unsupported);return false;}
+        }
         if (!target.startsWith(GTL) && !target.startsWith("org.leodreamer.wildcard_pattern.")) return true;
         try {
             // ModLauncher's provider rejects runTransformers=false before checking whether a class

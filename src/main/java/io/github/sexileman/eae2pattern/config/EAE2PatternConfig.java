@@ -26,16 +26,16 @@ public final class EAE2PatternConfig {
         builder.comment(
                 "Which ingredients must never appear inside a generated pattern.",
                 "Entries are item/fluid ids. A trailing * acts as a wildcard, e.g. \"minecraft:*\" or \"mekanism:*_dust\".",
-                "This is the explicit half of requirement #7; the automatic half is strip_container_items."
+                "GT non-consumed ingredients are controlled by the encoding screen."
         ).push("filters");
         IGNORED_STACKS = builder
                 .comment("Exact ids or wildcard patterns to drop from every pattern input.")
                 .defineListAllowEmpty("ignored_stacks", List.of(), o -> o instanceof String);
         STRIP_CONTAINER_ITEMS = builder
                 .comment(
-                        "Drop inputs that are handed back to the player instead of being consumed",
-                        "(buckets, lava buckets, honey bottles, ...). This is detected through the item's",
-                        "crafting remainder, which is what makes the item 'not consumed' in the first place."
+                        "Legacy option retained for configuration compatibility. No longer infers processing",
+                        "consumption from crafting remainders. Filled containers stay valid inputs; native",
+                        "AE2 crafting patterns retain their configured fluid substitution behavior."
                 )
                 .define("strip_container_items", true);
         builder.pop();

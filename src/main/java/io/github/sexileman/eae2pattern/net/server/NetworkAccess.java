@@ -34,6 +34,7 @@ import org.jetbrains.annotations.Nullable;
  */
 public final class NetworkAccess {
 
+    private static final java.util.Set<String> PATTERN_IDS=java.util.Set.of("crafting_pattern","processing_pattern","stonecutting_pattern","smithing_table_pattern");
     private final IGrid grid;
 
     @Nullable
@@ -126,6 +127,19 @@ public final class NetworkAccess {
     }
 
     public boolean sameNetwork(NetworkAccess other) { return grid == other.grid; }
+    public record PatternInventory(java.util.List<AEItemKey> keys,boolean limited){}
+    public PatternInventory patternInventory(){
+        var keys=new java.util.ArrayList<AEItemKey>();int seen=0;boolean limited=false;
+        for(var entry:grid.getStorageService().getCachedInventory()){
+            if(++seen>100000){limited=true;break;}
+            if(entry.getLongValue()<=0||!(entry.getKey() instanceof AEItemKey item)||!item.hasTag())continue;
+            var id=net.minecraftforge.registries.ForgeRegistries.ITEMS.getKey(item.getItem());
+            if(id==null||!id.getNamespace().equals("ae2")||!PATTERN_IDS.contains(id.getPath()))continue;
+            if(keys.size()==16384){limited=true;break;}keys.add(item);
+        }
+        return new PatternInventory(java.util.List.copyOf(keys),limited);
+    }
+    public java.util.Collection<appeng.api.crafting.IPatternDetails> craftingFor(appeng.api.stacks.AEKey output){return grid.getCraftingService().getCraftingFor(output);}
     public long storedAmount(AEItemKey key) {
         return key == null ? 0 : grid.getStorageService().getCachedInventory().get(key);
     }

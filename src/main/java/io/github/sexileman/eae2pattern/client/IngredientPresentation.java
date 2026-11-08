@@ -8,11 +8,12 @@ import java.util.List;
 
 /** Slot semantics shared by source details, encoded details and tooltips. Never displays NC as 0% consumed. */
 public record IngredientPresentation(Kind kind, String chance) {
-    public enum Kind { REGULAR, NOT_CONSUMED, CHANCE_INPUT, CHANCE_OUTPUT, MIXED }
+    public enum Kind { REGULAR, NOT_CONSUMED, CHANCE_INPUT, CHANCE_OUTPUT, MIXED, UNKNOWN_OUTPUT }
     public static final IngredientPresentation REGULAR = new IngredientPresentation(Kind.REGULAR, "");
     public static IngredientPresentation of(Ingredient ingredient, int side) {
         if (side == 0 && ingredient.neverConsumed()) return new IngredientPresentation(Kind.NOT_CONSUMED, "");
         if (side == 0 && ingredient.probabilistic()) return new IngredientPresentation(Kind.CHANCE_INPUT, ingredient.chanceText());
+        if (side == 1 && !ingredient.chanceKnown())return new IngredientPresentation(Kind.UNKNOWN_OUTPUT, "");
         if (side == 1 && !ingredient.guaranteedOutput()) return new IngredientPresentation(Kind.CHANCE_OUTPUT, ingredient.chanceText());
         return REGULAR;
     }
@@ -30,7 +31,7 @@ public record IngredientPresentation(Kind kind, String chance) {
         return found == null ? REGULAR : found;
     }
     public String badge() {
-        return switch (kind) { case NOT_CONSUMED -> "∞"; case CHANCE_INPUT, CHANCE_OUTPUT -> "%"; case MIXED -> "?"; default -> ""; };
+        return switch (kind) { case NOT_CONSUMED -> "∞"; case CHANCE_INPUT, CHANCE_OUTPUT -> "%"; case MIXED, UNKNOWN_OUTPUT -> "?"; default -> ""; };
     }
     public int color() { return kind == Kind.NOT_CONSUMED ? 0xFFBE2424 : WorkbenchTheme.WARNING; }
     public Component description() {
@@ -39,6 +40,7 @@ public record IngredientPresentation(Kind kind, String chance) {
             case CHANCE_INPUT -> "slot_chance_input";
             case CHANCE_OUTPUT -> "slot_chance_output";
             case MIXED -> "slot_mixed";
+            case UNKNOWN_OUTPUT -> "slot_unknown_output";
             default -> "slot_regular";
         };
         return Component.translatable("eae2_pattern.workbench." + key, chance)

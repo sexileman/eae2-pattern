@@ -42,11 +42,6 @@ public final class PatternWriter {
         if (network == null) {
             callback.accept(new GenerationReport(specs.size(), 0, 0, 0, 0, StopReason.NO_NETWORK, List.of())); return;
         }
-        long available = network.blankPatterns();
-        if (available < specs.size()) {
-            callback.accept(new GenerationReport(specs.size(), 0, 0, 0, 0, StopReason.NOT_ENOUGH_BLANK_PATTERNS,
-                    List.of("need " + specs.size() + " blank patterns, network has " + available))); return;
-        }
         JOBS.add(new Job(player, List.copyOf(specs), network, callback));
     }
 
@@ -89,9 +84,13 @@ public final class PatternWriter {
         final List<String> details = new ArrayList<>();
         int cursor, encoded, inserted, skipped;
         List<ItemStack> prepared;
+        final io.github.sexileman.eae2pattern.pattern.BatchPreflight<PatternSpec> preflight;
+        boolean validated;
+        int writeCount(){return prepared==null?preflight.required():prepared.size();}
         int requested() { return prepared == null ? specs.size() : prepared.size(); }
         Job(ServerPlayer player, List<PatternSpec> specs, NetworkAccess network, Consumer<GenerationReport> callback) {
             this.player = player; this.specs = specs; this.network = network; this.callback = callback;
+            preflight=new io.github.sexileman.eae2pattern.pattern.BatchPreflight<>(specs,s->s.recipeId().toString());
         }
         void detail(String message) { if (details.size() < 5) details.add(message); }
         void finish(StopReason reason) {
@@ -101,7 +100,16 @@ public final class PatternWriter {
         boolean step() {
             NetworkAccess current = NetworkAccess.resolve(player);
             if (current == null || !network.sameNetwork(current)) { finish(StopReason.NO_NETWORK); return true; }
-            PatternSpec spec = prepared == null ? specs.get(cursor) : null;
+            if(prepared==null&&!validated){
+                preflight.step(spec->PatternEncoder.encode(player.serverLevel(),spec));
+                if(preflight.done()){
+                    skipped=preflight.rejected();details.addAll(preflight.errors());validated=true;
+                    if(preflight.required()==0){finish(StopReason.ENCODE_FAILED);return true;}
+                    if(!preflight.enough(current.blankPatterns())){detail("Validated batch needs "+preflight.required()+" blank patterns; available "+current.blankPatterns());finish(StopReason.NOT_ENOUGH_BLANK_PATTERNS);return true;}
+                }
+                return false;
+            }
+            PatternSpec spec = prepared == null ? preflight.valid().get(cursor) : null;
             int index = cursor++;
             ItemStack pattern;
             try { pattern = prepared == null ? PatternEncoder.encode(player, spec) : prepared.get(index); }
@@ -140,7 +148,7 @@ public final class PatternWriter {
             }
         }
         boolean endIfFinished() {
-            if (cursor < requested()) return false;
+            if (cursor < writeCount()) return false;
             finish(inserted == 0 && skipped > 0 ? StopReason.ENCODE_FAILED : StopReason.COMPLETED); return true;
         }
     }

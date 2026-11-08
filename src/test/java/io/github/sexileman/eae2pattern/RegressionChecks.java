@@ -27,11 +27,117 @@ import java.util.List;
 public final class RegressionChecks {
     private static int checks;
     public static void main(String[] args) throws Exception {
-        policies(); wireFormat(); searches(); gtVersions(); layoutAndGrid(); manualMultiplier(); grouping(); inspectionPackets(); slotPresentation(); patternMetadata(); amountLabels(); machineWildcards(); heldWildcardWrites(); dynamicRules(); stackedCarriers(); wildcardTooltip(); materialPicker(); aeToolScreens(); encodingMessages(); recipeStripColumns(); searchDebounce(); wildcardStockStatus(); guidePages(); moreMenuLayout();
+        circuitConditions(); policies(); wireFormat(); searches(); gtVersions(); layoutAndGrid(); manualMultiplier(); grouping(); inspectionPackets(); slotPresentation(); patternMetadata(); amountLabels(); machineWildcards(); heldWildcardWrites(); dynamicRules(); stackedCarriers(); wildcardTooltip(); materialPicker(); aeToolScreens(); encodingMessages(); recipeStripColumns(); searchDebounce(); wildcardStockStatus(); guidePages(); moreMenuLayout(); cyclePaths(); generationSafety();
         System.out.println("Passed " + checks + " regression checks");
+    }
+    private static void circuitConditions() throws Exception {
+        var id=new ResourceLocation("gtceu:programmed_circuit");var tag=new CompoundTag();tag.putInt("Configuration",24);
+        var circuit=new StackSpec(StackType.ITEM,id,tag,1);
+        var selected=new io.github.sexileman.eae2pattern.wildcard.CircuitCondition(2,java.util.Set.of(24,1));
+        check(io.github.sexileman.eae2pattern.wildcard.CircuitCondition.configuration(circuit)==24,"circuit uses full configuration NBT");
+        check(io.github.sexileman.eae2pattern.wildcard.CircuitCondition.configuration(new StackSpec(StackType.ITEM,new ResourceLocation("other:tool"),tag,1))==-1,"unrelated Configuration tag is not a GT circuit");
+        var input=List.of(new io.github.sexileman.eae2pattern.wildcard.RuleRecipe.Slot(circuit,0));
+        check(io.github.sexileman.eae2pattern.wildcard.CircuitCondition.configuration(new StackSpec(StackType.ITEM,id,null,1))==0,"GTCEu missing configuration defaults to zero, distinct from no circuit");
+        check(selected.matches(input),"non consumed circuit participates in dedicated matching");
+        check(!new io.github.sexileman.eae2pattern.wildcard.CircuitCondition(1,java.util.Set.of()).matches(input),"no circuit excludes circuit recipes");
+        check(!selected.matches(List.<io.github.sexileman.eae2pattern.wildcard.RuleRecipe.Slot>of()),"selected configurations exclude recipes without circuit");
+        var state=new CompoundTag();selected.write(state);var clean=io.github.sexileman.eae2pattern.wildcard.WildcardEditorState.clean(state);
+        check(io.github.sexileman.eae2pattern.wildcard.CircuitCondition.read(clean).equals(selected),"wildcard cleaner preserves circuit selection");
+        var recipe=new io.github.sexileman.eae2pattern.wildcard.RuleRecipe(new ResourceLocation("test:recipe"),input,List.of());
+        check(new io.github.sexileman.eae2pattern.wildcard.DynamicRule(clean).matches(recipe),"server dynamic resolver matches selected circuit");
+        new io.github.sexileman.eae2pattern.wildcard.CircuitCondition(2,java.util.Set.of(2)).write(state);
+        check(!new io.github.sexileman.eae2pattern.wildcard.DynamicRule(state).matches(recipe),"server rejects different circuit even when tool search is disabled");
+        check(new io.github.sexileman.eae2pattern.wildcard.DynamicRule(new CompoundTag()).matches(recipe),"legacy wildcard without circuit fields retains all configurations");
+        var bad=new CompoundTag();bad.putInt("circuit_mode",2);bad.putIntArray("circuit_configs",new int[]{-1});boolean rejected=false;
+        try{io.github.sexileman.eae2pattern.wildcard.WildcardEditorState.clean(bad);}catch(IllegalArgumentException e){rejected=true;}
+        check(rejected,"server rejects malformed circuit configuration");
+        bad.putIntArray("circuit_configs",new int[257]);rejected=false;try{io.github.sexileman.eae2pattern.wildcard.WildcardEditorState.clean(bad);}catch(IllegalArgumentException e){rejected=true;}
+        check(rejected,"circuit rule payload is bounded");
+        var all=new CompoundTag();io.github.sexileman.eae2pattern.wildcard.CircuitCondition.ALL.write(all);
+        check(all.isEmpty(),"default circuit mode does not change legacy rule fingerprints");
+        var metal=new StackSpec(StackType.ITEM,new ResourceLocation("test:metal"),null,1);
+        var tool=new StackSpec(StackType.ITEM,new ResourceLocation("test:mould"),null,1);
+        var normal=new RecipeFilters(ItemSearchQuery.empty(),ItemSearchQuery.empty(),3,0,false);
+        var never=new RecipeFilters(ItemSearchQuery.empty(),ItemSearchQuery.empty(),1,0,false);
+        var chance=new RecipeFilters(ItemSearchQuery.empty(),ItemSearchQuery.empty(),2,0,false);
+        var withCircuit=entry(List.of(Ingredient.consumed(metal),Ingredient.notConsumed(circuit)),List.of(),List.of());
+        check(!normal.rejects(withCircuit)&&never.rejects(withCircuit),"circuit does not classify ordinary materials as non-consumed");
+        var withAuxCircuit=entry(List.of(Ingredient.consumed(metal)),List.of(Ingredient.notConsumed(circuit)),List.of());
+        check(!normal.rejects(withAuxCircuit)&&never.rejects(withAuxCircuit),"separate catalyst circuit also remains independent");
+        var withTool=entry(List.of(Ingredient.consumed(metal)),List.of(Ingredient.notConsumed(circuit),Ingredient.notConsumed(tool)),List.of());
+        check(normal.rejects(withTool)&&!never.rejects(withTool),"non-circuit mould still participates in consumption filtering");
+        var withChance=entry(List.of(Ingredient.consumed(metal,.1f)),List.of(Ingredient.notConsumed(circuit)),List.of());
+        check(normal.rejects(withChance)&&!chance.rejects(withChance),"chance consumption remains independent of circuit selection");
+        var ordinary=entry(List.of(Ingredient.consumed(metal)),List.of(),List.of());
+        check(!normal.rejects(ordinary)&&never.rejects(ordinary),"ordinary recipes without GT retain original material filter behavior");
+        check(withAuxCircuit.hasNeverConsumedInput(),"original diagnostics and encoding still recognize the required circuit");
+        var clazz=Class.forName("io.github.sexileman.eae2pattern.client.CircuitCatalog");var ctor=clazz.getDeclaredConstructor(RecipePlan.class);ctor.setAccessible(true);
+        var available=clazz.getDeclaredMethod("available");available.setAccessible(true);
+        var noGt=new RecipePlan(new ResourceLocation("minecraft:crafting"),Component.literal("crafting"),PatternKind.CRAFTING,List.of());
+        check(!(boolean)available.invoke(ctor.newInstance(noGt)),"no GT circuits hides the optional filter");
+        var entry=new RecipePlan.Entry(PatternKind.PROCESSING,new ResourceLocation("test:circuits"),Component.literal("circuit"),null,List.of(),List.of(new Ingredient(circuit,0,false)),List.of(),true);
+        var plan=new RecipePlan(new ResourceLocation("gtceu:bender"),Component.literal("bender"),PatternKind.PROCESSING,List.of(entry));
+        var catalog=ctor.newInstance(plan);check((boolean)available.invoke(catalog),"original non-consumed catalyst exposes circuit selection");
+        var matches=clazz.getDeclaredMethod("matches",RecipePlan.Entry.class,io.github.sexileman.eae2pattern.wildcard.CircuitCondition.class);matches.setAccessible(true);
+        check((boolean)matches.invoke(catalog,entry,selected),"cached client circuit condition matches authoritative rule");
     }
     private static void check(boolean condition, String message) {
         checks++; if (!condition) throw new AssertionError(message);
+    }
+    private static void generationSafety() throws Exception {
+        var values=io.github.sexileman.eae2pattern.pattern.CompleteIngredients.map(List.of("A","B"),String::toLowerCase);
+        check(values.equals(List.of("a","b")),"complete ingredient conversion preserves every slot and order");
+        boolean refused=false;try{io.github.sexileman.eae2pattern.pattern.CompleteIngredients.map(List.of("A","B"),x->x.equals("B")?null:x);}catch(IllegalArgumentException expected){refused=expected.getMessage().contains("slot 2");}
+        check(refused,"one unsupported material rejects the entire conversion instead of silently dropping B");
+        var batch=new io.github.sexileman.eae2pattern.pattern.BatchPreflight<>(List.of("ok1","bad","ok2"),x->x);
+        check(!batch.enough(99),"no batch may write before all validation is complete");
+        batch.step(v->{});check(!batch.enough(99),"a valid prefix cannot spend blanks early");
+        batch.step(v->{throw new IllegalArgumentException("unsupported");});batch.step(v->{});
+        check(batch.done()&&batch.required()==2&&batch.rejected()==1,"required blanks count valid results, not submitted recipes");
+        check(batch.enough(2)&&!batch.enough(1),"exact available blank count gates the prepared valid batch");
+        check(batch.valid().equals(List.of("ok1","ok2"))&&batch.errors().size()==1,"valid source references and diagnostics are retained without encoded stacks");
+        var many=new io.github.sexileman.eae2pattern.pattern.BatchPreflight<>(java.util.Collections.nCopies(50,"bad"),x->x);
+        while(!many.done())many.step(v->{throw new Exception("x".repeat(1000));});
+        check(many.required()==0&&many.errors().size()==5&&many.errors().stream().allMatch(e->e.length()<=512),"failed preparation diagnostics have bounded size");
+        var id=new ResourceLocation("ae2:processing_pattern");var tag=new CompoundTag();tag.putString("encodePlayer","one");tag.putString("input","same");
+        String signature=io.github.sexileman.eae2pattern.pattern.PatternSignature.of(id,tag);
+        var renamed=tag.copy();renamed.putString("encodePlayer","two");var display=new CompoundTag();display.putString("Name","renamed");renamed.put("display",display);
+        check(signature.equals(io.github.sexileman.eae2pattern.pattern.PatternSignature.of(id,renamed)),"display name and encoder identity do not prevent semantic duplicate detection");
+        check(tag.getString("encodePlayer").equals("one"),"signature calculation does not mutate encoded pattern tags");
+        var flags=tag.copy();flags.putBoolean("fluidSubstitution",true);
+        check(!signature.equals(io.github.sexileman.eae2pattern.pattern.PatternSignature.of(id,flags)),"encoding flags remain significant");
+        var input=tag.copy();var material=new CompoundTag();material.putInt("circuit",2);input.put("materialNbt",material);
+        check(!signature.equals(io.github.sexileman.eae2pattern.pattern.PatternSignature.of(id,input)),"material NBT remains significant");
+        var typed=tag.copy();PatternMetadata.write(typed,null,new ResourceLocation("gtceu:wiremill"));var other=tag.copy();PatternMetadata.write(other,null,new ResourceLocation("gtceu:bender"));
+        check(!io.github.sexileman.eae2pattern.pattern.PatternSignature.of(id,typed).equals(io.github.sexileman.eae2pattern.pattern.PatternSignature.of(id,other)),"different machine recipe types are not deduplicated together");
+        check(!signature.equals(io.github.sexileman.eae2pattern.pattern.PatternSignature.of(new ResourceLocation("ae2:crafting_pattern"),tag)),"different pattern kinds remain distinct");
+        var quantity=tag.copy();quantity.putLong("amount",2);var differentQuantity=quantity.copy();differentQuantity.putLong("amount",3);
+        check(!io.github.sexileman.eae2pattern.pattern.PatternSignature.of(id,quantity).equals(io.github.sexileman.eae2pattern.pattern.PatternSignature.of(id,differentQuantity)),"different encoded quantities remain distinct");
+        var orderA=tag.copy();var listA=new net.minecraft.nbt.ListTag();listA.add(net.minecraft.nbt.StringTag.valueOf("primary"));listA.add(net.minecraft.nbt.StringTag.valueOf("byproduct"));orderA.put("out",listA);
+        var orderB=tag.copy();var listB=new net.minecraft.nbt.ListTag();listB.add(net.minecraft.nbt.StringTag.valueOf("byproduct"));listB.add(net.minecraft.nbt.StringTag.valueOf("primary"));orderB.put("out",listB);
+        check(!io.github.sexileman.eae2pattern.pattern.PatternSignature.of(id,orderA).equals(io.github.sexileman.eae2pattern.pattern.PatternSignature.of(id,orderB)),"primary output order remains significant");
+        var unknown=(mezz.jei.api.gui.ingredient.IRecipeSlotView)java.lang.reflect.Proxy.newProxyInstance(RegressionChecks.class.getClassLoader(),new Class[]{mezz.jei.api.gui.ingredient.IRecipeSlotView.class},(proxy,m,args)->switch(m.getName()){case "isEmpty"->false;case "getIngredients"->java.util.stream.Stream.empty();case "equals"->proxy==args[0];case "hashCode"->System.identityHashCode(proxy);default->null;});
+        var collect=io.github.sexileman.eae2pattern.compat.jei.JeiRecipeCollector.class.getDeclaredMethod("toIngredients",List.class,boolean.class,GtChanceReader.Cursor.class,boolean.class);collect.setAccessible(true);
+        boolean unknownRefused=false;try{collect.invoke(null,List.of(unknown),true,null,true);}catch(java.lang.reflect.InvocationTargetException e){unknownRefused=e.getCause() instanceof IllegalArgumentException;}
+        check(unknownRefused,"non-empty JEI slot of an unsupported type rejects the recipe");
+        check(((List<?>)collect.invoke(null,List.of(unknown),true,null,false)).isEmpty(),"unsupported catalyst decoration does not turn into a required material");
+        var stack=stack("test:unknown_output",1);var unverified=new Ingredient(stack,1,true,false);
+        check(!unverified.guaranteedOutput()&&unverified.chanceText().equals("?"),"unread probability is not presented as guaranteed 100 percent");
+        check(IngredientPresentation.of(unverified,1).kind()==IngredientPresentation.Kind.UNKNOWN_OUTPUT,"unknown output confidence has an explicit presentation");
+        check(io.github.sexileman.eae2pattern.compat.jei.ChanceReader.read(unknown).known()==false,"missing tooltip probability remains unknown");
+    }
+    private static void cyclePaths() {
+        check(io.github.sexileman.eae2pattern.cycle.CyclePath.close(List.of("A","B"),List.of("A")).equals(List.of("A","B","A")),"two-material input back-edge closes A-B-A");
+        check(io.github.sexileman.eae2pattern.cycle.CyclePath.close(List.of("A","B","C"),List.of("A")).equals(List.of("A","B","C","A")),"longer cycles retain ordered ancestry");
+        check(io.github.sexileman.eae2pattern.cycle.CyclePath.close(List.of("X","A","B"),List.of("A")).equals(List.of("A","B","A")),"unrelated target prefix is excluded");
+        check(io.github.sexileman.eae2pattern.cycle.CyclePath.close(List.of("A"),List.of("A")).equals(List.of("A","A")),"direct recursive processing is identified");
+        check(io.github.sexileman.eae2pattern.cycle.CyclePath.close(List.of("A","B"),List.of("C")).isEmpty(),"acyclic dependencies do not become cycles");
+        check(io.github.sexileman.eae2pattern.cycle.CyclePath.close(List.of("A","B"),List.of()).isEmpty(),"co-output overlap alone is not reported as an input cycle");
+        check(io.github.sexileman.eae2pattern.cycle.CyclePath.close(List.of("A","B","C"),List.of("A","B")).equals(List.of("B","C","B")),"nearest ancestor gives the shortest witnessed cycle");
+        check(io.github.sexileman.eae2pattern.cycle.CyclePath.close(java.util.Collections.nCopies(65,"A"),List.of("A")).isEmpty(),"diagnostic depth is bounded");
+        var tagA=new CompoundTag();tagA.putInt("mode",1);var tagB=new CompoundTag();tagB.putInt("mode",2);
+        var a=new StackSpec(StackType.ITEM,new ResourceLocation("test:part"),tagA,1);var b=new StackSpec(StackType.ITEM,new ResourceLocation("test:part"),tagB,1);
+        check(io.github.sexileman.eae2pattern.cycle.CyclePath.close(List.of(a),List.of(b)).isEmpty(),"NBT-distinct materials do not form a false cycle");
     }
     private static void moreMenuLayout() {
         var actions=io.github.sexileman.eae2pattern.client.WorkbenchMoreAction.values();
@@ -71,7 +177,7 @@ public final class RegressionChecks {
         io.github.sexileman.eae2pattern.client.ClientNetworkState.reset();buffer.release();
         var title=io.github.sexileman.eae2pattern.wildcard.WildcardTooltipText.boundName(Component.literal("Wiremill"));
         check(title.getContents() instanceof net.minecraft.network.chat.contents.TranslatableContents t && t.getKey().equals("eae2_pattern.wildcard.bound_name") && ((Component)t.getArgs()[0]).getString().equals("Wiremill"), "bound name includes the machine and no recipe count");
-        check(title.getStyle().getColor().getValue()==0xC9B78C && !title.getStyle().isItalic(), "bound name uses muted champagne text without italics");
+        check(title.getStyle().getColor().getValue()==0xE640E6 && !title.getStyle().isItalic(), "bound name uses reference magenta text without italics");
         check(new GenerationReport(1,0,0,0,0,GenerationReport.StopReason.NOT_ENOUGH_WILDCARD_PATTERNS,List.of()).summaryKey().equals("eae2_pattern.report.no_wildcards"), "wildcard shortage has a distinct explanation");
     }
     private static void searchDebounce() {

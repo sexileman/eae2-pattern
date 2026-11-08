@@ -11,13 +11,13 @@ public record RecipeFilters(ItemSearchQuery products, ItemSearchQuery ingredient
         if (!ingredients.isEmpty() && !ingredients.matches(e, ItemSearchQuery.Side.INPUT)) return true;
         if (!products.isEmpty() && !products.matches(e, ItemSearchQuery.Side.OUTPUT)) return true;
         boolean inputMatches = switch (inputMode) {
-            case 1 -> e.hasNeverConsumedInput();
-            case 2 -> e.hasProbabilisticInput();
-            case 3 -> !e.hasNeverConsumedInput() && !e.hasProbabilisticInput();
+            case 1 -> e.hasNonCircuitNeverConsumedInput();
+            case 2 -> e.hasNonCircuitProbabilisticInput();
+            case 3 -> !e.hasNonCircuitNeverConsumedInput() && !e.hasNonCircuitProbabilisticInput();
             default -> true;
         };
         boolean outputMatches = switch (outputMode) {
-            case 1 -> !e.hasProbabilisticOutput();
+            case 1 -> !e.hasProbabilisticOutput() && !e.hasUnknownOutputChance();
             case 2 -> e.hasByproduct();
             case 3 -> e.hasProbabilisticByproduct();
             case 4 -> e.allOutputsProbabilistic();

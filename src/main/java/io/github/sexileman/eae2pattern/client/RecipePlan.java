@@ -127,6 +127,7 @@ public final class RecipePlan {
         private final List<Ingredient> inputs;
         private final List<Ingredient> catalysts;
         private final List<Ingredient> outputs;
+        private final boolean nonCircuitNeverConsumed, nonCircuitProbabilistic;
         private boolean selected;
         private Object jeiRecipe;
         public Object jeiRecipe() { return jeiRecipe; }
@@ -148,6 +149,16 @@ public final class RecipePlan {
             this.catalysts = List.copyOf(catalysts);
             this.outputs = List.copyOf(outputs);
             this.selected = selected;
+            boolean never = false, probabilistic = false;
+            for (var ingredient : this.inputs) {
+                if (io.github.sexileman.eae2pattern.wildcard.CircuitCondition.configuration(ingredient.spec()) >= 0) continue;
+                never |= ingredient.neverConsumed();
+                probabilistic |= ingredient.probabilistic();
+            }
+            for (var ingredient : this.catalysts) {
+                if (io.github.sexileman.eae2pattern.wildcard.CircuitCondition.configuration(ingredient.spec()) < 0) never = true;
+            }
+            nonCircuitNeverConsumed = never; nonCircuitProbabilistic = probabilistic;
         }
 
         public PatternKind kind() {
@@ -172,6 +183,10 @@ public final class RecipePlan {
             return outputs;
         }
 
+        /** Consumption classification for the material filter; circuit selection is independent. */
+        public boolean hasNonCircuitNeverConsumedInput() { return nonCircuitNeverConsumed; }
+        public boolean hasNonCircuitProbabilisticInput() { return nonCircuitProbabilistic; }
+
         public boolean hasNeverConsumedInput() {
             if (!catalysts.isEmpty()) {
                 return true;
@@ -195,18 +210,20 @@ public final class RecipePlan {
 
         public boolean hasProbabilisticOutput() {
             for (Ingredient output : outputs) {
-                if (!output.guaranteedOutput()) {
+                if (output.chanceKnown() && !output.guaranteedOutput()) {
                     return true;
                 }
             }
             return false;
         }
 
+        public boolean hasUnknownOutputChance(){return outputs.stream().anyMatch(i->!i.chanceKnown());}
+
         /** A probabilistic product other than the main one. */
         public boolean hasProbabilisticByproduct() {
             for (int i = 0; i < outputs.size(); i++) {
                 if (i == mainOutputIndex()) continue;
-                if (!outputs.get(i).guaranteedOutput()) {
+                if (outputs.get(i).chanceKnown() && !outputs.get(i).guaranteedOutput()) {
                     return true;
                 }
             }
@@ -219,8 +236,8 @@ public final class RecipePlan {
             return -1;
         }
 
-        public boolean hasByproduct() { return outputs.size() > (mainOutputIndex() < 0 ? 0 : 1); }
-        public boolean allOutputsProbabilistic() { return !outputs.isEmpty() && mainOutputIndex() < 0; }
+        public boolean hasByproduct() { if(hasUnknownOutputChance()&&mainOutputIndex()<0)return false; return outputs.size() > (mainOutputIndex() < 0 ? 0 : 1); }
+        public boolean allOutputsProbabilistic() { return !outputs.isEmpty() && !hasUnknownOutputChance() && mainOutputIndex() < 0; }
 
         public boolean canEncode(int outputPolicy, boolean dropTools) {
             boolean hasOutput = outputPolicy == 0 ? !outputs.isEmpty() : mainOutputIndex() >= 0;

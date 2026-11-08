@@ -34,6 +34,7 @@ public final class WildcardEditorState {
                 throw new IllegalArgumentException("Invalid held wildcard fingerprint");
             out.putByteArray("held_fingerprint", input.getByteArray("held_fingerprint").clone());
         }
+        CircuitCondition.read(input).write(out);
         return out;
     }
 }

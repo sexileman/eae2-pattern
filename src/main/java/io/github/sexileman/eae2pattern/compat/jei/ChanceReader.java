@@ -33,28 +33,30 @@ public final class ChanceReader {
     private ChanceReader() {
     }
 
-    /** @return the chance in the range (0, 1], 1 meaning "always". */
-    public static float chanceOf(IRecipeSlotView slot) {
+    /** @return the numeric fallback; use read() to distinguish missing probability data. */
+    public record Result(float chance,boolean known){}
+    public static float chanceOf(IRecipeSlotView slot){return read(slot).chance();}
+    public static Result read(IRecipeSlotView slot) {
         if (!(slot instanceof IRecipeSlotDrawable drawable)) {
-            return 1.0F;
+            return new Result(1.0F,false);
         }
         List<Component> tooltip;
         try {
             tooltip = drawable.getTooltip();
         } catch (Throwable t) {
             EAE2Pattern.LOGGER.debug("Could not read a slot tooltip while collecting recipes", t);
-            return 1.0F;
+            return new Result(1.0F,false);
         }
         if (tooltip == null || tooltip.isEmpty()) {
-            return 1.0F;
+            return new Result(1.0F,false);
         }
         for (Component line : tooltip) {
             Float chance = parse(line.getString());
             if (chance != null) {
-                return chance;
+                return new Result(chance,true);
             }
         }
-        return 1.0F;
+        return new Result(1.0F,false);
     }
 
     static Float parse(String line) {

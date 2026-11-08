@@ -85,6 +85,8 @@ public final class CollectingScreen extends AeToolScreen {
             this.minecraft.setScreen(this.returnTo);
             return;
         }
+        if(minecraft.player!=null&&(collector.skippedCount()>0||collector.truncated()))
+            minecraft.player.displayClientMessage(Component.translatable("eae2_pattern.collecting.result",plan.entries().size(),collector.skippedCount(),collector.truncated()?Component.translatable("eae2_pattern.collecting.limited"):Component.empty()),false);
         if (destination != null) destination.accept(plan);
         else PreviewGui.open(plan, this.returnTo);
     }

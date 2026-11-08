@@ -71,6 +71,10 @@ public final class PatternWorkbenchScreen extends AeToolScreen implements Genera
     private int footerStatusX, footerStatusY, footerStatusWidth;
     private Component notice = Component.empty();
     private final SearchDebounce searchDebounce = new SearchDebounce();
+    private CircuitCatalog circuitCatalog;
+    private io.github.sexileman.eae2pattern.wildcard.CircuitCondition circuit = io.github.sexileman.eae2pattern.wildcard.CircuitCondition.ALL;
+    private CircuitFilterButton circuitButton;
+    private final SearchDebounce multiplierDebounce = new SearchDebounce();
     private Action generate, inputFilter, outputFilter, tools, products, multiplier, halveMultiplier, doubleMultiplier, resetMultiplier, grouping, more, detailMode;
 
     public PatternWorkbenchScreen(RecipePlan plan, Screen parent) {
@@ -87,7 +91,12 @@ public final class PatternWorkbenchScreen extends AeToolScreen implements Genera
         int searchY = layout.searchY(), filterY = layout.filterY(), toolbarY = layout.toolbarY();
         bodyTop = layout.bodyTop(); bodyBottom = layout.bodyBottom();
         int half = (panelWidth - 28) / 2;
-        inputBox = addRenderableWidget(new WorkbenchSearchBox(font, left + 16, top + searchY + 5, half - 12, tr("input")));
+        if(circuitCatalog==null)circuitCatalog=new CircuitCatalog(plan);
+        int circuitWidth=circuitCatalog.available()?Math.min(86,half/2):0;
+        circuitButton=null;
+        if(circuitWidth>0) circuitButton=addRenderableWidget(new CircuitFilterButton(left+10+half-circuitWidth,top+searchY, circuitWidth,19,circuitCatalog,()->circuit,
+            ()->minecraft.setScreen(new CircuitPickerScreen(this,circuitCatalog,circuit,c->{circuit=c;refresh();}))));
+        inputBox = addRenderableWidget(new WorkbenchSearchBox(font, left + 16, top + searchY + 5, half - 12 - (circuitWidth>0?circuitWidth+4:0), tr("input")));
         outputBox = addRenderableWidget(new WorkbenchSearchBox(font, left + 24 + half, top + searchY + 5, half - 12, tr("output")));
         inputBox.setMaxLength(160); outputBox.setMaxLength(160);
         inputBox.setBordered(false); outputBox.setBordered(false);
@@ -97,7 +106,7 @@ public final class PatternWorkbenchScreen extends AeToolScreen implements Genera
         outputBox.setResponder(value -> { if (value.equals(outputText)) return; outputText = value; exactOutput = null; searchDebounce.changed(); });
         boolean stacked=panelWidth<420&&panelHeight>=260;
         int q=stacked?(panelWidth-24)/2:(panelWidth-32)/4;
-        inputFilter=action(left+10,top+filterY,q,()->choose(inputFilter,"input_mode.",4,inputMode,value->{inputMode=value;refresh();}));
+        inputFilter=action(left+10,top+filterY,q,()->choose(inputFilter,"input_mode.",4,inputMode,value->{inputMode=value;refresh();})).help("input_consumption_help");
         outputFilter=action(left+14+q,top+filterY,q,()->choose(outputFilter,"output_mode.",6,outputMode,value->{outputMode=value;refresh();}));
         tools=action(stacked?left+10:left+18+q*2,top+filterY+(stacked?22:0),q,()->{dropTools=!dropTools;optionsChanged();}).toggle(()->dropTools);
         products=action(stacked?left+14+q:left+22+q*3,top+filterY+(stacked?22:0),q,()->choose(products,"policy.",3,outputPolicy,value->{outputPolicy=value;optionsChanged();}));
@@ -127,23 +136,29 @@ public final class PatternWorkbenchScreen extends AeToolScreen implements Genera
                 .help("multiplier_double_help");
         resetMultiplier = action(left + 121, layout.footerControlsY(), 38,
                 () -> changeMultiplier(ProcessingMultiplier.DEFAULT)).help("multiplier_reset_help");
-        action(left + panelWidth - 62, top + 9, 52, this::onClose).help("close_help").setMessage(tr("close"));
+        action(left + panelWidth - 62, headerButtonY(), 52, this::onClose).help("close_help").setMessage(tr("close"));
         generate = action(left + panelWidth - (panelWidth<300?118:138), layout.footerControlsY(), panelWidth<300?100:120, this::generate).help("scope_help");
         choice = null; navigatingToJei = false;
         ClientGenerationFeedback.setListener(this); InspectionFeedback.setListener(this::inspectionFinished);
         ClientNetworkState.reset(); queryNetwork(); queuePreview(); rebuildDetails(); updateButtons();
     }
+    private int headerButtonY() { return top + (panelHeight < 230 ? 1 : 4); }
     private Action action(int x, int y, int w, Runnable click) { return addRenderableWidget(new Action(x, y, w, click)); }
     private void changeMultiplier(int value) {
-        multiplierText = Integer.toString(ProcessingMultiplier.normalize(value));
-        optionsChanged();
+        String next = Integer.toString(ProcessingMultiplier.normalize(value));
+        if (next.equals(multiplierText)) return;
+        multiplierText = next;
+        previewRequest = -1; // Ignore replies for the previous multiplier while keeping the displayed preview.
+        multiplierDebounce.changed();
+        updateButtons();
     }
     private void queryNetwork() { PacketHandler.sendToServer(new C2SQueryNetworkStatusPacket(0)); }
     @Override public void tick() {
         inputBox.tick(); outputBox.tick();
+        if (multiplierDebounce.poll()) { optionsChanged(); previewDelay = focused == null ? 0 : 1; }
         if (searchDebounce.poll()) { input = ItemSearchQuery.parse(inputText); output = ItemSearchQuery.parse(outputText); refresh(); }
         if (filtering && !searchDebounce.pending()) filterStep();
-        if (!filtering && !searchDebounce.pending() && previewDelay > 0 && !sending && !checking && --previewDelay == 0) requestPreview();
+        if (!filtering && !searchDebounce.pending() && previewDelay > 0 && !multiplierDebounce.pending() && !sending && !checking && --previewDelay == 0) requestPreview();
         if (++tickCount % 60 == 0 && !sending) queryNetwork();
         updateButtons();
     }
@@ -161,7 +176,7 @@ public final class PatternWorkbenchScreen extends AeToolScreen implements Genera
         int work = 0;
         while (filterCursor < plan.entries().size() && work++ < 1024 && System.nanoTime() < deadline) {
             RecipePlan.Entry e = plan.entries().get(filterCursor++);
-            if (filters.rejects(e)) continue;
+            if (filters.rejects(e) || !circuitCatalog.matches(e,circuit)) continue;
             if (exactInput != null && java.util.stream.Stream.concat(e.inputs().stream(), e.catalysts().stream())
                     .noneMatch(i -> RecipeDiagnostics.sameMaterial(exactInput, i.spec()))) continue;
             if (exactOutput != null && e.outputs().stream().noneMatch(i -> RecipeDiagnostics.sameMaterial(exactOutput, i.spec()))) continue;
@@ -189,6 +204,7 @@ public final class PatternWorkbenchScreen extends AeToolScreen implements Genera
         updateButtons();
     }
     private void updateButtons() {
+        if(circuitButton!=null)circuitButton.active=!sending&&!checking;
         if (generate == null) return;
         inputFilter.setMessage(tr("input_mode." + inputMode)); outputFilter.setMessage(tr("output_mode." + outputMode));
         tools.setMessage(tr(dropTools ? "tools_drop" : "tools_keep")); products.setMessage(tr("policy." + outputPolicy));
@@ -204,8 +220,8 @@ public final class PatternWorkbenchScreen extends AeToolScreen implements Genera
         resetMultiplier.active = !checking && !sending && ProcessingMultiplier.parse(multiplierText) != 1;
         more.active = !checking && !sending;
         generate.setMessage(sending ? tr("sending") : tr("generate", requiredBlanks()));
-        generate.active = !sending && !checking && !filtering && !searchDebounce.pending() && ProcessingMultiplier.parse(multiplierText) > 0
-                && eligibleCount > 0 && ClientNetworkState.hasNetwork() && ClientNetworkState.blankPatterns() >= requiredBlanks();
+        generate.active = !multiplierDebounce.pending() && !sending && !checking && !filtering && !searchDebounce.pending() && ProcessingMultiplier.parse(multiplierText) > 0
+                && eligibleCount > 0 && ClientNetworkState.hasNetwork() && ClientNetworkState.blankPatterns() > 0;
     }
     private int requiredBlanks() { return eligibleCount; }
     private void generate() {
@@ -280,6 +296,7 @@ public final class PatternWorkbenchScreen extends AeToolScreen implements Genera
                 existing.addAll(result.existing());
                 for (RecipePlan.Entry entry : plan.entries()) if (existing.contains(entry.recipeId())) entry.setSelected(false);
                 notice = tr("existing_result", result.checked(), result.existing().size(), result.failed());
+                if(result.details().stream().anyMatch(d->EncodingMessages.key(d).equals("inspection_limited")))notice=notice.copy().append(" · ").append(Component.translatable("eae2_pattern.error.inspection_limited"));
                 refresh();
             } else notice = tr("existing_failed");
             queuePreview(); updateButtons();
@@ -316,6 +333,7 @@ public final class PatternWorkbenchScreen extends AeToolScreen implements Genera
                 for (StackSpec input : preview.inputs()) details.add(encodedLine(input, 0));
                 details.add(new DetailLine(tr("encoded_outputs"), null, ACCENT));
                 for (StackSpec output : preview.outputs()) details.add(encodedLine(output, 1));
+                if (focused.hasUnknownOutputChance())details.add(DetailLine.notice(tr("unknown_output_warning"),WorkbenchTheme.WARNING));
                 if (focused.hasProbabilisticOutput()) details.add(DetailLine.notice(tr("chance_warning"), WorkbenchTheme.WARNING));
                 if (focused.hasProbabilisticInput()) details.add(DetailLine.notice(tr("chance_input_warning"), WorkbenchTheme.WARNING));
             }
@@ -349,6 +367,7 @@ public final class PatternWorkbenchScreen extends AeToolScreen implements Genera
         for (Ingredient input : entry.catalysts()) addIngredient(input, false, false);
         details.add(new DetailLine(tr("outputs"), null, ACCENT));
         for (int i = 0; i < entry.outputs().size(); i++) addIngredient(entry.outputs().get(i), true, i != entry.mainOutputIndex());
+        if(entry.hasUnknownOutputChance())details.add(DetailLine.notice(tr("unknown_output_warning"),WorkbenchTheme.WARNING));
         details.add(DetailLine.notice(tr("semantics"), DIM));
     }
     private void moreMenu() {
@@ -375,6 +394,7 @@ public final class PatternWorkbenchScreen extends AeToolScreen implements Genera
                 case RESET_SETTINGS -> {
                     dropTools = true; outputPolicy = inputMode = outputMode = groupingMode = 0;
                     selectedOnly = false; sourceView = false; pinned = null; expanded.clear(); changeMultiplier(1);
+                    circuit=io.github.sexileman.eae2pattern.wildcard.CircuitCondition.ALL;
                     inputBox.setValue(""); outputBox.setValue(""); optionsChanged(); refresh();
                 }
                 default -> { }
@@ -385,7 +405,7 @@ public final class PatternWorkbenchScreen extends AeToolScreen implements Genera
         iconHits.clear();
 
         WorkbenchTheme.panel(g, left, top, panelWidth, panelHeight);
-        text(g, tr("title").copy().append(" / ").append(plan.machineName()), left + 10, top + 10, panelWidth - 86, TEXT);
+        text(g, tr("title").copy().append(" / ").append(plan.machineName()), left + 10, headerButtonY() + (19 - font.lineHeight) / 2, panelWidth - 86, TEXT);
         if (panelHeight >= 230) g.fill(left + 10, top + 27, left + panelWidth - 10, top + 28, LINE);
         searchSurface(g, inputBox); searchSurface(g, outputBox);
         g.fill(split, bodyTop - 27, split + 1, bodyBottom, LINE);
@@ -433,7 +453,7 @@ public final class PatternWorkbenchScreen extends AeToolScreen implements Genera
     }
     private void renderFooter(GuiGraphics g, Component status) {
         WorkbenchTheme.control(g, left + 8, layout.footerTop(), panelWidth - 16, layout.footerHeight(), WorkbenchTheme.BACKGROUND, LINE);
-        boolean ready = ClientNetworkState.hasNetwork() && ClientNetworkState.blankPatterns() >= requiredBlanks()
+        boolean ready = ClientNetworkState.hasNetwork() && ClientNetworkState.blankPatterns() > 0
                 && ProcessingMultiplier.parse(multiplierText) > 0;
         footerStatusX = left + (layout.footerTitle()?18:168);
         if (layout.footerTitle()) {
@@ -778,7 +798,11 @@ public final class PatternWorkbenchScreen extends AeToolScreen implements Genera
     }
     @Override public List<GhostField> jeiGhostFields(){
         if(sending||checking||choice!=null)return List.of();
-        return List.of(ghostField(inputBox,s->{inputBox.setValue("&"+s.id());exactInput=s;searchDebounce.changed();}),ghostField(outputBox,s->{outputBox.setValue("&"+s.id());exactOutput=s;searchDebounce.changed();}));
+        var targets=new ArrayList<GhostField>();
+        targets.add(ghostField(inputBox,s->{inputBox.setValue("&"+s.id());exactInput=s;searchDebounce.changed();}));
+        targets.add(ghostField(outputBox,s->{outputBox.setValue("&"+s.id());exactOutput=s;searchDebounce.changed();}));
+        if(circuitButton!=null&&!sending&&!checking)targets.add(new GhostField(new net.minecraft.client.renderer.Rect2i(circuitButton.getX(),circuitButton.getY(),circuitButton.getWidth(),circuitButton.getHeight()),s->{int n=io.github.sexileman.eae2pattern.wildcard.CircuitCondition.configuration(s);if(n>=0){circuit=new io.github.sexileman.eae2pattern.wildcard.CircuitCondition(2,Set.of(n));circuitButton.setMessage(CircuitCatalog.label(circuit));refresh();}}));
+        return targets;
     }
     @Override public List<net.minecraft.client.renderer.Rect2i> jeiExtraAreas(){return choice==null?List.of():List.of(new net.minecraft.client.renderer.Rect2i(choice.x,choice.y,choice.w,choice.h));}
 

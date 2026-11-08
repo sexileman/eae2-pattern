@@ -13,7 +13,7 @@ import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.fml.common.Mod;
 import java.util.*;
 
-/** Read-only, explicitly requested checks. Does not traverse providers or touch stored items. */
+/** Read-only explicit checks of stored pattern signatures and currently published AE2 definitions. */
 @Mod.EventBusSubscriber(modid = EAE2Pattern.MOD_ID)
 public final class PatternInspection {
     private static final ArrayDeque<Job> JOBS = new ArrayDeque<>();
@@ -50,10 +50,18 @@ public final class PatternInspection {
         final List<ResourceLocation> existing = new ArrayList<>();
         final List<PatternSpec> preview = new ArrayList<>();
         final List<String> details = new ArrayList<>();
-        int cursor, failed;
+        int cursor, failed,inventoryCursor;
+        List<AEItemKey> inventory=List.of();
+        final Set<String> storedSignatures=new HashSet<>();
+        boolean limitedReported,checkingPublished;
+        List<appeng.api.crafting.IPatternDetails> published=List.of();
+        int publishedCursor;
+        String pendingSignature;
+        ResourceLocation pendingId;
         Job(ServerPlayer player, List<PatternSpec> specs, int id, int operation) {
             this.player = player; this.specs = specs; requestId = id; this.operation = operation;
             network = operation == 1 ? NetworkAccess.resolve(player) : null;
+            if(network!=null){var snapshot=network.patternInventory();inventory=snapshot.keys();if(snapshot.limited())limited();}
         }
         boolean step() {
             if (operation == 1) {
@@ -62,13 +70,30 @@ public final class PatternInspection {
                     details.add("ME network unavailable or changed"); finish(false); return true;
                 }
             }
+            if(operation==1&&inventoryCursor<inventory.size()){
+                storedSignatures.add(PatternSignature.of(inventory.get(inventoryCursor++)));return false;
+            }
+            if(!inventory.isEmpty()&&inventoryCursor==inventory.size()){inventory=List.of();inventoryCursor=0;}
+            if(checkingPublished)return checkPublished();
             PatternSpec spec = specs.get(cursor++);
             try {
                 var encoded = PatternEncoder.encode(player, spec);
                 if (operation == 2) preview.add(EncodedPatternView.decode(player.serverLevel(), spec, encoded));
-                else if (network.storedAmount(AEItemKey.of(encoded)) > 0
-                        || network.storedAmount(AEItemKey.of(PatternEncoder.encode(player.serverLevel(), spec))) > 0)
-                    existing.add(spec.recipeId());
+                else {
+                    String signature=PatternSignature.of(AEItemKey.of(encoded));
+                    boolean found=storedSignatures.contains(signature);
+                    if(!found){
+                        var decoded=appeng.api.crafting.PatternDetailsHelper.decodePattern(encoded,player.serverLevel());
+                        if(decoded!=null){
+                            published=network.craftingFor(decoded.getPrimaryOutput().what()).stream().limit(513).toList();
+                            if(published.size()>512){limited();published=published.subList(0,512);}
+                            if(!published.isEmpty()){
+                                pendingSignature=signature;pendingId=spec.recipeId();publishedCursor=0;checkingPublished=true;return false;
+                            }
+                        }
+                    }
+                    if(found)existing.add(spec.recipeId());
+                }
             } catch (Exception e) {
                 failed++;
                 if (details.size() < 4) {
@@ -79,6 +104,16 @@ public final class PatternInspection {
             if (cursor < specs.size()) return false;
             finish(true); return true;
         }
+        boolean checkPublished(){
+            boolean found=false;
+            try{found=pendingSignature.equals(PatternSignature.of(published.get(publishedCursor++).getDefinition()));}
+            catch(RuntimeException unsupported){limited();}
+            if(found)existing.add(pendingId);
+            if(!found&&publishedCursor<published.size())return false;
+            checkingPublished=false;published=List.of();pendingSignature=null;pendingId=null;
+            if(cursor<specs.size())return false;finish(true);return true;
+        }
+        void limited(){if(!limitedReported){limitedReported=true;details.add("Pattern inspection capacity reached; results are partial");}}
         void finish(boolean success) {
             PacketHandler.sendToPlayer(player, new S2CInspectionPacket(requestId, operation, success,
                     cursor, failed, existing, preview, details));

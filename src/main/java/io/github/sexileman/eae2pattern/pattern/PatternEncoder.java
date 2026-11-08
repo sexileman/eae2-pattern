@@ -291,13 +291,9 @@ public final class PatternEncoder {
     }
 
     private static GenericStack[] toGenericStacks(List<StackSpec> specs, boolean requireNonEmpty) throws EncodingException {
-        List<GenericStack> stacks = new ArrayList<>(specs.size());
-        for (StackSpec spec : specs) {
-            GenericStack stack = toGenericStack(spec);
-            if (stack != null) {
-                stacks.add(stack);
-            }
-        }
+        List<GenericStack> stacks;
+        try { stacks = CompleteIngredients.map(specs, PatternEncoder::toGenericStack,s->s.type()+":"+s.id()); }
+        catch(IllegalArgumentException invalid) { throw new EncodingException(invalid.getMessage()); }
         if (requireNonEmpty && stacks.isEmpty()) {
             throw new EncodingException("no encodable ingredients left after filtering");
         }
@@ -315,6 +311,6 @@ public final class PatternEncoder {
             return stack.isEmpty() ? null : AEItemKey.of(stack);
         }
         Fluid fluid = ForgeRegistries.FLUIDS.getValue(spec.id());
-        return fluid == null ? null : AEFluidKey.of(new net.minecraftforge.fluids.FluidStack(fluid, 1, spec.tag()));
+        return fluid == null || fluid == net.minecraft.world.level.material.Fluids.EMPTY ? null : AEFluidKey.of(new net.minecraftforge.fluids.FluidStack(fluid, 1, spec.tag()));
     }
 }
