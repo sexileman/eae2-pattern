@@ -58,6 +58,7 @@ public final class WildcardEditorScreen extends AeToolScreen implements Generati
     private CircuitCondition circuit = CircuitCondition.ALL;
     private CircuitFilterButton circuitButton;
     private final SearchDebounce multiplierDebounce = new SearchDebounce();
+    private SettingChoice settingChoice;
     private Control generate;
     private Control generateNetwork;
     private static final int TEXT = WorkbenchTheme.TEXT, DIM = WorkbenchTheme.DIM, ROW = RecipeListRow.HEIGHT;
@@ -138,14 +139,14 @@ public final class WildcardEditorScreen extends AeToolScreen implements Generati
         int modeWidth = Math.max(36, Math.min(82, w - (split - x) - 70));
         button(split + 10, y + 53, modeWidth, 1, () -> { sourceView = !sourceView; detailScroll = 0; updateControls(); }, "source");
         button(split + 16 + modeWidth, y + 53, 44, 1, () -> { if (focus != null) RecipeNavigation.show(plan, focus); }, "jei");
-        button(x + 10, y + 65, Math.min(240, w / 2 - 15), 2, () -> { dropTools = !dropTools; changedPolicy(); }, "drop_tools");
-        button(x + 10, y + 90, Math.min(240, w / 2 - 15), 2, () -> { outputPolicy = (outputPolicy + 1) % 3; changedPolicy(); }, "output_policy");
+        button(x + 10, y + 65, Math.min(240, w / 2 - 15), 2, () -> chooseSetting("drop_tools"), "drop_tools");
+        button(x + 10, y + 90, Math.min(240, w / 2 - 15), 2, () -> chooseSetting("output_policy"), "output_policy");
         button(x + 10, y + 115, 32, 2, () -> { changeMultiplier(ProcessingMultiplier.halveAmount(multiplier)); }, "halve");
         button(x + 48, y + 115, 56, 2, () -> { changeMultiplier(1); }, "multiplier");
         button(x + 110, y + 115, 32, 2, () -> { changeMultiplier(ProcessingMultiplier.doubleAmount(multiplier)); }, "double");
-        button(x + w / 2 + 5, y + 65, w / 2 - 15, 2, () -> { inScope = (inScope + 1) % 3; changedRules(); }, "input_scope");
-        button(x + w / 2 + 5, y + 90, w / 2 - 15, 2, () -> { outScope = (outScope + 1) % 3; changedRules(); }, "output_scope");
-        button(x + w / 2 + 5, y + 115, w / 2 - 15, 2, () -> { searchTools = !searchTools; changedRules(); }, "search_tools");
+        button(x + w / 2 + 5, y + 65, w / 2 - 15, 2, () -> chooseSetting("input_scope"), "input_scope");
+        button(x + w / 2 + 5, y + 90, w / 2 - 15, 2, () -> chooseSetting("output_scope"), "output_scope");
+        button(x + w / 2 + 5, y + 115, w / 2 - 15, 2, () -> chooseSetting("search_tools"), "search_tools");
         generateNetwork = heldTarget != null && h > 210
                 ? button(x + 10, y + 140, w - 20, 2, () -> generate(false), "save_copy_network") : null;
         generate = button(x + w - 140, y + h - 27, 130, -1, this::generate, heldTarget != null ? "write_held" : savedCopy ? "save_copy" : "generate");
@@ -157,6 +158,7 @@ public final class WildcardEditorScreen extends AeToolScreen implements Generati
         Control c = new Control(bx, by, width, page, action, key); controls.add(c); return addRenderableWidget(c);
     }
     private void sync() {
+        settingChoice=null;
         for (int i = 0; i < 4; i++) boxes[i].visible = tab == 3;
         for (var c : controls) c.visible = c.page < 0 || c.page == tab;
         updateControls();
@@ -184,6 +186,7 @@ public final class WildcardEditorScreen extends AeToolScreen implements Generati
                 case "source" -> tr(sourceView ? "source" : "final");
                 default -> tr(c.key);
             });
+            if (isSetting(c.key)) c.setMessage(c.getMessage().copy().append(" ▾"));
             if (c.key.equals("halve")) c.active &= multiplier > 1;
             if (c.key.equals("double")) c.active &= multiplier < ProcessingMultiplier.MAX;
             if (c.key.equals("material") || c.key.equals("select_all") || c.key.equals("select_none")) c.active &= !filtering && !searchDebounce.pending();
@@ -317,6 +320,7 @@ public final class WildcardEditorScreen extends AeToolScreen implements Generati
         label(g, filtering ? tr("filtering", cursor, plan.entries().size()) : heldTarget != null ? tr("summary_held", matches.size(), chosen()) : tr("summary", matches.size(), chosen(), ClientNetworkState.blankWildcards()), x + 10, y + h - 24, w - 160, DIM, .8f);
         if (!status.getString().isEmpty()) label(g, status, x + 10, y + h - 13, w - 160, WorkbenchTheme.WARNING, .7f);
         super.render(g, mx, my, partial);
+        if(settingChoice!=null){settingChoice.render(g,mx,my);return;}
         for (var hit : hits) if (tab == 1 && my >= listTop && my < listBottom && mx >= hit.x && mx < hit.x + 18 && my >= hit.y && my < hit.y + 18) {
             var lines = new ArrayList<Component>();
             try {
@@ -439,11 +443,13 @@ public final class WildcardEditorScreen extends AeToolScreen implements Generati
     }
     private static double clamp(double value, int content, int viewport) { return Math.max(0, Math.min(value, Math.max(0, content - viewport))); }
     @Override public boolean mouseScrolled(double mx, double my, double delta) {
+        if(settingChoice!=null)return true;
         if (!insidePanel(mx,my) || tab != 1 || my < listTop || my > listBottom) return super.mouseScrolled(mx, my, delta);
         if (mx < split) scroll = clamp(scroll - delta * ROW, matches.size() * ROW, listBottom - listTop);
         else detailScroll = clamp(detailScroll - delta * 30, detailHeight(), listBottom - listTop); return true;
     }
     @Override public boolean mouseClicked(double mx, double my, int button) {
+        if(settingChoice!=null){var popup=settingChoice;settingChoice=null;int index=popup.bounds.indexAt(mx,my);if(button==0&&index>=0)popup.select(index);if(index>=0||insidePanel(mx,my))return true;return false;}
         if(!insidePanel(mx,my))return false;
         if (super.mouseClicked(mx, my, button)) return true;
         if(tab==1&&button==0&&!sending&&my>=listTop&&my<listBottom)for(var hit:hits)if(mx>=hit.x&&mx<hit.x+18&&my>=hit.y&&my<hit.y+18){chooseIngredient(hit);return true;}
@@ -505,6 +511,61 @@ public final class WildcardEditorScreen extends AeToolScreen implements Generati
     @Override public void removed() { ClientGenerationFeedback.setListener(null); InspectionFeedback.setListener(null); }
     @Override public void onClose() { minecraft.setScreen(parent); }
     @Override public boolean isPauseScreen() { return false; }
+    private static boolean isSetting(String key){return Set.of("drop_tools","output_policy","input_scope","output_scope","search_tools").contains(key);}
+    private void chooseSetting(String key){
+        var anchor=controls.stream().filter(c->c.key.equals(key)).findFirst().orElseThrow();
+        List<Component> labels;int current;
+        switch(key){
+            case "drop_tools" -> {labels=List.of(tr("tools_machine"),tr("tools_pattern"));current=dropTools?0:1;}
+            case "output_policy" -> {labels=List.of(tr("policy_0"),tr("policy_1"),tr("policy_2"));current=outputPolicy;}
+            case "input_scope","output_scope" -> {labels=List.of(tr("scope_0"),tr("scope_1"),tr("scope_2"));current=key.equals("input_scope")?inScope:outScope;}
+            case "search_tools" -> {labels=List.of(tr("search_tools_yes"),tr("search_tools_no"));current=searchTools?0:1;}
+            default -> throw new IllegalArgumentException("Unknown encoding setting");
+        }
+        settingChoice=new SettingChoice(anchor,key,labels,current);
+    }
+    private final class SettingChoice {
+        final String key;final List<Component> labels;final int current;final PopupLayout bounds;int cursor;
+        SettingChoice(Control anchor,String key,List<Component> labels,int current){
+            this.key=key;this.labels=labels;this.current=current;cursor=current;
+            bounds=PopupLayout.measure(anchor.getX(),anchor.getY(),anchor.getWidth(),anchor.getHeight(),labels.stream().mapToInt(font::width).max().orElse(80)+28,labels.size(),width,height);
+        }
+        void select(int value){
+            if(value==current)return;
+            switch(key){
+                case "drop_tools" -> dropTools=value==0;
+                case "output_policy" -> outputPolicy=value;
+                case "input_scope" -> inScope=value;
+                case "output_scope" -> outScope=value;
+                case "search_tools" -> searchTools=value==0;
+                default -> throw new IllegalArgumentException("Unknown encoding setting");
+            }
+            if(key.equals("drop_tools")||key.equals("output_policy"))changedPolicy();else changedRules();
+        }
+        void render(GuiGraphics g,int mx,int my){
+            g.pose().pushPose();g.pose().translate(0,0,400);
+            WorkbenchTheme.control(g,bounds.x(),bounds.y(),bounds.width(),bounds.height(),WorkbenchTheme.SURFACE,WorkbenchTheme.LINE);
+            for(int i=0;i<labels.size();i++){
+                int rowY=bounds.y()+3+i*19;
+                if(i==cursor||bounds.indexAt(mx,my)==i)g.fill(bounds.x()+3,rowY,bounds.x()+bounds.width()-3,rowY+19,WorkbenchTheme.HOVER);
+                label(g,labels.get(i),bounds.x()+8,rowY+5,bounds.width()-28,TEXT,1);
+                if(i==current)g.drawString(font,"✓",bounds.x()+bounds.width()-16,rowY+5,TEXT,false);
+            }
+            g.pose().popPose();
+        }
+    }
+    @Override public boolean keyPressed(int key,int scan,int modifiers){
+        if(settingChoice!=null){
+            if(key==256){settingChoice=null;return true;}
+            if(key==264||key==265){settingChoice.cursor=Math.floorMod(settingChoice.cursor+(key==264?1:-1),settingChoice.labels.size());return true;}
+            if(key==257||key==335||key==32){var popup=settingChoice;settingChoice=null;popup.select(popup.cursor);return true;}
+            return true;
+        }
+        return super.keyPressed(key,scan,modifiers);
+    }
+    @Override public List<net.minecraft.client.renderer.Rect2i> jeiExtraAreas(){
+        if(settingChoice==null)return List.of();var b=settingChoice.bounds;return List.of(new net.minecraft.client.renderer.Rect2i(b.x(),b.y(),b.width(),b.height()));
+    }
     private record Hit(int x, int y, StackSpec spec, IngredientPresentation presentation, int side) {}
     private final class Control extends AbstractButton {
         final int page; final Runnable action; final String key;
@@ -519,12 +580,12 @@ public final class WildcardEditorScreen extends AeToolScreen implements Generati
     @Override public net.minecraft.client.renderer.Rect2i toolBounds(){return new net.minecraft.client.renderer.Rect2i(x,y,w,h);}
 
     @Override public java.util.Optional<IngredientArea> jeiIngredientAt(double mx,double my){
-        if(tab!=1||my<listTop||my>=listBottom)return java.util.Optional.empty();
+        if(settingChoice!=null||tab!=1||my<listTop||my>=listBottom)return java.util.Optional.empty();
         for(var hit:hits)if(mx>=hit.x&&mx<hit.x+18&&my>=hit.y&&my<hit.y+18)return java.util.Optional.of(new IngredientArea(hit.spec,new net.minecraft.client.renderer.Rect2i(hit.x,hit.y,18,18)));
         return java.util.Optional.empty();
     }
     @Override public List<GhostField> jeiGhostFields(){
-        if(sending)return List.of();
+        if(sending||settingChoice!=null)return List.of();
         var targets=new ArrayList<GhostField>();
         if(circuitButton!=null)targets.add(new GhostField(new net.minecraft.client.renderer.Rect2i(circuitButton.getX(),circuitButton.getY(),circuitButton.getWidth(),circuitButton.getHeight()),s->{int n=CircuitCondition.configuration(s);if(n>=0){circuit=new CircuitCondition(2,Set.of(n));circuitButton.setMessage(CircuitCatalog.label(circuit));changedRules();}}));for(var box:boxes)if(box.visible&&box.active)targets.add(ghostField(box,s->box.setValue("&"+s.id())));return targets;
     }
