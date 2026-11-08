@@ -57,3 +57,25 @@ AE2 的普通计划只有一个最终目标，但该目标的配方树能同时�
 - [CraftingCpuLogic](https://github.com/AppliedEnergistics/Applied-Energistics-2/blob/forge/v15.4.10/src/main/java/appeng/crafting/execution/CraftingCpuLogic.java)：trySubmitJob、executeCrafting、insert、finishJob、持久化。
 - [ExecutingCraftingJob](https://github.com/AppliedEnergistics/Applied-Energistics-2/blob/forge/v15.4.10/src/main/java/appeng/crafting/execution/ExecutingCraftingJob.java)：任务次数、单最终目标、等待库存。
 - [1.20.1 自动合成指南](https://guide.appliedenergistics.org/1.20.1/ae2-mechanics/autocrafting/)：普通自动合成不理解递归生产的概述。
+
+
+## 附属模组的合并投料与循环批次（追加）
+
+核查整合包提供的 extendedae_plus-1.5.3.jar：
+
+- PatternProviderLogicDoublingMixin 将供应器智能倍增开关和计算后的倍率上限标到原生 AEProcessingPattern 上。
+- autopattern.CraftingSimulationStateMixin.onBuildCraftingPlan 在计划构建处重写配方次数表：满足智能倍增条件时，把处理配方包装为 ScaledProcessingPattern。未受限分支可把 N 次改为倍率 N 的一次；受限时拆为若干整批与余数，另有按供应器数分配分支。不是所有配方都无条件合并。
+- ScaledProcessingPattern/ScaledInput 放大原输入及输出数量。CraftingServiceGetProvidersMixin 与 PatternProviderLogicContainsRedirectMixin 用 getOriginal 将虚拟放大配方映射回供应器识别的原配方，避免找不到机器。仅查看名字或修改次数而不放大耗材与等待产物是不正确的。
+- 模组包含上述能力不等于当前存档已启用该开关，也不等于实际机器可一次容纳任意数量。未在此检查运行时开关与世界中的供应器配置。
+
+原生 executeCrafting 每次成功推送一个 pattern 任务就将次数减一，并按本次配方详情登记等待产物；多个推送可发生在相近 tick。若一个样板每份输出 10A，需求 10000A，在无库存抵扣/其他路径的简化前提下是 1000 份配方。智能倍增可将 1000 份输入与 10000A 的期望输出包装成一次逻辑推送；物品传输、网络包和 GT 机器加工不保证只执行一次，容器容量、并行和部分接收仍是独立限制。若需求不是 10 的整数倍，除非有不同配方，否则不能凭合并投料改变最小配方单位。
+
+### 对循环实现的约束
+
+全计划按同配方总次数合并，可能把不同循环阶段压成一个大批次，破坏小种子周转。例如仅有 1A，配方 A→2B、B→2A 时，不能因最终需要 10000A 就第一批要求数千 A。已有计划的总次数仍是必要数据，但投料必须按当前阶段真实可用库存执行。
+
+循环任务的单批次数上限应取：剩余计划次数、当前真实可用输入允许的次数、必须留给其他阶段/目标的配额，以及供应器已配置的可用批次限制的最小值。物品与流体按各自原始整数单位计算；不能把尚未返回的产物计入当前库存。阶段内可以大批合并，回流后增长可支持更大的下一批，不应退化为全部逐份发送。
+
+后续优先研究：非循环任务继续使用原有智能倍增；循环部分保留原配方身份与阶段信息，限制或阻止跨阶段整单合并，只合并当前可安全执行的阶段。不得全局关闭用户供应器的智能倍增开关。若附属模组已包装配方，识别原配方与倍率后统一计算，防止重复放大。任务重载时还要验证原定义、包装倍率、阶段、剩余次数和在途数量都能正确恢复；仅持久化原样板 ID 不足以代表整个循环状态。
+
+字节码核查记录在本地 .tools/compat/eap-scale-plan-review.txt、eap-scaled-review.txt、addon-batch-review.txt。此次仍仅为分析，未声称 ExtendedAE、GTLCore、MAE2 的所有相关路径已经完成兼容验证。
