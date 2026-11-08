@@ -88,6 +88,13 @@ public final class RegressionChecks {
         check(debounce.poll(1_700_000_000L), "slow ticks run one overdue search without catchup repeats");
     }
     private static void recipeStripColumns() {
+        for(int width:new int[]{86,100,118,130}){
+            var columns=io.github.sexileman.eae2pattern.client.RecipeStripLayout.measure(width);
+            check(columns.inputMax()*22<=columns.inputWidth(),"narrow row keeps input icons inside their column");
+            check(columns.outputX()+columns.outputMax()*22<=width,"narrow row keeps output icons inside the row");
+            check(columns.inputMax()*22+3+io.github.sexileman.eae2pattern.client.RecipeStripLayout.overflowWidth(columns.inputWidth(),columns.inputMax())<=columns.inputWidth(),"narrow overflow text cannot enter the arrow gutter");
+        }
+
         for (int width : new int[]{136,170,220,280}) {
             var columns=io.github.sexileman.eae2pattern.client.RecipeStripLayout.measure(width);
             check(columns.inputMax()*22+30<=columns.arrowX(), "input icons and overflow stay before the arrow");

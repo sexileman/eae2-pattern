@@ -143,7 +143,7 @@ public final class PatternWorkbenchScreen extends AeToolScreen implements Genera
         inputBox.tick(); outputBox.tick();
         if (searchDebounce.poll()) { input = ItemSearchQuery.parse(inputText); output = ItemSearchQuery.parse(outputText); refresh(); }
         if (filtering && !searchDebounce.pending()) filterStep();
-        if (!searchDebounce.pending() && previewDelay > 0 && !sending && !checking && --previewDelay == 0) requestPreview();
+        if (!filtering && !searchDebounce.pending() && previewDelay > 0 && !sending && !checking && --previewDelay == 0) requestPreview();
         if (++tickCount % 60 == 0 && !sending) queryNetwork();
         updateButtons();
     }
@@ -210,9 +210,8 @@ public final class PatternWorkbenchScreen extends AeToolScreen implements Genera
     private int requiredBlanks() { return eligibleCount; }
     private void generate() {
         if (!generate.active) return;
-        List<PatternSpec> specs = selectedSpecs();
-        try { PatternRequestSender.send(specs); sending = true; notice = tr("sending"); }
-        catch (IllegalArgumentException e) { notice = EncodingMessages.explain(e.getMessage()); }
+        try { PatternRequestSender.send(selectedSpecs()); sending = true; notice = tr("sending"); }
+        catch (IllegalArgumentException | ArithmeticException e) { notice = EncodingMessages.explain(e.getMessage()); }
         updateButtons();
     }
     private List<PatternSpec> selectedSpecs() {
@@ -258,13 +257,14 @@ public final class PatternWorkbenchScreen extends AeToolScreen implements Genera
     private void requestPreview() {
         if (focused == null) return;
         int scale = ProcessingMultiplier.parse(multiplierText);
-        PatternSpec spec = scale == 0 ? null : focused.specForPolicy(scale, outputPolicy, dropTools);
-        if (spec == null) {
-            previewNotice = scale == 0 ? tr("multiplier_invalid", ProcessingMultiplier.MAX) : tr(RecipeDiagnostics.skipReason(focused, outputPolicy, dropTools));
-            rebuildDetails(); return;
-        }
-        try { previewRequest = PatternRequestSender.send(List.of(spec), 2); }
-        catch (IllegalArgumentException e) { previewNotice = EncodingMessages.explain(e.getMessage()); }
+        try {
+            PatternSpec spec = scale == 0 ? null : focused.specForPolicy(scale, outputPolicy, dropTools);
+            if (spec == null) {
+                previewNotice = scale == 0 ? tr("multiplier_invalid", ProcessingMultiplier.MAX) : tr(RecipeDiagnostics.skipReason(focused, outputPolicy, dropTools));
+                rebuildDetails(); return;
+            }
+            previewRequest = PatternRequestSender.send(List.of(spec), 2);
+        } catch (IllegalArgumentException | ArithmeticException e) { previewRequest=-1;previewNotice = EncodingMessages.explain(e.getMessage()); }
         rebuildDetails();
     }
     private void inspectionFinished(S2CInspectionPacket result) {
@@ -293,7 +293,7 @@ public final class PatternWorkbenchScreen extends AeToolScreen implements Genera
         try {
             existing.clear(); existingRequest = PatternRequestSender.send(selectedSpecs(), 1);
             checking = true; notice = tr("checking"); updateButtons();
-        } catch (IllegalArgumentException e) { notice = EncodingMessages.explain(e.getMessage()); }
+        } catch (IllegalArgumentException | ArithmeticException e) { notice = EncodingMessages.explain(e.getMessage()); }
     }
     private void rebuildDetails() {
         details.clear(); referenceDetails.clear();

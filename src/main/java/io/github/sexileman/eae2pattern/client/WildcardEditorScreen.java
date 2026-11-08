@@ -152,7 +152,7 @@ public final class WildcardEditorScreen extends AeToolScreen implements Generati
         for (var c : controls) c.visible = c.page < 0 || c.page == tab;
         updateControls();
     }
-    private int chosen() { if(chosenCount>=0)return chosenCount; int n = 0; for (var e : matches) if (selected.contains(e.recipeId()) && (dynamic ? sourceRecipe(e)!=null&&sourceRecipe(e).canEncode(outputPolicy,dropTools) : e.canEncode(outputPolicy, dropTools)) && !previewErrors.containsKey(e.recipeId())) n++; return chosenCount=n; }
+    private int chosen() { if(filtering||searchDebounce.pending())return 0; if(chosenCount>=0)return chosenCount; int n = 0; for (var e : matches) if (selected.contains(e.recipeId()) && (dynamic ? sourceRecipe(e)!=null&&sourceRecipe(e).canEncode(outputPolicy,dropTools) : e.canEncode(outputPolicy, dropTools)) && !previewErrors.containsKey(e.recipeId())) n++; return chosenCount=n; }
     private void updateControls() {
         int chosen = chosen();
         for (var c : controls) {
@@ -217,9 +217,13 @@ public final class WildcardEditorScreen extends AeToolScreen implements Generati
             }
         }
         if (!sending && !filtering && !searchDebounce.pending() && previewDelay > 0 && --previewDelay == 0 && focus != null) {
-            var spec = specFor(focus);
-            if (spec != null) previewRequest = PatternRequestSender.send(List.of(spec), 2);
-            else previewError = tr("policy_empty");
+            try {
+                var spec = specFor(focus);
+                if (spec != null) previewRequest = PatternRequestSender.send(List.of(spec), 2);
+                else previewError = tr("policy_empty");
+            } catch (IllegalArgumentException | ArithmeticException invalid) {
+                previewRequest=-1;previewError=EncodingMessages.explain(invalid.getMessage());
+            }
         }
         updateControls();
     }
@@ -249,9 +253,12 @@ public final class WildcardEditorScreen extends AeToolScreen implements Generati
     private void generate(boolean held) {
         if (sending || filtering || searchDebounce.pending()) return;
         if (!held && (generateNetwork != null ? !generateNetwork.active : !generate.active)) return;
-        List<PatternSpec> specs = new ArrayList<>();
-        for (var e : matches) if (selected.contains(e.recipeId()) && !previewErrors.containsKey(e.recipeId())) { var spec = specFor(e); if (spec != null) specs.add(spec); }
         try {
+            List<PatternSpec> specs = new ArrayList<>();
+            for (var e : matches) if (selected.contains(e.recipeId()) && !previewErrors.containsKey(e.recipeId())) {
+                var spec = specFor(e);
+                if (spec != null) { specs.add(spec); if(dynamic)break; }
+            }
             CompoundTag rules = state();
             if(dynamic){var exceptions=new TreeSet<ResourceLocation>(Comparator.comparing(ResourceLocation::toString));exceptions.addAll(storedExclusions);for(var e:plan.entries())if(e.kind()==PatternKind.PROCESSING){if(!selected.contains(e.recipeId()))exceptions.add(e.recipeId());else exceptions.remove(e.recipeId());}var excluded=new net.minecraft.nbt.ListTag();for(var id:exceptions)excluded.add(net.minecraft.nbt.StringTag.valueOf(id.toString()));rules.put("exclude_ids",excluded);rules=WildcardEditorState.clean(rules);}
             int operation = 4;
@@ -262,7 +269,7 @@ public final class WildcardEditorScreen extends AeToolScreen implements Generati
             if(dynamic&&specs.size()>1)specs=List.of(specs.get(0));
             PatternRequestSender.send(specs, operation, rules); writingHeld = held; sending = true; status = tr("preparing");
         }
-        catch (IllegalArgumentException e) { status = EncodingMessages.explain(e.getMessage()); }
+        catch (IllegalArgumentException | ArithmeticException e) { status = EncodingMessages.explain(e.getMessage()); }
         updateControls();
     }
     @Override public void onGenerationFinished(GenerationReport report) {

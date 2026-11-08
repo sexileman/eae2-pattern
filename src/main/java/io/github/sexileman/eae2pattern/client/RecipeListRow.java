@@ -22,16 +22,16 @@ public final class RecipeListRow {
         if(badgeWidth>0)g.drawString(font,badge,right-badgeWidth,y+3,WorkbenchTheme.DIM,false);
         var columns=RecipeStripLayout.measure(right-x-23);
         var inputs=new ArrayList<>(entry.inputs());inputs.addAll(entry.catalysts());
-        strip(g,font,visuals,inputs,x+19,y+17,columns.inputMax(),0,hits);
+        strip(g,font,visuals,inputs,x+19,y+17,columns.inputMax(),columns.inputWidth(),0,hits);
         g.drawString(font,"→",x+19+columns.arrowX(),y+22,WorkbenchTheme.DIM,false);
-        strip(g,font,visuals,entry.outputs(),x+19+columns.outputX(),y+17,columns.outputMax(),1,hits);
+        strip(g,font,visuals,entry.outputs(),x+19+columns.outputX(),y+17,columns.outputMax(),columns.outputWidth(),1,hits);
     }
-    private static void strip(GuiGraphics g,Font font,StackVisuals visuals,List<Ingredient> slots,int x,int y,int max,int side,HitSink hits){
+    private static void strip(GuiGraphics g,Font font,StackVisuals visuals,List<Ingredient> slots,int x,int y,int max,int room,int side,HitSink hits){
         for(int i=0;i<Math.min(max,slots.size());i++){
             var ingredient=slots.get(i);var state=IngredientPresentation.of(ingredient,side);
             WorkbenchTheme.slot(g,x-1,y-1,state);visuals.draw(g,ingredient.spec(),x,y);visuals.drawRule(g,state,x,y);
             hits.add(x,y,ingredient,side);x+=22;
         }
-        if(slots.size()>max)g.drawString(font,font.plainSubstrByWidth("+"+(slots.size()-max),27),x+3,y+5,WorkbenchTheme.DIM,false);
+        if(slots.size()>max && RecipeStripLayout.overflowWidth(room,Math.min(max,slots.size()))>=12)g.drawString(font,font.plainSubstrByWidth("+"+(slots.size()-max),Math.min(27,RecipeStripLayout.overflowWidth(room,max))),x+3,y+5,WorkbenchTheme.DIM,false);
     }
 }
