@@ -1,3 +1,5 @@
+> 当前为 alpha.5，修复 alpha.4 与 EAP 叠加注入导致的启动失败，批量规则保持不变。
+
 > 当前为 alpha.4，构件 `eae2-pattern-1.20.1-6.6.0-cycle-alpha.4.jar`。以下版本记录保留作历史；当前批量规则见文末。
 
 > 当前为 alpha.3，构件 `eae2-pattern-1.20.1-6.6.0-cycle-alpha.3.jar`。新增单层上游 C 配方消费循环 A/B，以下 alpha.1/alpha.2 记录保留作历史；当前范围见文末 alpha.3。
@@ -99,3 +101,10 @@ alpha.3 构建通过：7097 项回归检查（含 C 双侧需求、原料缺一�
 验证包含大量批次账本恢复、库存瓶颈、流体限量、输入倍数与输出数量一致性。构建及离线接口检查不替代整合包内实际机器测试。
 
 alpha.4 验证：7,103 项回归断言、126 项通用打包/供应器接口检查、37 项已安装模组接口检查通过。尚未启动 Forge 世界验证。
+
+
+## alpha.5：EAP 启动注入兼容修复
+
+22:36:58 错误报告显示 `GrowthProviderBatchMixin` 的固定 `index=0` 在 EAP 重定向后指向 List 参数，触发 `InvalidInjectionException`。原生调用参数为 Object，重定向后为 List、Object。使用 `index=-1` 按处理方法的 Object 类型定位，在两种调用形式下分别得到序号 0 和 1。
+
+回归直接执行 Mixin 0.8.5 的 `ModifyArgInjector.findArgIndex`，通过离线日志宿主初始化选择器，无需启动 Minecraft。7,103 项回归断言、129 项通用打包与接口检查、37 项已安装模组接口检查通过。此检查覆盖本次报错的参数选择路径，未启动完整整合包，不代表全部 Mixin 组合已实测。

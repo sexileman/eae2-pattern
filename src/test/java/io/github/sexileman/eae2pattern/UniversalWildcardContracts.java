@@ -13,6 +13,35 @@ import javax.tools.ToolProvider;
 public final class UniversalWildcardContracts {
     private static int checks;
     private static final String BRIDGE = "io/github/sexileman/eae2pattern/compat/gtl/GtlWildcardBridge";
+    /** Exercise Mixin 0.8.5's actual selector against both pre/post-Redirect argument shapes. */
+    private static void growthBatchArgumentSelection(ZipFile app) throws Exception {
+        var mixin=node(bytes(app,"io/github/sexileman/eae2pattern/mixin/GrowthProviderBatchMixin.class"));
+        var handler=mixin.methods.stream().filter(m->m.name.equals("eae2$registeredGrowthPattern")).findFirst().orElseThrow();
+        var annotation=handler.visibleAnnotations.stream().filter(a->a.desc.endsWith("/ModifyArg;")).findFirst().orElseThrow();
+        int configured=-1;
+        for(int i=0;i<annotation.values.size();i+=2)if(annotation.values.get(i).equals("index"))configured=(Integer)annotation.values.get(i+1);
+        check(configured==-1,"batch registration argument uses type selection instead of a fixed redirect-sensitive index");
+        var unsafeClass=Class.forName("sun.misc.Unsafe");var singleton=unsafeClass.getDeclaredField("theUnsafe");singleton.setAccessible(true);
+        var unsafe=singleton.get(null);
+        // Supply only the logger required by Injector's static initializer; no game host is started.
+        var serviceClass=org.spongepowered.asm.service.MixinService.class;
+        var getInstance=serviceClass.getDeclaredMethod("getInstance");getInstance.setAccessible(true);var serviceInstance=getInstance.invoke(null);
+        var serviceField=serviceClass.getDeclaredField("service");serviceField.setAccessible(true);var previousService=serviceField.get(serviceInstance);
+        var logger=new org.spongepowered.asm.logging.LoggerAdapterDefault("selector-test");
+        var loggingHost=java.lang.reflect.Proxy.newProxyInstance(serviceClass.getClassLoader(),new Class<?>[]{org.spongepowered.asm.service.IMixinService.class},
+                (proxy,method,args)->method.getName().equals("getLogger")?logger:null);
+        Class<?> injectorClass;
+        serviceField.set(serviceInstance,loggingHost);
+        try{injectorClass=Class.forName("org.spongepowered.asm.mixin.injection.invoke.ModifyArgInjector");}
+        finally{serviceField.set(serviceInstance,previousService);}
+        // Only findArgIndex is invoked. Its immutable selector fields are initialized without a full launcher context.
+        var injector=unsafeClass.getMethod("allocateInstance",Class.class).invoke(unsafe,injectorClass);
+        var index=injectorClass.getDeclaredField("index");index.setAccessible(true);index.setInt(injector,configured);
+        var resultType=Class.forName("org.spongepowered.asm.mixin.injection.code.Injector").getDeclaredField("returnType");resultType.setAccessible(true);resultType.set(injector,Type.getType(Object.class));
+        var select=injectorClass.getDeclaredMethod("findArgIndex",org.spongepowered.asm.mixin.injection.struct.Target.class,Type[].class);select.setAccessible(true);
+        check((Integer)select.invoke(injector,null,(Object)Type.getArgumentTypes("(Ljava/lang/Object;)Z"))==0,"actual Mixin selector locates vanilla contains argument");
+        check((Integer)select.invoke(injector,null,(Object)Type.getArgumentTypes("(Ljava/util/List;Ljava/lang/Object;)Z"))==1,"actual Mixin selector locates pattern after EAP inserts List argument");
+    }
     private static void providerBatchTarget(ClassNode provider){
         int targets=0;
         for(var method:provider.methods)if(method.name.equals("pushPattern"))for(var insn:method.instructions)
@@ -32,6 +61,7 @@ public final class UniversalWildcardContracts {
         }
         byte[] bridge;
         try (var app = new ZipFile(own.toFile())) {
+            growthBatchArgumentSelection(app);
             check(Collections.list(app.entries()).stream().noneMatch(e -> e.getName().endsWith(".jar") || e.getName().startsWith("org/leodreamer/") || e.getName().startsWith("org/gtlcore/")), "universal jar embeds neither original wildcard nor GTL classes");
             for(String asset:List.of("assets/eae2_pattern/ae2guide/index.md","assets/eae2_pattern/ae2guide/wildcard-patterns.md","assets/eae2_pattern/ae2guide/batch-encoding.md","assets/eae2_pattern/textures/item/machine_wildcard_pattern.png","assets/eae2_pattern/textures/item/machine_wildcard_pattern_encoded.png"))check(app.getEntry(asset)!=null,"native guide and original icon packaged: "+asset);
             var itemModel=com.google.gson.JsonParser.parseString(new String(bytes(app,"assets/eae2_pattern/models/item/machine_wildcard_pattern.json"),java.nio.charset.StandardCharsets.UTF_8)).getAsJsonObject();
