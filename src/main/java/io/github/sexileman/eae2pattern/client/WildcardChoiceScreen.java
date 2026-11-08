@@ -33,7 +33,7 @@ public final class WildcardChoiceScreen extends AeToolScreen {
     }
     @Override public void render(GuiGraphics g,int mx,int my,float partial) {
         WorkbenchTheme.panel(g,x,y,w,h);
-        g.drawString(font,title,x+12,y+11,WorkbenchTheme.TEXT,false);
+        g.drawString(font,title,x+12,y+6+(18-font.lineHeight)/2,WorkbenchTheme.TEXT,false);
         WorkbenchTheme.control(g,x+8,y+27,w-16,23,WorkbenchTheme.INPUT,WorkbenchTheme.LINE);
         int first=Math.max(0,(int)scroll/rowHeight),last=Math.min(visible.size(),first+viewport()/rowHeight+2);
         PickerOption hovered=null;

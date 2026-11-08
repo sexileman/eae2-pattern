@@ -34,7 +34,7 @@ public final class WildcardMachineScreen extends AeToolScreen {
     }
     @Override public void render(GuiGraphics g, int mx, int my, float partial) {
          WorkbenchTheme.panel(g,x,y,w,h);
-        g.drawString(font, net.minecraft.locale.Language.getInstance().getVisualOrder(font.substrByWidth(title,w-74)), x + 10, y + 10, WorkbenchTheme.TEXT, false);
+        g.drawString(font, net.minecraft.locale.Language.getInstance().getVisualOrder(font.substrByWidth(title,w-74)), x + 10, y + 6 + (18 - font.lineHeight) / 2, WorkbenchTheme.TEXT, false);
         WorkbenchTheme.control(g,search.getX()-4,search.getY()-4,search.getWidth()+8,20,WorkbenchTheme.INPUT,WorkbenchTheme.LINE);
         g.enableScissor(x + 5, y + 55, x + w - 5, y + h - 5);
         for (int i = scroll; i < Math.min(visible.size(), scroll + (h - 60) / 25 + 1); i++) {

@@ -280,7 +280,7 @@ public final class WildcardEditorScreen extends AeToolScreen implements Generati
     }
     @Override public void render(GuiGraphics g, int mx, int my, float partial) {
         hits.clear();  WorkbenchTheme.panel(g,x,y,w,h);
-        label(g, title.copy().append(" / ").append(plan.machineName()), x + 10, y + 10, w - 80, TEXT, 1);
+        label(g, title.copy().append(" / ").append(plan.machineName()), x + 10, y + 7 + (18 - font.lineHeight) / 2, w - 80, TEXT, 1);
         g.fill(x + 10, y + 26, x + w - 10, y + 27, WorkbenchTheme.LINE);
         if (tab == 0) {
             if(h>=250){label(g,tr("input_rules"),x+12,y+55,w/2-20,TEXT,.85f);label(g,tr("output_rules"),x+w/2+6,y+55,w/2-20,TEXT,.85f);}

@@ -388,7 +388,7 @@ public final class PatternWorkbenchScreen extends AeToolScreen implements Genera
         iconHits.clear();
 
         WorkbenchTheme.panel(g, left, top, panelWidth, panelHeight);
-        text(g, tr("title").copy().append(" / ").append(plan.machineName()), left + 10, top + 10, panelWidth - 86, TEXT);
+        text(g, tr("title").copy().append(" / ").append(plan.machineName()), left + 10, top + 9 + (19 - font.lineHeight) / 2, panelWidth - 86, TEXT);
         if (panelHeight >= 230) g.fill(left + 10, top + 27, left + panelWidth - 10, top + 28, LINE);
         searchSurface(g, inputBox); searchSurface(g, outputBox);
         g.fill(split, bodyTop - 27, split + 1, bodyBottom, LINE);
