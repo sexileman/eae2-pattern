@@ -1,18 +1,8 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 16 16" shape-rendering="crispEdges">
-<!-- Original 16px-grid thin card. Shared neutral casing; small wildcard inlay identifies state. -->
-<polygon points="0,5 10,1 12,2 16,7 16,11 8,15 6,14 0,9" fill="#797779"/>
-<polygon points="1,8 7,12 15,8 15,11 8,14 1,9" fill="#969494"/>
-<polygon points="2,9 7,12 14,9 14,11 8,13" fill="#B2B0B0"/>
-<polygon points="1,5 10,2 15,7 7,11 1,8" fill="#D0CFCF"/>
-<polygon points="1,5 10,2 11,3 3,6 1,6" fill="#E8E7E7"/>
-<polygon points="4,6 10,3 13,7 7,10" fill="#8A8789"/>
-<polygon points="5,6 10,4 12,7 7,9" fill="#575056"/>
-<polygon points="1,7 2,6 6,10 5,11 1,9" fill="#386A75"/>
-<polygon points="2,7 3,7 6,10 5,10" fill="#83BCC4"/>
-<polygon points="7,5 8,5 9,8 8,8" fill="#B95779"/>
-<polygon points="6,6 7,5 11,7 10,8" fill="#B95779"/>
-<polygon points="6,8 10,5 11,6 7,9" fill="#B95779"/>
-<polygon points="7,6 8,6 9,7 8,8" fill="#DF91AA"/>
-<polygon points="7,11 15,7 15,8 8,12" fill="#E8E7E7"/>
-<polygon points="9,12 14,10 14,11 10,13" fill="#777575"/>
+<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16" shape-rendering="crispEdges">
+<!-- Overlay only. The item model references AE2 blank_pattern as the unchanged base. -->
+<rect x="7" y="5" width="1" height="1" fill="#D04B80"/>
+<rect x="9" y="5" width="1" height="1" fill="#D04B80"/>
+<rect x="8" y="6" width="1" height="1" fill="#F29ABA"/>
+<rect x="7" y="7" width="1" height="1" fill="#D04B80"/>
+<rect x="9" y="7" width="1" height="1" fill="#D04B80"/>
 </svg>

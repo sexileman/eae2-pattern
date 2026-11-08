@@ -1,6 +1,7 @@
 {
   "parent": "minecraft:item/generated",
   "textures": {
-    "layer0": "eae2_pattern:item/machine_wildcard_pattern_encoded"
+    "layer0": "ae2:item/blank_pattern",
+    "layer1": "eae2_pattern:item/machine_wildcard_pattern_encoded"
   }
 }

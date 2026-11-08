@@ -26,7 +26,15 @@ public final class UniversalWildcardContracts {
             check(Collections.list(app.entries()).stream().noneMatch(e -> e.getName().endsWith(".jar") || e.getName().startsWith("org/leodreamer/") || e.getName().startsWith("org/gtlcore/")), "universal jar embeds neither original wildcard nor GTL classes");
             for(String asset:List.of("assets/eae2_pattern/ae2guide/index.md","assets/eae2_pattern/ae2guide/wildcard-patterns.md","assets/eae2_pattern/ae2guide/batch-encoding.md","assets/eae2_pattern/textures/item/machine_wildcard_pattern.png","assets/eae2_pattern/textures/item/machine_wildcard_pattern_encoded.png"))check(app.getEntry(asset)!=null,"native guide and original icon packaged: "+asset);
             var itemModel=com.google.gson.JsonParser.parseString(new String(bytes(app,"assets/eae2_pattern/models/item/machine_wildcard_pattern.json"),java.nio.charset.StandardCharsets.UTF_8)).getAsJsonObject();
-            check(itemModel.getAsJsonObject("textures").get("layer0").getAsString().startsWith("eae2_pattern:"),"carrier uses its own icon namespace");
+            check(itemModel.getAsJsonObject("textures").get("layer0").getAsString().equals("ae2:item/blank_pattern"),"blank carrier references original AE2 geometry and texture");
+            for(String modelName:List.of("machine_wildcard_pattern","machine_wildcard_pattern_encoded")){
+                var model=com.google.gson.JsonParser.parseString(new String(bytes(app,"assets/eae2_pattern/models/item/"+modelName+".json"),java.nio.charset.StandardCharsets.UTF_8)).getAsJsonObject();
+                check(model.getAsJsonObject("textures").get("layer0").getAsString().equals("ae2:item/blank_pattern")&&model.getAsJsonObject("textures").get("layer1").getAsString().startsWith("eae2_pattern:"),"both states share the native base and independent overlay");
+                var overlay=javax.imageio.ImageIO.read(new java.io.ByteArrayInputStream(bytes(app,"assets/eae2_pattern/textures/item/"+modelName+".png")));
+                check(overlay.getWidth()==16&&overlay.getHeight()==16,"overlay uses native 16px resolution without resampling");
+                int opaque=0;boolean hardEdges=true;for(int y=0;y<16;y++)for(int x=0;x<16;x++){int a=overlay.getRGB(x,y)>>>24;if(a==255)opaque++;else if(a!=0)hardEdges=false;}
+                check(opaque==5&&hardEdges,"overlay has exactly five hard pixels and no soft alpha edges");
+            }
             check(itemModel.getAsJsonArray("overrides").get(0).getAsJsonObject().getAsJsonObject("predicate").has("eae2_pattern:encoded"),"encoded appearance has its own model predicate");
             var encoder=node(bytes(app,"io/github/sexileman/eae2pattern/pattern/PatternEncoder.class"));
             boolean nativeFluids=false;
