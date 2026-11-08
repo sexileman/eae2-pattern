@@ -71,6 +71,7 @@ public final class PatternWorkbenchScreen extends AeToolScreen implements Genera
     private int footerStatusX, footerStatusY, footerStatusWidth;
     private Component notice = Component.empty();
     private final SearchDebounce searchDebounce = new SearchDebounce();
+    private final SearchDebounce multiplierDebounce = new SearchDebounce();
     private Action generate, inputFilter, outputFilter, tools, products, multiplier, halveMultiplier, doubleMultiplier, resetMultiplier, grouping, more, detailMode;
 
     public PatternWorkbenchScreen(RecipePlan plan, Screen parent) {
@@ -135,15 +136,20 @@ public final class PatternWorkbenchScreen extends AeToolScreen implements Genera
     }
     private Action action(int x, int y, int w, Runnable click) { return addRenderableWidget(new Action(x, y, w, click)); }
     private void changeMultiplier(int value) {
-        multiplierText = Integer.toString(ProcessingMultiplier.normalize(value));
-        optionsChanged();
+        String next = Integer.toString(ProcessingMultiplier.normalize(value));
+        if (next.equals(multiplierText)) return;
+        multiplierText = next;
+        previewRequest = -1; // Ignore replies for the previous multiplier while keeping the displayed preview.
+        multiplierDebounce.changed();
+        updateButtons();
     }
     private void queryNetwork() { PacketHandler.sendToServer(new C2SQueryNetworkStatusPacket(0)); }
     @Override public void tick() {
         inputBox.tick(); outputBox.tick();
+        if (multiplierDebounce.poll()) { optionsChanged(); previewDelay = focused == null ? 0 : 1; }
         if (searchDebounce.poll()) { input = ItemSearchQuery.parse(inputText); output = ItemSearchQuery.parse(outputText); refresh(); }
         if (filtering && !searchDebounce.pending()) filterStep();
-        if (!filtering && !searchDebounce.pending() && previewDelay > 0 && !sending && !checking && --previewDelay == 0) requestPreview();
+        if (!filtering && !searchDebounce.pending() && previewDelay > 0 && !multiplierDebounce.pending() && !sending && !checking && --previewDelay == 0) requestPreview();
         if (++tickCount % 60 == 0 && !sending) queryNetwork();
         updateButtons();
     }
@@ -204,7 +210,7 @@ public final class PatternWorkbenchScreen extends AeToolScreen implements Genera
         resetMultiplier.active = !checking && !sending && ProcessingMultiplier.parse(multiplierText) != 1;
         more.active = !checking && !sending;
         generate.setMessage(sending ? tr("sending") : tr("generate", requiredBlanks()));
-        generate.active = !sending && !checking && !filtering && !searchDebounce.pending() && ProcessingMultiplier.parse(multiplierText) > 0
+        generate.active = !multiplierDebounce.pending() && !sending && !checking && !filtering && !searchDebounce.pending() && ProcessingMultiplier.parse(multiplierText) > 0
                 && eligibleCount > 0 && ClientNetworkState.hasNetwork() && ClientNetworkState.blankPatterns() > 0;
     }
     private int requiredBlanks() { return eligibleCount; }
