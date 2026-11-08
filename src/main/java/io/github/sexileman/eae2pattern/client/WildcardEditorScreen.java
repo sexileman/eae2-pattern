@@ -54,6 +54,9 @@ public final class WildcardEditorScreen extends AeToolScreen implements Generati
     private final Map<ResourceLocation, Component> previewErrors = new HashMap<>();
     private Component status = Component.empty();
     private final SearchDebounce searchDebounce = new SearchDebounce();
+    private CircuitCatalog circuitCatalog;
+    private CircuitCondition circuit = CircuitCondition.ALL;
+    private CircuitFilterButton circuitButton;
     private final SearchDebounce multiplierDebounce = new SearchDebounce();
     private Control generate;
     private Control generateNetwork;
@@ -68,6 +71,7 @@ public final class WildcardEditorScreen extends AeToolScreen implements Generati
         else selected.addAll(included);
         dynamic=plan.entries().stream().anyMatch(e->e.jeiRecipe()!=null&&(e.jeiRecipe().getClass().getName().equals("com.gregtechceu.gtceu.integration.jei.recipe.GTRecipeWrapper")||e.jeiRecipe() instanceof net.minecraft.world.item.crafting.AbstractCookingRecipe));
         if (state != null && !state.isEmpty()) {
+            circuit=CircuitCondition.read(state);
             if(state.contains("dynamic"))dynamic=state.getBoolean("dynamic");inForm=state.getString("in_form");outForm=state.getString("out_form");material=state.getString("material");
             var excluded=state.getList("exclude_ids",8);for(int i=0;i<excluded.size();i++){var id=ResourceLocation.tryParse(excluded.getString(i));if(id!=null){selected.remove(id);storedExclusions.add(id);}}
             query = new String[]{state.getString("in_include"), state.getString("in_exclude"), state.getString("out_include"), state.getString("out_exclude")};
@@ -108,6 +112,10 @@ public final class WildcardEditorScreen extends AeToolScreen implements Generati
         controls.clear(); var frame=ToolViewport.measure(width,height,552,420);w=frame.width();h=frame.height();x=frame.left();y=frame.top();
         split = x + w * 11 / 20; listTop = y + 76; listBottom = y + h - 36;
         button(x + w - 58, y + 4, 48, -1, () -> onClose(), "back");
+        if(circuitCatalog==null)circuitCatalog=new CircuitCatalog(plan);
+        circuitButton=null;
+        if(circuitCatalog.available())circuitButton=addRenderableWidget(new CircuitFilterButton(x+w-151,y+4,87,18,circuitCatalog,()->circuit,
+            ()->minecraft.setScreen(new CircuitPickerScreen(this,circuitCatalog,circuit,c->{circuit=c;changedRules();}))));
         for (int i = 0; i < 4; i++) { final int n = i; int tw=Math.min(94,(w-20)/4); button(x + 10 + i * tw, y + 30, tw-6, -1, () -> { tab = n; sync(); }, "tab_" + i); }
         boxes = new EditBox[4]; int col = (w - 34) / 2, first = h < 220 ? 57 : 70;
         for (int i = 0; i < 4; i++) {
@@ -155,6 +163,7 @@ public final class WildcardEditorScreen extends AeToolScreen implements Generati
     }
     private int chosen() { if(filtering||searchDebounce.pending())return 0; if(chosenCount>=0)return chosenCount; int n = 0; for (var e : matches) if (selected.contains(e.recipeId()) && (dynamic ? sourceRecipe(e)!=null&&sourceRecipe(e).canEncode(outputPolicy,dropTools) : e.canEncode(outputPolicy, dropTools)) && !previewErrors.containsKey(e.recipeId())) n++; return chosenCount=n; }
     private void updateControls() {
+        if(circuitButton!=null)circuitButton.active=!sending;
         int chosen = chosen();
         for (var c : controls) {
             c.active = !sending;
@@ -214,7 +223,7 @@ public final class WildcardEditorScreen extends AeToolScreen implements Generati
             while (cursor < plan.entries().size() && n++ < 96 && System.nanoTime() < end) {
                 var e = plan.entries().get(cursor++);
                 if(catalogued.add(e.recipeId()))for(var slots:List.of(e.inputs(),e.outputs()))for(var i:slots)materialCatalog.add(i.spec());
-                if (e.kind() == PatternKind.PROCESSING) {
+                if (e.kind() == PatternKind.PROCESSING && circuitCatalog.matches(e,circuit)) {
                     if(dynamic){var raw=sourceRecipe(e);if(portableRule!=null&&raw!=null&&portableRule.matches(raw))working.add(e);}
                     else if(rules.matches(e, searchTools)&&formMatches(e))working.add(e);
                 }
@@ -253,6 +262,7 @@ public final class WildcardEditorScreen extends AeToolScreen implements Generati
         s.putBoolean("in_all", inAll); s.putBoolean("out_all", outAll); s.putBoolean("drop_tools", dropTools); s.putBoolean("search_tools", searchTools);
         s.putInt("in_scope", inScope); s.putInt("out_scope", outScope); s.putInt("output_policy", outputPolicy); s.putInt("multiplier", multiplier);
         s.putString("in_form",inForm);s.putString("out_form",outForm);s.putString("material",material);s.putBoolean("dynamic",dynamic);
+        circuit.write(s);
         return WildcardEditorState.clean(s);
     }
     private void generate() {
@@ -289,7 +299,7 @@ public final class WildcardEditorScreen extends AeToolScreen implements Generati
     }
     @Override public void render(GuiGraphics g, int mx, int my, float partial) {
         hits.clear();  WorkbenchTheme.panel(g,x,y,w,h);
-        label(g, title.copy().append(" / ").append(plan.machineName()), x + 10, y + 4 + (18 - font.lineHeight) / 2, w - 80, TEXT, 1);
+        label(g, title.copy().append(" / ").append(plan.machineName()), x + 10, y + 4 + (18 - font.lineHeight) / 2, w - (circuitButton==null?80:166), TEXT, 1);
         g.fill(x + 10, y + 26, x + w - 10, y + 27, WorkbenchTheme.LINE);
         if (tab == 0) {
             if(h>=250){label(g,tr("input_rules"),x+12,y+55,w/2-20,TEXT,.85f);label(g,tr("output_rules"),x+w/2+6,y+55,w/2-20,TEXT,.85f);}
@@ -514,8 +524,9 @@ public final class WildcardEditorScreen extends AeToolScreen implements Generati
         return java.util.Optional.empty();
     }
     @Override public List<GhostField> jeiGhostFields(){
-        if(tab!=3||sending)return List.of();
-        var targets=new ArrayList<GhostField>();for(var box:boxes)if(box.visible&&box.active)targets.add(ghostField(box,s->box.setValue("&"+s.id())));return targets;
+        if(sending)return List.of();
+        var targets=new ArrayList<GhostField>();
+        if(circuitButton!=null)targets.add(new GhostField(new net.minecraft.client.renderer.Rect2i(circuitButton.getX(),circuitButton.getY(),circuitButton.getWidth(),circuitButton.getHeight()),s->{int n=CircuitCondition.configuration(s);if(n>=0){circuit=new CircuitCondition(2,Set.of(n));circuitButton.setMessage(CircuitCatalog.label(circuit));changedRules();}}));for(var box:boxes)if(box.visible&&box.active)targets.add(ghostField(box,s->box.setValue("&"+s.id())));return targets;
     }
 
 }

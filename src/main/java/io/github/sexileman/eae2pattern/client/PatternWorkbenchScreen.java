@@ -71,6 +71,9 @@ public final class PatternWorkbenchScreen extends AeToolScreen implements Genera
     private int footerStatusX, footerStatusY, footerStatusWidth;
     private Component notice = Component.empty();
     private final SearchDebounce searchDebounce = new SearchDebounce();
+    private CircuitCatalog circuitCatalog;
+    private io.github.sexileman.eae2pattern.wildcard.CircuitCondition circuit = io.github.sexileman.eae2pattern.wildcard.CircuitCondition.ALL;
+    private CircuitFilterButton circuitButton;
     private final SearchDebounce multiplierDebounce = new SearchDebounce();
     private Action generate, inputFilter, outputFilter, tools, products, multiplier, halveMultiplier, doubleMultiplier, resetMultiplier, grouping, more, detailMode;
 
@@ -88,7 +91,12 @@ public final class PatternWorkbenchScreen extends AeToolScreen implements Genera
         int searchY = layout.searchY(), filterY = layout.filterY(), toolbarY = layout.toolbarY();
         bodyTop = layout.bodyTop(); bodyBottom = layout.bodyBottom();
         int half = (panelWidth - 28) / 2;
-        inputBox = addRenderableWidget(new WorkbenchSearchBox(font, left + 16, top + searchY + 5, half - 12, tr("input")));
+        if(circuitCatalog==null)circuitCatalog=new CircuitCatalog(plan);
+        int circuitWidth=circuitCatalog.available()?Math.min(86,half/2):0;
+        circuitButton=null;
+        if(circuitWidth>0) circuitButton=addRenderableWidget(new CircuitFilterButton(left+10+half-circuitWidth,top+searchY, circuitWidth,19,circuitCatalog,()->circuit,
+            ()->minecraft.setScreen(new CircuitPickerScreen(this,circuitCatalog,circuit,c->{circuit=c;refresh();}))));
+        inputBox = addRenderableWidget(new WorkbenchSearchBox(font, left + 16, top + searchY + 5, half - 12 - (circuitWidth>0?circuitWidth+4:0), tr("input")));
         outputBox = addRenderableWidget(new WorkbenchSearchBox(font, left + 24 + half, top + searchY + 5, half - 12, tr("output")));
         inputBox.setMaxLength(160); outputBox.setMaxLength(160);
         inputBox.setBordered(false); outputBox.setBordered(false);
@@ -168,7 +176,7 @@ public final class PatternWorkbenchScreen extends AeToolScreen implements Genera
         int work = 0;
         while (filterCursor < plan.entries().size() && work++ < 1024 && System.nanoTime() < deadline) {
             RecipePlan.Entry e = plan.entries().get(filterCursor++);
-            if (filters.rejects(e)) continue;
+            if (filters.rejects(e) || !circuitCatalog.matches(e,circuit)) continue;
             if (exactInput != null && java.util.stream.Stream.concat(e.inputs().stream(), e.catalysts().stream())
                     .noneMatch(i -> RecipeDiagnostics.sameMaterial(exactInput, i.spec()))) continue;
             if (exactOutput != null && e.outputs().stream().noneMatch(i -> RecipeDiagnostics.sameMaterial(exactOutput, i.spec()))) continue;
@@ -196,6 +204,7 @@ public final class PatternWorkbenchScreen extends AeToolScreen implements Genera
         updateButtons();
     }
     private void updateButtons() {
+        if(circuitButton!=null)circuitButton.active=!sending&&!checking;
         if (generate == null) return;
         inputFilter.setMessage(tr("input_mode." + inputMode)); outputFilter.setMessage(tr("output_mode." + outputMode));
         tools.setMessage(tr(dropTools ? "tools_drop" : "tools_keep")); products.setMessage(tr("policy." + outputPolicy));
@@ -385,6 +394,7 @@ public final class PatternWorkbenchScreen extends AeToolScreen implements Genera
                 case RESET_SETTINGS -> {
                     dropTools = true; outputPolicy = inputMode = outputMode = groupingMode = 0;
                     selectedOnly = false; sourceView = false; pinned = null; expanded.clear(); changeMultiplier(1);
+                    circuit=io.github.sexileman.eae2pattern.wildcard.CircuitCondition.ALL;
                     inputBox.setValue(""); outputBox.setValue(""); optionsChanged(); refresh();
                 }
                 default -> { }
@@ -788,7 +798,11 @@ public final class PatternWorkbenchScreen extends AeToolScreen implements Genera
     }
     @Override public List<GhostField> jeiGhostFields(){
         if(sending||checking||choice!=null)return List.of();
-        return List.of(ghostField(inputBox,s->{inputBox.setValue("&"+s.id());exactInput=s;searchDebounce.changed();}),ghostField(outputBox,s->{outputBox.setValue("&"+s.id());exactOutput=s;searchDebounce.changed();}));
+        var targets=new ArrayList<GhostField>();
+        targets.add(ghostField(inputBox,s->{inputBox.setValue("&"+s.id());exactInput=s;searchDebounce.changed();}));
+        targets.add(ghostField(outputBox,s->{outputBox.setValue("&"+s.id());exactOutput=s;searchDebounce.changed();}));
+        if(circuitButton!=null&&!sending&&!checking)targets.add(new GhostField(new net.minecraft.client.renderer.Rect2i(circuitButton.getX(),circuitButton.getY(),circuitButton.getWidth(),circuitButton.getHeight()),s->{int n=io.github.sexileman.eae2pattern.wildcard.CircuitCondition.configuration(s);if(n>=0){circuit=new io.github.sexileman.eae2pattern.wildcard.CircuitCondition(2,Set.of(n));circuitButton.setMessage(CircuitCatalog.label(circuit));refresh();}}));
+        return targets;
     }
     @Override public List<net.minecraft.client.renderer.Rect2i> jeiExtraAreas(){return choice==null?List.of():List.of(new net.minecraft.client.renderer.Rect2i(choice.x,choice.y,choice.w,choice.h));}
 

@@ -435,5 +435,12 @@
   "eae2_pattern.workbench.skip_unknown_output": "Unverified probability: no guaranteed or primary output is known",
   "eae2_pattern.collecting.result": "Collected %s recipes; skipped %s. %s",
   "eae2_pattern.collecting.limited": "Collection limit reached; results are incomplete.",
-  "eae2_pattern.cmd.legacy_containers": "strip_container_items is retained for old configs; crafting remainders no longer remove processing inputs. Use recipe semantics and encoding settings."
+  "eae2_pattern.cmd.legacy_containers": "strip_container_items is retained for old configs; crafting remainders no longer remove processing inputs. Use recipe semantics and encoding settings.",
+  "eae2_pattern.circuit.title": "Circuit Configuration",
+  "eae2_pattern.circuit.all": "Circuit: Any",
+  "eae2_pattern.circuit.none": "No circuit",
+  "eae2_pattern.circuit.selected": "Circuit: %s",
+  "eae2_pattern.circuit.configuration": "Circuit configuration: %s",
+  "eae2_pattern.circuit.matches": "%s recipes for this machine",
+  "eae2_pattern.circuit.hint": "Select configurations; drag a configured circuit here from JEI."
 }

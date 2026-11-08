@@ -27,8 +27,43 @@ import java.util.List;
 public final class RegressionChecks {
     private static int checks;
     public static void main(String[] args) throws Exception {
-        policies(); wireFormat(); searches(); gtVersions(); layoutAndGrid(); manualMultiplier(); grouping(); inspectionPackets(); slotPresentation(); patternMetadata(); amountLabels(); machineWildcards(); heldWildcardWrites(); dynamicRules(); stackedCarriers(); wildcardTooltip(); materialPicker(); aeToolScreens(); encodingMessages(); recipeStripColumns(); searchDebounce(); wildcardStockStatus(); guidePages(); moreMenuLayout(); cyclePaths(); generationSafety();
+        circuitConditions(); policies(); wireFormat(); searches(); gtVersions(); layoutAndGrid(); manualMultiplier(); grouping(); inspectionPackets(); slotPresentation(); patternMetadata(); amountLabels(); machineWildcards(); heldWildcardWrites(); dynamicRules(); stackedCarriers(); wildcardTooltip(); materialPicker(); aeToolScreens(); encodingMessages(); recipeStripColumns(); searchDebounce(); wildcardStockStatus(); guidePages(); moreMenuLayout(); cyclePaths(); generationSafety();
         System.out.println("Passed " + checks + " regression checks");
+    }
+    private static void circuitConditions() throws Exception {
+        var id=new ResourceLocation("gtceu:programmed_circuit");var tag=new CompoundTag();tag.putInt("Configuration",24);
+        var circuit=new StackSpec(StackType.ITEM,id,tag,1);
+        var selected=new io.github.sexileman.eae2pattern.wildcard.CircuitCondition(2,java.util.Set.of(24,1));
+        check(io.github.sexileman.eae2pattern.wildcard.CircuitCondition.configuration(circuit)==24,"circuit uses full configuration NBT");
+        check(io.github.sexileman.eae2pattern.wildcard.CircuitCondition.configuration(new StackSpec(StackType.ITEM,new ResourceLocation("other:tool"),tag,1))==-1,"unrelated Configuration tag is not a GT circuit");
+        var input=List.of(new io.github.sexileman.eae2pattern.wildcard.RuleRecipe.Slot(circuit,0));
+        check(io.github.sexileman.eae2pattern.wildcard.CircuitCondition.configuration(new StackSpec(StackType.ITEM,id,null,1))==0,"GTCEu missing configuration defaults to zero, distinct from no circuit");
+        check(selected.matches(input),"non consumed circuit participates in dedicated matching");
+        check(!new io.github.sexileman.eae2pattern.wildcard.CircuitCondition(1,java.util.Set.of()).matches(input),"no circuit excludes circuit recipes");
+        check(!selected.matches(List.<io.github.sexileman.eae2pattern.wildcard.RuleRecipe.Slot>of()),"selected configurations exclude recipes without circuit");
+        var state=new CompoundTag();selected.write(state);var clean=io.github.sexileman.eae2pattern.wildcard.WildcardEditorState.clean(state);
+        check(io.github.sexileman.eae2pattern.wildcard.CircuitCondition.read(clean).equals(selected),"wildcard cleaner preserves circuit selection");
+        var recipe=new io.github.sexileman.eae2pattern.wildcard.RuleRecipe(new ResourceLocation("test:recipe"),input,List.of());
+        check(new io.github.sexileman.eae2pattern.wildcard.DynamicRule(clean).matches(recipe),"server dynamic resolver matches selected circuit");
+        new io.github.sexileman.eae2pattern.wildcard.CircuitCondition(2,java.util.Set.of(2)).write(state);
+        check(!new io.github.sexileman.eae2pattern.wildcard.DynamicRule(state).matches(recipe),"server rejects different circuit even when tool search is disabled");
+        check(new io.github.sexileman.eae2pattern.wildcard.DynamicRule(new CompoundTag()).matches(recipe),"legacy wildcard without circuit fields retains all configurations");
+        var bad=new CompoundTag();bad.putInt("circuit_mode",2);bad.putIntArray("circuit_configs",new int[]{-1});boolean rejected=false;
+        try{io.github.sexileman.eae2pattern.wildcard.WildcardEditorState.clean(bad);}catch(IllegalArgumentException e){rejected=true;}
+        check(rejected,"server rejects malformed circuit configuration");
+        bad.putIntArray("circuit_configs",new int[257]);rejected=false;try{io.github.sexileman.eae2pattern.wildcard.WildcardEditorState.clean(bad);}catch(IllegalArgumentException e){rejected=true;}
+        check(rejected,"circuit rule payload is bounded");
+        var all=new CompoundTag();io.github.sexileman.eae2pattern.wildcard.CircuitCondition.ALL.write(all);
+        check(all.isEmpty(),"default circuit mode does not change legacy rule fingerprints");
+        var clazz=Class.forName("io.github.sexileman.eae2pattern.client.CircuitCatalog");var ctor=clazz.getDeclaredConstructor(RecipePlan.class);ctor.setAccessible(true);
+        var available=clazz.getDeclaredMethod("available");available.setAccessible(true);
+        var noGt=new RecipePlan(new ResourceLocation("minecraft:crafting"),Component.literal("crafting"),PatternKind.CRAFTING,List.of());
+        check(!(boolean)available.invoke(ctor.newInstance(noGt)),"no GT circuits hides the optional filter");
+        var entry=new RecipePlan.Entry(PatternKind.PROCESSING,new ResourceLocation("test:circuits"),Component.literal("circuit"),null,List.of(),List.of(new Ingredient(circuit,0,false)),List.of(),true);
+        var plan=new RecipePlan(new ResourceLocation("gtceu:bender"),Component.literal("bender"),PatternKind.PROCESSING,List.of(entry));
+        var catalog=ctor.newInstance(plan);check((boolean)available.invoke(catalog),"original non-consumed catalyst exposes circuit selection");
+        var matches=clazz.getDeclaredMethod("matches",RecipePlan.Entry.class,io.github.sexileman.eae2pattern.wildcard.CircuitCondition.class);matches.setAccessible(true);
+        check((boolean)matches.invoke(catalog,entry,selected),"cached client circuit condition matches authoritative rule");
     }
     private static void check(boolean condition, String message) {
         checks++; if (!condition) throw new AssertionError(message);

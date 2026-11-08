@@ -435,5 +435,12 @@
   "eae2_pattern.workbench.skip_unknown_output": "输出概率未确认，无法确定必产或主产物",
   "eae2_pattern.collecting.result": "已收录 %s 条，跳过 %s 条。%s",
   "eae2_pattern.collecting.limited": "已达到采集上限，结果不完整。",
-  "eae2_pattern.cmd.legacy_containers": "strip_container_items 为兼容旧配置保留，已停用容器返还推断；不消耗材料由编码设置和真实配方决定。"
+  "eae2_pattern.cmd.legacy_containers": "strip_container_items 为兼容旧配置保留，已停用容器返还推断；不消耗材料由编码设置和真实配方决定。",
+  "eae2_pattern.circuit.title": "电路配置",
+  "eae2_pattern.circuit.all": "电路：全部",
+  "eae2_pattern.circuit.none": "无需电路",
+  "eae2_pattern.circuit.selected": "电路：%s",
+  "eae2_pattern.circuit.configuration": "电路配置：%s",
+  "eae2_pattern.circuit.matches": "当前机器匹配 %s 条配方",
+  "eae2_pattern.circuit.hint": "选择电路编号，或从 JEI 拖入已配置的电路。"
 }
