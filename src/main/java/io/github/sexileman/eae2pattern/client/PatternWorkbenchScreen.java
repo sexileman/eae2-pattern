@@ -128,12 +128,13 @@ public final class PatternWorkbenchScreen extends AeToolScreen implements Genera
                 .help("multiplier_double_help");
         resetMultiplier = action(left + 121, layout.footerControlsY(), 38,
                 () -> changeMultiplier(ProcessingMultiplier.DEFAULT)).help("multiplier_reset_help");
-        action(left + panelWidth - 62, top + 9, 52, this::onClose).help("close_help").setMessage(tr("close"));
+        action(left + panelWidth - 62, headerButtonY(), 52, this::onClose).help("close_help").setMessage(tr("close"));
         generate = action(left + panelWidth - (panelWidth<300?118:138), layout.footerControlsY(), panelWidth<300?100:120, this::generate).help("scope_help");
         choice = null; navigatingToJei = false;
         ClientGenerationFeedback.setListener(this); InspectionFeedback.setListener(this::inspectionFinished);
         ClientNetworkState.reset(); queryNetwork(); queuePreview(); rebuildDetails(); updateButtons();
     }
+    private int headerButtonY() { return top + (panelHeight < 230 ? 1 : 4); }
     private Action action(int x, int y, int w, Runnable click) { return addRenderableWidget(new Action(x, y, w, click)); }
     private void changeMultiplier(int value) {
         String next = Integer.toString(ProcessingMultiplier.normalize(value));
@@ -394,7 +395,7 @@ public final class PatternWorkbenchScreen extends AeToolScreen implements Genera
         iconHits.clear();
 
         WorkbenchTheme.panel(g, left, top, panelWidth, panelHeight);
-        text(g, tr("title").copy().append(" / ").append(plan.machineName()), left + 10, top + 9 + (19 - font.lineHeight) / 2, panelWidth - 86, TEXT);
+        text(g, tr("title").copy().append(" / ").append(plan.machineName()), left + 10, headerButtonY() + (19 - font.lineHeight) / 2, panelWidth - 86, TEXT);
         if (panelHeight >= 230) g.fill(left + 10, top + 27, left + panelWidth - 10, top + 28, LINE);
         searchSurface(g, inputBox); searchSurface(g, outputBox);
         g.fill(split, bodyTop - 27, split + 1, bodyBottom, LINE);

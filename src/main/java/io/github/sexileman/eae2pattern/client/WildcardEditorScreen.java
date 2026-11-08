@@ -107,7 +107,7 @@ public final class WildcardEditorScreen extends AeToolScreen implements Generati
     @Override protected void init() {
         controls.clear(); var frame=ToolViewport.measure(width,height,552,420);w=frame.width();h=frame.height();x=frame.left();y=frame.top();
         split = x + w * 11 / 20; listTop = y + 76; listBottom = y + h - 36;
-        button(x + w - 58, y + 7, 48, -1, () -> onClose(), "back");
+        button(x + w - 58, y + 4, 48, -1, () -> onClose(), "back");
         for (int i = 0; i < 4; i++) { final int n = i; int tw=Math.min(94,(w-20)/4); button(x + 10 + i * tw, y + 30, tw-6, -1, () -> { tab = n; sync(); }, "tab_" + i); }
         boxes = new EditBox[4]; int col = (w - 34) / 2, first = h < 220 ? 57 : 70;
         for (int i = 0; i < 4; i++) {
@@ -289,7 +289,7 @@ public final class WildcardEditorScreen extends AeToolScreen implements Generati
     }
     @Override public void render(GuiGraphics g, int mx, int my, float partial) {
         hits.clear();  WorkbenchTheme.panel(g,x,y,w,h);
-        label(g, title.copy().append(" / ").append(plan.machineName()), x + 10, y + 7 + (18 - font.lineHeight) / 2, w - 80, TEXT, 1);
+        label(g, title.copy().append(" / ").append(plan.machineName()), x + 10, y + 4 + (18 - font.lineHeight) / 2, w - 80, TEXT, 1);
         g.fill(x + 10, y + 26, x + w - 10, y + 27, WorkbenchTheme.LINE);
         if (tab == 0) {
             if(h>=250){label(g,tr("input_rules"),x+12,y+55,w/2-20,TEXT,.85f);label(g,tr("output_rules"),x+w/2+6,y+55,w/2-20,TEXT,.85f);}
