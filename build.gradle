@@ -14,7 +14,7 @@ plugins {
  *   PATCH  bug fixes only (1.1.0 -> 1.1.1)
  *
  * The Minecraft version is deliberately not part of it: it lives in the branch
- * name (`1.20.1`, `1.21`, ...) and in the dependency ranges in mods.toml, so the
+ * name (`1.20.1`, `1.21`, ...), dependency ranges and archive base name, so the
  * same mod version can be rebuilt for another Minecraft release without
  * inventing a new numbering scheme. Bump mod_version in gradle.properties by
  * hand and tag the release (v1.1.0) in git.
@@ -25,7 +25,8 @@ version = modVersion
 group = mod_group_id
 
 base {
-    archivesName = mod_artifact
+    // Stable artifact contract: <mod_artifact>-<minecraft_version>-<mod_version>.jar
+    archivesName = "${mod_artifact}-${minecraft_version}"
 }
 
 java.toolchain.languageVersion = JavaLanguageVersion.of(17)
@@ -177,5 +178,31 @@ tasks.register('universalCompatibilityTest', JavaExec) {
     doFirst {
         args(tasks.named('jar', Jar).get().archiveFile.get().asFile.absolutePath,
              project.findProperty('compatModsDir') ?: '../others/mods')
+    }
+}
+
+// Stage the canonical release name without an ambiguous generic alias.
+tasks.register('stageRelease') {
+    group = 'build'
+    description = 'Builds and copies the canonical Minecraft-versioned jar and SHA-256 to dist.'
+    dependsOn 'build'
+    def releaseJar = tasks.named('jar', Jar).flatMap { it.archiveFile }
+    inputs.file releaseJar
+    def releaseName = tasks.named('jar', Jar).flatMap { it.archiveFileName }
+    outputs.file releaseName.map { layout.projectDirectory.file("dist/${it}") }
+    outputs.file releaseName.map { layout.projectDirectory.file("dist/${it}.sha256") }
+    doLast {
+        def sourceJar = releaseJar.get().asFile
+        def targetJar = layout.projectDirectory.file("dist/${sourceJar.name}").asFile
+        targetJar.parentFile.mkdirs()
+        java.nio.file.Files.copy(sourceJar.toPath(), targetJar.toPath(), java.nio.file.StandardCopyOption.REPLACE_EXISTING)
+        def digest = java.security.MessageDigest.getInstance('SHA-256')
+        targetJar.withInputStream { stream ->
+            byte[] buffer = new byte[8192]
+            int count
+            while ((count = stream.read(buffer)) != -1) digest.update(buffer, 0, count)
+        }
+        new File(targetJar.parentFile, targetJar.name + '.sha256').text = digest.digest().encodeHex().toString() + '\n'
+        logger.lifecycle("Release: ${targetJar}")
     }
 }
