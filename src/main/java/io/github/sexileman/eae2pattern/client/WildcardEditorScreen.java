@@ -42,6 +42,7 @@ public final class WildcardEditorScreen extends AeToolScreen implements Generati
     private DynamicRule portableRule;
     private String inForm="",outForm="",material="";
     private boolean dynamic;
+    private final boolean dynamicAvailable;
     private Component ruleError;
     private int chosenCount=-1;
     private final Set<ResourceLocation> catalogued=new HashSet<>();
@@ -70,7 +71,8 @@ public final class WildcardEditorScreen extends AeToolScreen implements Generati
         super(tr("title")); this.plan = plan; this.parent = parent; this.savedCopy = savedCopy; this.heldTarget = heldTarget;
         if (included == null) for (var e : plan.entries()) { if (e.isSelected()) selected.add(e.recipeId()); }
         else selected.addAll(included);
-        dynamic=plan.entries().stream().anyMatch(e->e.jeiRecipe()!=null&&(e.jeiRecipe().getClass().getName().equals("com.gregtechceu.gtceu.integration.jei.recipe.GTRecipeWrapper")||e.jeiRecipe() instanceof net.minecraft.world.item.crafting.AbstractCookingRecipe));
+        dynamicAvailable=plan.entries().stream().anyMatch(e->e.jeiRecipe()!=null&&(e.jeiRecipe().getClass().getName().equals("com.gregtechceu.gtceu.integration.jei.recipe.GTRecipeWrapper")||e.jeiRecipe() instanceof net.minecraft.world.item.crafting.AbstractCookingRecipe));
+        dynamic=dynamicAvailable;
         if (state != null && !state.isEmpty()) {
             circuit=CircuitCondition.read(state);
             if(state.contains("dynamic"))dynamic=state.getBoolean("dynamic");inForm=state.getString("in_form");outForm=state.getString("out_form");material=state.getString("material");
@@ -126,14 +128,14 @@ public final class WildcardEditorScreen extends AeToolScreen implements Generati
             boxes[i].setResponder(v -> { if (v.equals(query[n])) return; query[n] = v; changedRules(); });
         }
         int opts = y + first + 52;
-        button(x + 10, opts, col, 3, () -> { inAll = !inAll; changedRules(); }, "input_match");
-        button(x + 22 + col, opts, col, 3, () -> { outAll = !outAll; changedRules(); }, "output_match");
+        button(x + 10, opts, col, 3, () -> chooseSetting("input_match"), "input_match");
+        button(x + 22 + col, opts, col, 3, () -> chooseSetting("output_match"), "output_match");
         int quickY=y+(h<250?57:70);
         button(x+10,quickY,col,0,()->chooseForm(true),"input_form");
         button(x+22+col,quickY,col,0,()->chooseForm(false),"output_form");
         button(x+10,quickY+25,w-20,0,this::chooseMaterial,"material");
         button(x+10,quickY+50,w-20,0,this::extractFocused,"extract");
-        button(x+10,quickY+75,w-20,0,()->{dynamic=!dynamic;changedRules();},"mode");
+        button(x+10,quickY+75,w-20,0,()->chooseSetting("mode"),"mode");
         button(x + 10, y + 53, 62, 1, () -> { matches.forEach(e -> selected.add(e.recipeId())); chosenCount=-1; updateControls(); }, "select_all");
         button(x + 78, y + 53, 62, 1, () -> { matches.forEach(e -> selected.remove(e.recipeId())); chosenCount=-1; updateControls(); }, "select_none");
         int modeWidth = Math.max(36, Math.min(82, w - (split - x) - 70));
@@ -511,7 +513,7 @@ public final class WildcardEditorScreen extends AeToolScreen implements Generati
     @Override public void removed() { ClientGenerationFeedback.setListener(null); InspectionFeedback.setListener(null); }
     @Override public void onClose() { minecraft.setScreen(parent); }
     @Override public boolean isPauseScreen() { return false; }
-    private static boolean isSetting(String key){return Set.of("drop_tools","output_policy","input_scope","output_scope","search_tools").contains(key);}
+    private static boolean isSetting(String key){return Set.of("drop_tools","output_policy","input_scope","output_scope","search_tools","mode","input_match","output_match").contains(key);}
     private void chooseSetting(String key){
         var anchor=controls.stream().filter(c->c.key.equals(key)).findFirst().orElseThrow();
         List<Component> labels;int current;
@@ -519,6 +521,9 @@ public final class WildcardEditorScreen extends AeToolScreen implements Generati
             case "drop_tools" -> {labels=List.of(tr("tools_machine"),tr("tools_pattern"));current=dropTools?0:1;}
             case "output_policy" -> {labels=List.of(tr("policy_0"),tr("policy_1"),tr("policy_2"));current=outputPolicy;}
             case "input_scope","output_scope" -> {labels=List.of(tr("scope_0"),tr("scope_1"),tr("scope_2"));current=key.equals("input_scope")?inScope:outScope;}
+            case "input_match" -> {labels=List.of(tr("input_recipe"),tr("input_all"));current=inAll?1:0;}
+            case "output_match" -> {labels=List.of(tr("output_recipe"),tr("output_all"));current=outAll?1:0;}
+            case "mode" -> {labels=dynamicAvailable?List.of(tr("mode_dynamic"),tr("mode_fixed")):List.of(tr("mode_fixed"));current=dynamicAvailable?(dynamic?0:1):0;}
             case "search_tools" -> {labels=List.of(tr("search_tools_yes"),tr("search_tools_no"));current=searchTools?0:1;}
             default -> throw new IllegalArgumentException("Unknown encoding setting");
         }
@@ -538,6 +543,9 @@ public final class WildcardEditorScreen extends AeToolScreen implements Generati
                 case "input_scope" -> inScope=value;
                 case "output_scope" -> outScope=value;
                 case "search_tools" -> searchTools=value==0;
+                case "mode" -> dynamic=dynamicAvailable&&value==0;
+                case "input_match" -> inAll=value==1;
+                case "output_match" -> outAll=value==1;
                 default -> throw new IllegalArgumentException("Unknown encoding setting");
             }
             if(key.equals("drop_tools")||key.equals("output_policy"))changedPolicy();else changedRules();
