@@ -1,8 +1,8 @@
-# 6.4.1 验证记录与游戏内验收
+# 6.5.9 验证记录与游戏内验收
 
 ## 构建及自动检查
 
-本次构建通过：465 项领域回归、105 项通用产物/可选接口/提供方分流检查。本次 35 项原包接口及可选 JEC 匹配检查通过。没有执行实际游戏启动或世界内验收。
+本次构建通过：487 项领域回归、110 项通用产物/可选接口/提供方分流检查。本次 35 项原包接口及可选 JEC 匹配检查通过。没有执行实际游戏启动或世界内验收。
 
 Java 17 / Forge 1.20.1。工作区使用缓存 Gradle 8.8 和本地离线依赖完成构建；普通环境可运行：
 
@@ -10,7 +10,7 @@ Java 17 / Forge 1.20.1。工作区使用缓存 Gradle 8.8 和本地离线依赖�
 .\gradlew.bat build universalCompatibilityTest -PcompatModsDir="D:/codex workspace/others/mods"
 ```
 
-只生成标准通用构件 `build/libs/eae2-pattern-6.4.1.jar`，不需要生成/安装修改版 GTLCore。
+只生成标准通用构件 `build/libs/eae2-pattern-1.20.1-6.5.9.jar`，不需要生成/安装修改版 GTLCore。
 
 自动验证范围：
 
