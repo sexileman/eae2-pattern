@@ -359,6 +359,7 @@ public final class WildcardEditorScreen extends AeToolScreen implements Generati
             if(!tools.isEmpty())dy=setupRows(g,tools,dx,dy,room);
         }
         if(!sourceView&&preview!=null){
+            if(focus.hasUnknownOutputChance())dy=detailNotice(g,Component.translatable("eae2_pattern.workbench.unknown_output_warning"),dx,dy,room);
             if(focus.hasProbabilisticOutput())dy=detailNotice(g,Component.translatable("eae2_pattern.workbench.chance_warning"),dx,dy,room);
             if(focus.hasProbabilisticInput())dy=detailNotice(g,Component.translatable("eae2_pattern.workbench.chance_input_warning"),dx,dy,room);
         }

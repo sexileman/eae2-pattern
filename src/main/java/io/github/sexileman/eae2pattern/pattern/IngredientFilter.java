@@ -2,26 +2,15 @@ package io.github.sexileman.eae2pattern.pattern;
 
 import io.github.sexileman.eae2pattern.config.EAE2PatternConfig;
 import net.minecraft.resources.ResourceLocation;
-import net.minecraft.world.item.Item;
-import net.minecraft.world.item.ItemStack;
 import net.minecraftforge.registries.ForgeRegistries;
 
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 
-/**
- * Requirement #7: "filter out the items in the recipe that are not consumed".
- *
- * <p>Three distinct things can make an ingredient "not consumed", and they need different handling:</p>
- * <ol>
- *     <li><b>Catalysts.</b> JEI lists the machine itself in the catalyst role of a recipe. Those are not
- *     ingredients at all and must never enter the pattern. The JEI adapter drops them before we get here.</li>
- *     <li><b>Container items.</b> A bucket of water is consumed, then the empty bucket is returned. Net cost is
- *     zero, so a pattern that demands the bucket will stall the crafting job. Detected via the crafting
- *     remainder.</li>
- *     <li><b>Configured blacklist.</b> Pack authors and players know their pack better than any heuristic does.</li>
- * </ol>
+/** Explicit pack exclusions only. Actual non-consumed GT inputs are handled before encoding.
+ * Crafting remainders do not prove that a processing input is free or interchangeable with a fluid.
+ * Native AE2 crafting encoding owns bucket/fluid substitutions and container returns.
  */
 public final class IngredientFilter {
 
@@ -43,19 +32,7 @@ public final class IngredientFilter {
         if (matchesIgnoredList(spec)) {
             return false;
         }
-        if (spec.isItem() && EAE2PatternConfig.STRIP_CONTAINER_ITEMS.get()) {
-            ItemStack stack = spec.toItemStack();
-            if (!stack.isEmpty() && hasCraftingRemainder(stack.getItem())) {
-                return false;
-            }
-        }
         return true;
-    }
-
-    private static boolean hasCraftingRemainder(Item item) {
-        // getCraftingRemainingItem() is deprecated on Item in 1.20.1 in favour of hasCraftingRemainingItem(),
-        // but the boolean form is the one that stays cheap for items without a remainder.
-        return item.hasCraftingRemainingItem();
     }
 
     private static boolean matchesIgnoredList(StackSpec spec) {

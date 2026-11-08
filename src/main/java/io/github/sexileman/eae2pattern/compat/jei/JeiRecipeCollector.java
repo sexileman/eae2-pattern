@@ -79,7 +79,7 @@ public final class JeiRecipeCollector {
         private int fallbackCounter;
         private int cursor;
         private int skipped;
-        private boolean truncated;
+        private boolean truncated, lookupLimited;
 
         private Collector(IRecipeCategory<Object> category) {
             this.category = category;
@@ -95,14 +95,18 @@ public final class JeiRecipeCollector {
                 this.recipes = this.runtime.getRecipeManager()
                         .createRecipeLookup(this.type)
                         .get()
-                        .filter(category::isHandled)
+                        .limit(65537)
                         .toList();
+                lookupLimited=this.recipes.size()>65536;
             }
         }
 
         public boolean finished() {
-            return runtime == null || cursor >= recipes.size();
+            return runtime == null || truncated || cursor >= Math.min(65536,recipes.size());
         }
+
+        public int skippedCount(){return skipped;}
+        public boolean truncated(){return truncated||lookupLimited;}
 
         public int processed() {
             return cursor;
@@ -118,6 +122,7 @@ public final class JeiRecipeCollector {
                 return;
             }
             Object recipe = recipes.get(cursor++);
+            if(!category.isHandled(recipe))return;
             var sourceId=category.getRegistryName(recipe);
             // JEI displays reset normally, but its generic blank -> blank layout must not become a batch crafting loop.
             if(sourceId!=null&&io.github.sexileman.eae2pattern.wildcard.WildcardCarrierRules.isResetRecipe(sourceId.toString()))return;
@@ -138,12 +143,14 @@ public final class JeiRecipeCollector {
             IRecipeSlotsView slots = layout.get().getRecipeSlotsView();
             List<IRecipeSlotView> inputSlots = slots.getSlotViews(RecipeIngredientRole.INPUT);
             List<IRecipeSlotView> outputSlots = slots.getSlotViews(RecipeIngredientRole.OUTPUT);
-            List<Ingredient> inputs = toIngredients(inputSlots, true,
-                    GtChanceReader.cursor(recipe, true, itemSlots(inputSlots), fluidSlots(inputSlots)));
-            List<Ingredient> catalysts = toIngredients(slots.getSlotViews(RecipeIngredientRole.CATALYST), true, null)
-                    .stream().map(i -> Ingredient.notConsumed(i.spec())).toList();
-            List<Ingredient> outputs = toIngredients(outputSlots, false,
-                    GtChanceReader.cursor(recipe, false, itemSlots(outputSlots), fluidSlots(outputSlots)));
+            List<Ingredient> inputs,catalysts,outputs;
+            try {
+                inputs = toIngredients(inputSlots, true,GtChanceReader.cursor(recipe,true,itemSlots(inputSlots),fluidSlots(inputSlots)));
+                catalysts = toIngredients(slots.getSlotViews(RecipeIngredientRole.CATALYST),true,null,false).stream().map(i->Ingredient.notConsumed(i.spec())).toList();
+                outputs = toIngredients(outputSlots,false,GtChanceReader.cursor(recipe,false,itemSlots(outputSlots),fluidSlots(outputSlots)));
+            }catch(IllegalArgumentException unsupported){skip(recipe,unsupported.getMessage());return;}
+            if(recipe instanceof CraftingRecipe||recipe instanceof SmithingRecipe||recipe instanceof StonecutterRecipe||recipe instanceof net.minecraft.world.item.crafting.AbstractCookingRecipe)
+                outputs=outputs.stream().map(i->Ingredient.produced(i.spec(),1)).toList();
             if (outputs.isEmpty()) {
                 skip(recipe, "no item or fluid output slot");
                 return;
@@ -179,6 +186,7 @@ public final class JeiRecipeCollector {
 
         private void skip(Object recipe, String reason) {
             this.skipped++;
+            if(skipped<=5)EAE2Pattern.LOGGER.warn("Recipe {} skipped: {}",category.getRegistryName(recipe),reason);
             EAE2Pattern.LOGGER.debug("Skipping recipe {} of {}: {}", category.getRegistryName(recipe),
                     type.getUid(), reason);
         }
@@ -230,6 +238,9 @@ public final class JeiRecipeCollector {
 
     private static List<Ingredient> toIngredients(List<IRecipeSlotView> slotViews, boolean inputSide,
                                                   @Nullable GtChanceReader.Cursor gtCursor) {
+        return toIngredients(slotViews,inputSide,gtCursor,true);
+    }
+    private static List<Ingredient> toIngredients(List<IRecipeSlotView> slotViews,boolean inputSide,@Nullable GtChanceReader.Cursor gtCursor,boolean strict) {
         List<Ingredient> collected = new ArrayList<>(slotViews.size());
         for (IRecipeSlotView slot : slotViews) {
             if (slot.isEmpty()) {
@@ -237,19 +248,16 @@ public final class JeiRecipeCollector {
             }
             StackSpec spec = specOf(slot);
             if (spec == null) {
+                if(strict)throw new IllegalArgumentException("Unsupported ingredient in non-empty "+(inputSide?"input":"output")+" slot "+(slotViews.indexOf(slot)+1));
                 continue;
             }
             // GregTech keeps the chance out of JEI entirely, so its recipes are read from the recipe object.
             // Every other mod that does show it does so in the slot tooltip; when neither applies the ingredient
             // is treated as certain, which is the safe direction.
-            float chance = gtCursor != null
-                    ? gtCursor.next(spec.type() == StackType.FLUID)
-                    : ChanceReader.chanceOf(slot);
-            if (inputSide) {
-                collected.add(chance <= 0.0F ? Ingredient.notConsumed(spec) : Ingredient.consumed(spec, chance));
-            } else {
-                collected.add(Ingredient.produced(spec, chance));
-            }
+            ChanceReader.Result parsed=gtCursor==null?ChanceReader.read(slot):new ChanceReader.Result(gtCursor.next(spec.type()==StackType.FLUID),true);
+            float chance=parsed.chance();
+            if(inputSide)collected.add(chance<=0?Ingredient.notConsumed(spec):new Ingredient(spec,chance,true,parsed.known()));
+            else collected.add(new Ingredient(spec,chance,true,parsed.known()));
         }
         return collected;
     }
@@ -276,11 +284,11 @@ public final class JeiRecipeCollector {
 
     @Nullable
     private static StackSpec specOf(IRecipeSlotView slot) {
-        Optional<ItemStack> item = slot.getIngredients(VanillaTypes.ITEM_STACK).findFirst();
+        Optional<ItemStack> item = slot.getIngredients(VanillaTypes.ITEM_STACK).filter(stack->!stack.isEmpty()).findFirst();
         if (item.isPresent() && !item.get().isEmpty()) {
             return StackSpec.item(item.get());
         }
-        Optional<FluidStack> fluid = slot.getIngredients(ForgeTypes.FLUID_STACK).findFirst();
+        Optional<FluidStack> fluid = slot.getIngredients(ForgeTypes.FLUID_STACK).filter(stack->!stack.isEmpty()).findFirst();
         if (fluid.isPresent() && !fluid.get().isEmpty()) {
             return StackSpec.fluid(fluid.get());
         }

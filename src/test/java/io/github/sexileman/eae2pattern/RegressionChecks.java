@@ -27,11 +27,53 @@ import java.util.List;
 public final class RegressionChecks {
     private static int checks;
     public static void main(String[] args) throws Exception {
-        policies(); wireFormat(); searches(); gtVersions(); layoutAndGrid(); manualMultiplier(); grouping(); inspectionPackets(); slotPresentation(); patternMetadata(); amountLabels(); machineWildcards(); heldWildcardWrites(); dynamicRules(); stackedCarriers(); wildcardTooltip(); materialPicker(); aeToolScreens(); encodingMessages(); recipeStripColumns(); searchDebounce(); wildcardStockStatus(); guidePages(); moreMenuLayout(); cyclePaths();
+        policies(); wireFormat(); searches(); gtVersions(); layoutAndGrid(); manualMultiplier(); grouping(); inspectionPackets(); slotPresentation(); patternMetadata(); amountLabels(); machineWildcards(); heldWildcardWrites(); dynamicRules(); stackedCarriers(); wildcardTooltip(); materialPicker(); aeToolScreens(); encodingMessages(); recipeStripColumns(); searchDebounce(); wildcardStockStatus(); guidePages(); moreMenuLayout(); cyclePaths(); generationSafety();
         System.out.println("Passed " + checks + " regression checks");
     }
     private static void check(boolean condition, String message) {
         checks++; if (!condition) throw new AssertionError(message);
+    }
+    private static void generationSafety() throws Exception {
+        var values=io.github.sexileman.eae2pattern.pattern.CompleteIngredients.map(List.of("A","B"),String::toLowerCase);
+        check(values.equals(List.of("a","b")),"complete ingredient conversion preserves every slot and order");
+        boolean refused=false;try{io.github.sexileman.eae2pattern.pattern.CompleteIngredients.map(List.of("A","B"),x->x.equals("B")?null:x);}catch(IllegalArgumentException expected){refused=expected.getMessage().contains("slot 2");}
+        check(refused,"one unsupported material rejects the entire conversion instead of silently dropping B");
+        var batch=new io.github.sexileman.eae2pattern.pattern.BatchPreflight<>(List.of("ok1","bad","ok2"),x->x);
+        check(!batch.enough(99),"no batch may write before all validation is complete");
+        batch.step(v->{});check(!batch.enough(99),"a valid prefix cannot spend blanks early");
+        batch.step(v->{throw new IllegalArgumentException("unsupported");});batch.step(v->{});
+        check(batch.done()&&batch.required()==2&&batch.rejected()==1,"required blanks count valid results, not submitted recipes");
+        check(batch.enough(2)&&!batch.enough(1),"exact available blank count gates the prepared valid batch");
+        check(batch.valid().equals(List.of("ok1","ok2"))&&batch.errors().size()==1,"valid source references and diagnostics are retained without encoded stacks");
+        var many=new io.github.sexileman.eae2pattern.pattern.BatchPreflight<>(java.util.Collections.nCopies(50,"bad"),x->x);
+        while(!many.done())many.step(v->{throw new Exception("x".repeat(1000));});
+        check(many.required()==0&&many.errors().size()==5&&many.errors().stream().allMatch(e->e.length()<=512),"failed preparation diagnostics have bounded size");
+        var id=new ResourceLocation("ae2:processing_pattern");var tag=new CompoundTag();tag.putString("encodePlayer","one");tag.putString("input","same");
+        String signature=io.github.sexileman.eae2pattern.pattern.PatternSignature.of(id,tag);
+        var renamed=tag.copy();renamed.putString("encodePlayer","two");var display=new CompoundTag();display.putString("Name","renamed");renamed.put("display",display);
+        check(signature.equals(io.github.sexileman.eae2pattern.pattern.PatternSignature.of(id,renamed)),"display name and encoder identity do not prevent semantic duplicate detection");
+        check(tag.getString("encodePlayer").equals("one"),"signature calculation does not mutate encoded pattern tags");
+        var flags=tag.copy();flags.putBoolean("fluidSubstitution",true);
+        check(!signature.equals(io.github.sexileman.eae2pattern.pattern.PatternSignature.of(id,flags)),"encoding flags remain significant");
+        var input=tag.copy();var material=new CompoundTag();material.putInt("circuit",2);input.put("materialNbt",material);
+        check(!signature.equals(io.github.sexileman.eae2pattern.pattern.PatternSignature.of(id,input)),"material NBT remains significant");
+        var typed=tag.copy();PatternMetadata.write(typed,null,new ResourceLocation("gtceu:wiremill"));var other=tag.copy();PatternMetadata.write(other,null,new ResourceLocation("gtceu:bender"));
+        check(!io.github.sexileman.eae2pattern.pattern.PatternSignature.of(id,typed).equals(io.github.sexileman.eae2pattern.pattern.PatternSignature.of(id,other)),"different machine recipe types are not deduplicated together");
+        check(!signature.equals(io.github.sexileman.eae2pattern.pattern.PatternSignature.of(new ResourceLocation("ae2:crafting_pattern"),tag)),"different pattern kinds remain distinct");
+        var quantity=tag.copy();quantity.putLong("amount",2);var differentQuantity=quantity.copy();differentQuantity.putLong("amount",3);
+        check(!io.github.sexileman.eae2pattern.pattern.PatternSignature.of(id,quantity).equals(io.github.sexileman.eae2pattern.pattern.PatternSignature.of(id,differentQuantity)),"different encoded quantities remain distinct");
+        var orderA=tag.copy();var listA=new net.minecraft.nbt.ListTag();listA.add(net.minecraft.nbt.StringTag.valueOf("primary"));listA.add(net.minecraft.nbt.StringTag.valueOf("byproduct"));orderA.put("out",listA);
+        var orderB=tag.copy();var listB=new net.minecraft.nbt.ListTag();listB.add(net.minecraft.nbt.StringTag.valueOf("byproduct"));listB.add(net.minecraft.nbt.StringTag.valueOf("primary"));orderB.put("out",listB);
+        check(!io.github.sexileman.eae2pattern.pattern.PatternSignature.of(id,orderA).equals(io.github.sexileman.eae2pattern.pattern.PatternSignature.of(id,orderB)),"primary output order remains significant");
+        var unknown=(mezz.jei.api.gui.ingredient.IRecipeSlotView)java.lang.reflect.Proxy.newProxyInstance(RegressionChecks.class.getClassLoader(),new Class[]{mezz.jei.api.gui.ingredient.IRecipeSlotView.class},(proxy,m,args)->switch(m.getName()){case "isEmpty"->false;case "getIngredients"->java.util.stream.Stream.empty();case "equals"->proxy==args[0];case "hashCode"->System.identityHashCode(proxy);default->null;});
+        var collect=io.github.sexileman.eae2pattern.compat.jei.JeiRecipeCollector.class.getDeclaredMethod("toIngredients",List.class,boolean.class,GtChanceReader.Cursor.class,boolean.class);collect.setAccessible(true);
+        boolean unknownRefused=false;try{collect.invoke(null,List.of(unknown),true,null,true);}catch(java.lang.reflect.InvocationTargetException e){unknownRefused=e.getCause() instanceof IllegalArgumentException;}
+        check(unknownRefused,"non-empty JEI slot of an unsupported type rejects the recipe");
+        check(((List<?>)collect.invoke(null,List.of(unknown),true,null,false)).isEmpty(),"unsupported catalyst decoration does not turn into a required material");
+        var stack=stack("test:unknown_output",1);var unverified=new Ingredient(stack,1,true,false);
+        check(!unverified.guaranteedOutput()&&unverified.chanceText().equals("?"),"unread probability is not presented as guaranteed 100 percent");
+        check(IngredientPresentation.of(unverified,1).kind()==IngredientPresentation.Kind.UNKNOWN_OUTPUT,"unknown output confidence has an explicit presentation");
+        check(io.github.sexileman.eae2pattern.compat.jei.ChanceReader.read(unknown).known()==false,"missing tooltip probability remains unknown");
     }
     private static void cyclePaths() {
         check(io.github.sexileman.eae2pattern.cycle.CyclePath.close(List.of("A","B"),List.of("A")).equals(List.of("A","B","A")),"two-material input back-edge closes A-B-A");

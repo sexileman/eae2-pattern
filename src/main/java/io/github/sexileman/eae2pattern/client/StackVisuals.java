@@ -67,7 +67,7 @@ public final class StackVisuals {
         String label = switch (presentation.kind()) {
             case NOT_CONSUMED -> Component.translatable("eae2_pattern.workbench.slot_overlay_not_consumed").getString();
             case CHANCE_INPUT, CHANCE_OUTPUT -> presentation.chance();
-            case MIXED -> "?";
+            case MIXED, UNKNOWN_OUTPUT -> "?";
             default -> "";
         };
         if (label.isEmpty()) return;

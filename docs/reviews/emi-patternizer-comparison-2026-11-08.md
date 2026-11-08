@@ -119,3 +119,10 @@ Collector 构造时 createRecipeLookup(...).get().filter(...).toList() 先遍历
 - [延迟配置](https://github.com/link-fgfgui/EMI-Patternizer/blob/6413da5b48453cbcca88d2c26027e7c220d4cfdd/src/main/java/io/github/linkfgfgui/emi_patternizer/Config.java)
 - [终端预读取](https://github.com/link-fgfgui/EMI-Patternizer/blob/6413da5b48453cbcca88d2c26027e7c220d4cfdd/src/main/java/io/github/linkfgfgui/emi_patternizer/intergrated/PatternAccessPreloader.java)
 - [版本与依赖](https://github.com/link-fgfgui/EMI-Patternizer/blob/6413da5b48453cbcca88d2c26027e7c220d4cfdd/gradle.properties)
+
+## 6.4.1 本轮实施状态
+
+- 已落地：原生水桶/流体替代路径保留、停用返还物误删、未知非空材料整条拒绝、普通批次准确预检、存储/已发布定义的有界结构签名匹配、概率可信度提示、类别判断分片和采集截断反馈。
+- 谨慎边界：流体替代开关默认不变；不自动将机器处理输入中的水桶转为流体；机器类型提示和其他编码字段不随展示元数据一起删除。
+- 尚未引入的结构性能力：完整候选槽位的选择/搜索模型、按目标依赖链编码入口、额外无线终端 API 适配。这些需要独立交互或兼容实现，不通过猜测替换材料来实现。
+- 所有改动在 feature/cyclic-recipes-1.20.1 的独立生成优化提交中，循环检测模块和 Mixin 未修改。真实游戏中的流体替代和网络读写仍待验收。

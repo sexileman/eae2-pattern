@@ -205,7 +205,7 @@ public final class PatternWorkbenchScreen extends AeToolScreen implements Genera
         more.active = !checking && !sending;
         generate.setMessage(sending ? tr("sending") : tr("generate", requiredBlanks()));
         generate.active = !sending && !checking && !filtering && !searchDebounce.pending() && ProcessingMultiplier.parse(multiplierText) > 0
-                && eligibleCount > 0 && ClientNetworkState.hasNetwork() && ClientNetworkState.blankPatterns() >= requiredBlanks();
+                && eligibleCount > 0 && ClientNetworkState.hasNetwork() && ClientNetworkState.blankPatterns() > 0;
     }
     private int requiredBlanks() { return eligibleCount; }
     private void generate() {
@@ -280,6 +280,7 @@ public final class PatternWorkbenchScreen extends AeToolScreen implements Genera
                 existing.addAll(result.existing());
                 for (RecipePlan.Entry entry : plan.entries()) if (existing.contains(entry.recipeId())) entry.setSelected(false);
                 notice = tr("existing_result", result.checked(), result.existing().size(), result.failed());
+                if(result.details().stream().anyMatch(d->EncodingMessages.key(d).equals("inspection_limited")))notice=notice.copy().append(" · ").append(Component.translatable("eae2_pattern.error.inspection_limited"));
                 refresh();
             } else notice = tr("existing_failed");
             queuePreview(); updateButtons();
@@ -316,6 +317,7 @@ public final class PatternWorkbenchScreen extends AeToolScreen implements Genera
                 for (StackSpec input : preview.inputs()) details.add(encodedLine(input, 0));
                 details.add(new DetailLine(tr("encoded_outputs"), null, ACCENT));
                 for (StackSpec output : preview.outputs()) details.add(encodedLine(output, 1));
+                if (focused.hasUnknownOutputChance())details.add(DetailLine.notice(tr("unknown_output_warning"),WorkbenchTheme.WARNING));
                 if (focused.hasProbabilisticOutput()) details.add(DetailLine.notice(tr("chance_warning"), WorkbenchTheme.WARNING));
                 if (focused.hasProbabilisticInput()) details.add(DetailLine.notice(tr("chance_input_warning"), WorkbenchTheme.WARNING));
             }
@@ -349,6 +351,7 @@ public final class PatternWorkbenchScreen extends AeToolScreen implements Genera
         for (Ingredient input : entry.catalysts()) addIngredient(input, false, false);
         details.add(new DetailLine(tr("outputs"), null, ACCENT));
         for (int i = 0; i < entry.outputs().size(); i++) addIngredient(entry.outputs().get(i), true, i != entry.mainOutputIndex());
+        if(entry.hasUnknownOutputChance())details.add(DetailLine.notice(tr("unknown_output_warning"),WorkbenchTheme.WARNING));
         details.add(DetailLine.notice(tr("semantics"), DIM));
     }
     private void moreMenu() {
@@ -433,7 +436,7 @@ public final class PatternWorkbenchScreen extends AeToolScreen implements Genera
     }
     private void renderFooter(GuiGraphics g, Component status) {
         WorkbenchTheme.control(g, left + 8, layout.footerTop(), panelWidth - 16, layout.footerHeight(), WorkbenchTheme.BACKGROUND, LINE);
-        boolean ready = ClientNetworkState.hasNetwork() && ClientNetworkState.blankPatterns() >= requiredBlanks()
+        boolean ready = ClientNetworkState.hasNetwork() && ClientNetworkState.blankPatterns() > 0
                 && ProcessingMultiplier.parse(multiplierText) > 0;
         footerStatusX = left + (layout.footerTitle()?18:168);
         if (layout.footerTitle()) {

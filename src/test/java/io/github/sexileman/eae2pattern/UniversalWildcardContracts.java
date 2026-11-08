@@ -28,6 +28,17 @@ public final class UniversalWildcardContracts {
             var itemModel=com.google.gson.JsonParser.parseString(new String(bytes(app,"assets/eae2_pattern/models/item/machine_wildcard_pattern.json"),java.nio.charset.StandardCharsets.UTF_8)).getAsJsonObject();
             check(itemModel.getAsJsonObject("textures").get("layer0").getAsString().startsWith("eae2_pattern:"),"carrier uses its own icon namespace");
             check(itemModel.getAsJsonArray("overrides").get(0).getAsJsonObject().getAsJsonObject("predicate").has("eae2_pattern:encoded"),"encoded appearance has its own model predicate");
+            var encoder=node(bytes(app,"io/github/sexileman/eae2pattern/pattern/PatternEncoder.class"));
+            boolean nativeFluids=false;
+            for(var method:encoder.methods)if(method.name.equals("encodeCrafting"))for(var instruction:method.instructions)
+                if(instruction instanceof MethodInsnNode call&&call.owner.equals("appeng/api/crafting/PatternDetailsHelper")&&call.name.equals("encodeCraftingPattern")){
+                    var previous=instruction.getPrevious();while(previous!=null&&previous.getOpcode()<0)previous=previous.getPrevious();
+                    nativeFluids=previous instanceof VarInsnNode flag&&flag.getOpcode()==Opcodes.ILOAD&&flag.var==4;
+                }
+            check(nativeFluids,"crafting still passes the configured fluid-substitution flag to AE2's native encoder");
+            var filter=node(bytes(app,"io/github/sexileman/eae2pattern/pattern/IngredientFilter.class"));boolean inferredRemainder=false;
+            for(var method:filter.methods)for(var insn:method.instructions)if(insn instanceof MethodInsnNode call&&call.name.toLowerCase().contains("craftingremain"))inferredRemainder=true;
+            check(!inferredRemainder,"processing filtering no longer deletes filled containers based on crafting remainders");
             bridge = bytes(app, BRIDGE + ".class");
             check(app.getEntry("io/github/sexileman/eae2pattern/api/MachineWildcardApi.class") != null, "own independent API shipped");
             String config = new String(bytes(app, "eae2_pattern.mixins.json"), java.nio.charset.StandardCharsets.UTF_8);

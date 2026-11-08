@@ -17,7 +17,7 @@ public record RecipeFilters(ItemSearchQuery products, ItemSearchQuery ingredient
             default -> true;
         };
         boolean outputMatches = switch (outputMode) {
-            case 1 -> !e.hasProbabilisticOutput();
+            case 1 -> !e.hasProbabilisticOutput() && !e.hasUnknownOutputChance();
             case 2 -> e.hasByproduct();
             case 3 -> e.hasProbabilisticByproduct();
             case 4 -> e.allOutputsProbabilistic();

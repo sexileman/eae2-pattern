@@ -6,7 +6,7 @@ public final class RecipeDiagnostics {
     private RecipeDiagnostics() {}
     public static String skipReason(RecipePlan.Entry entry, int policy, boolean dropTools) {
         if (entry.outputs().isEmpty()) return "skip_no_output";
-        if (policy != 0 && entry.mainOutputIndex() < 0) return "skip_no_guaranteed";
+        if (policy != 0 && entry.mainOutputIndex() < 0) return entry.hasUnknownOutputChance()?"skip_unknown_output":"skip_no_guaranteed";
         if (entry.kind() == PatternKind.PROCESSING) {
             long count = (dropTools ? 0 : entry.catalysts().size())
                     + entry.inputs().stream().filter(i -> !dropTools || !i.neverConsumed()).count();

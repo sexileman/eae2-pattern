@@ -195,18 +195,20 @@ public final class RecipePlan {
 
         public boolean hasProbabilisticOutput() {
             for (Ingredient output : outputs) {
-                if (!output.guaranteedOutput()) {
+                if (output.chanceKnown() && !output.guaranteedOutput()) {
                     return true;
                 }
             }
             return false;
         }
 
+        public boolean hasUnknownOutputChance(){return outputs.stream().anyMatch(i->!i.chanceKnown());}
+
         /** A probabilistic product other than the main one. */
         public boolean hasProbabilisticByproduct() {
             for (int i = 0; i < outputs.size(); i++) {
                 if (i == mainOutputIndex()) continue;
-                if (!outputs.get(i).guaranteedOutput()) {
+                if (outputs.get(i).chanceKnown() && !outputs.get(i).guaranteedOutput()) {
                     return true;
                 }
             }
@@ -219,8 +221,8 @@ public final class RecipePlan {
             return -1;
         }
 
-        public boolean hasByproduct() { return outputs.size() > (mainOutputIndex() < 0 ? 0 : 1); }
-        public boolean allOutputsProbabilistic() { return !outputs.isEmpty() && mainOutputIndex() < 0; }
+        public boolean hasByproduct() { if(hasUnknownOutputChance()&&mainOutputIndex()<0)return false; return outputs.size() > (mainOutputIndex() < 0 ? 0 : 1); }
+        public boolean allOutputsProbabilistic() { return !outputs.isEmpty() && !hasUnknownOutputChance() && mainOutputIndex() < 0; }
 
         public boolean canEncode(int outputPolicy, boolean dropTools) {
             boolean hasOutput = outputPolicy == 0 ? !outputs.isEmpty() : mainOutputIndex() >= 0;

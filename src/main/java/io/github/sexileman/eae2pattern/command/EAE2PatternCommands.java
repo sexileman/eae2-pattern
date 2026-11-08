@@ -109,6 +109,7 @@ public final class EAE2PatternCommands {
                     setting.path(), setting.read().get()), false);
         }
         context.getSource().sendSuccess(() -> Component.translatable("eae2_pattern.cmd.hint"), false);
+        context.getSource().sendSuccess(()->Component.translatable("eae2_pattern.cmd.legacy_containers"),false);
         return SETTINGS.size();
     }
 
@@ -127,6 +128,7 @@ public final class EAE2PatternCommands {
         if (setting == null) {
             return 0;
         }
+        if(setting.path().equals("filters.strip_container_items"))context.getSource().sendSuccess(()->Component.translatable("eae2_pattern.cmd.legacy_containers"),false);
         String raw = StringArgumentType.getString(context, "value");
         String error = setting.write().apply(raw);
         if (error != null) {

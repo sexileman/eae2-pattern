@@ -16,7 +16,9 @@ import io.github.sexileman.eae2pattern.pattern.StackSpec;
  *       are about.</li>
  * </ul>
  */
-public record Ingredient(StackSpec spec, float chance, boolean consumed) {
+public record Ingredient(StackSpec spec, float chance, boolean consumed, boolean chanceKnown) {
+
+    public Ingredient(StackSpec spec,float chance,boolean consumed){this(spec,chance,consumed,true);}
 
     /** Only 100% is guaranteed; 99.99% remains probabilistic. */
     public static final float CERTAIN = 1.0F;
@@ -58,15 +60,16 @@ public record Ingredient(StackSpec spec, float chance, boolean consumed) {
     }
 
     public boolean guaranteedOutput() {
-        return chance >= CERTAIN;
+        return chanceKnown && chance >= CERTAIN;
     }
 
     public Ingredient withSpec(StackSpec replacement) {
-        return new Ingredient(replacement, chance, consumed);
+        return new Ingredient(replacement, chance, consumed, chanceKnown);
     }
 
     /** Short label for the percentage badges, e.g. {@code 90%}. */
     public String chanceText() {
+        if(!chanceKnown)return "?";
         if (chance >= CERTAIN) {
             return "100%";
         }

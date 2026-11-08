@@ -6,6 +6,8 @@ public final class EncodingMessages {
     private EncodingMessages(){}
     public static String key(String raw){
         String text=raw==null?"":raw.toLowerCase(Locale.ROOT);
+        if(text.contains("inspection capacity"))return "inspection_limited";
+        if(text.contains("unsupported ingredient"))return "unsupported_ingredient";
         if(text.contains("no ingredients after filtering")||text.contains("no encodable ingredients left after filtering"))return "filtered_input";
         if(text.contains("no output")||text.contains("no valid input or output"))return "no_output";
         if(text.contains("network")&&(text.contains("unavailable")||text.contains("changed")))return "network";
