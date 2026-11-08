@@ -1,37 +1,8 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32" shape-rendering="crispEdges">
-<rect x="6" y="2" width="20" height="28" fill="#272334"/>
-<rect x="3" y="5" width="26" height="20" fill="#272334"/>
-<rect x="5" y="3" width="21" height="25" fill="#5C536F"/>
-<rect x="4" y="6" width="24" height="19" fill="#5C536F"/>
-<rect x="6" y="4" width="19" height="23" fill="#C4C5D2"/>
-<rect x="5" y="7" width="22" height="17" fill="#C4C5D2"/>
-<rect x="6" y="4" width="18" height="2" fill="#EEF0F4"/>
-<rect x="5" y="7" width="2" height="16" fill="#EEF0F4"/>
-<rect x="24" y="6" width="2" height="19" fill="#858397"/>
-<rect x="7" y="25" width="17" height="2" fill="#858397"/>
-<rect x="8" y="7" width="15" height="15" fill="#3C344D"/>
-<rect x="9" y="8" width="13" height="13" fill="#524260"/>
-<rect x="9" y="26" width="2" height="3" fill="#C2A979"/>
-<rect x="13" y="26" width="2" height="3" fill="#C2A979"/>
-<rect x="17" y="26" width="2" height="3" fill="#C2A979"/>
-<rect x="21" y="26" width="2" height="3" fill="#C2A979"/>
-<rect x="14" y="11" width="4" height="8" fill="#9774CA"/>
-<rect x="12" y="13" width="8" height="4" fill="#9774CA"/>
-<rect x="14" y="13" width="4" height="4" fill="#CFB5F1"/>
-<rect x="10" y="10" width="2" height="4" fill="#6BBAB7"/>
-<rect x="10" y="10" width="5" height="1" fill="#6BBAB7"/>
-<rect x="19" y="10" width="2" height="4" fill="#6BBAB7"/>
-<rect x="17" y="10" width="4" height="1" fill="#6BBAB7"/>
-<rect x="10" y="17" width="2" height="3" fill="#6BBAB7"/>
-<rect x="10" y="19" width="5" height="1" fill="#6BBAB7"/>
-<rect x="19" y="17" width="2" height="3" fill="#6BBAB7"/>
-<rect x="17" y="19" width="4" height="1" fill="#6BBAB7"/>
-<rect x="9" y="9" width="3" height="3" fill="#3C344D"/>
-<rect x="9" y="9" width="2" height="1" fill="#858397"/>
-<rect x="19" y="9" width="3" height="3" fill="#3C344D"/>
-<rect x="19" y="9" width="2" height="1" fill="#858397"/>
-<rect x="9" y="18" width="3" height="3" fill="#3C344D"/>
-<rect x="9" y="18" width="2" height="1" fill="#858397"/>
-<rect x="19" y="18" width="3" height="3" fill="#3C344D"/>
-<rect x="19" y="18" width="2" height="1" fill="#858397"/>
+<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16" shape-rendering="crispEdges">
+<!-- Overlay only. The item model references AE2 blank_pattern as the unchanged base. -->
+<rect x="7" y="5" width="1" height="1" fill="#9A8BAF"/>
+<rect x="9" y="5" width="1" height="1" fill="#9A8BAF"/>
+<rect x="8" y="6" width="1" height="1" fill="#C0B5CD"/>
+<rect x="7" y="7" width="1" height="1" fill="#9A8BAF"/>
+<rect x="9" y="7" width="1" height="1" fill="#9A8BAF"/>
 </svg>
