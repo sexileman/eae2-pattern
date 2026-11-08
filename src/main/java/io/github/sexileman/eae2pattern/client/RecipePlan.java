@@ -127,6 +127,7 @@ public final class RecipePlan {
         private final List<Ingredient> inputs;
         private final List<Ingredient> catalysts;
         private final List<Ingredient> outputs;
+        private final boolean nonCircuitNeverConsumed, nonCircuitProbabilistic;
         private boolean selected;
         private Object jeiRecipe;
         public Object jeiRecipe() { return jeiRecipe; }
@@ -148,6 +149,16 @@ public final class RecipePlan {
             this.catalysts = List.copyOf(catalysts);
             this.outputs = List.copyOf(outputs);
             this.selected = selected;
+            boolean never = false, probabilistic = false;
+            for (var ingredient : this.inputs) {
+                if (io.github.sexileman.eae2pattern.wildcard.CircuitCondition.configuration(ingredient.spec()) >= 0) continue;
+                never |= ingredient.neverConsumed();
+                probabilistic |= ingredient.probabilistic();
+            }
+            for (var ingredient : this.catalysts) {
+                if (io.github.sexileman.eae2pattern.wildcard.CircuitCondition.configuration(ingredient.spec()) < 0) never = true;
+            }
+            nonCircuitNeverConsumed = never; nonCircuitProbabilistic = probabilistic;
         }
 
         public PatternKind kind() {
@@ -171,6 +182,10 @@ public final class RecipePlan {
         public List<Ingredient> outputs() {
             return outputs;
         }
+
+        /** Consumption classification for the material filter; circuit selection is independent. */
+        public boolean hasNonCircuitNeverConsumedInput() { return nonCircuitNeverConsumed; }
+        public boolean hasNonCircuitProbabilisticInput() { return nonCircuitProbabilistic; }
 
         public boolean hasNeverConsumedInput() {
             if (!catalysts.isEmpty()) {

@@ -67,10 +67,10 @@
   "eae2_pattern.workbench.title": "Pattern encoding",
   "eae2_pattern.workbench.input": "Search inputs…",
   "eae2_pattern.workbench.output": "Search outputs…",
-  "eae2_pattern.workbench.input_mode.0": "Inputs: all",
-  "eae2_pattern.workbench.input_mode.1": "Inputs: reusable",
-  "eae2_pattern.workbench.input_mode.2": "Inputs: chance",
-  "eae2_pattern.workbench.input_mode.3": "Inputs: all consumed",
+  "eae2_pattern.workbench.input_mode.0": "Materials: Any",
+  "eae2_pattern.workbench.input_mode.1": "Materials: Non-consumed",
+  "eae2_pattern.workbench.input_mode.2": "Materials: Chance consumption",
+  "eae2_pattern.workbench.input_mode.3": "Materials: Always consumed",
   "eae2_pattern.workbench.output_mode.0": "Outputs: all",
   "eae2_pattern.workbench.output_mode.1": "Outputs: all guaranteed",
   "eae2_pattern.workbench.output_mode.2": "Outputs: byproducts",
@@ -442,5 +442,6 @@
   "eae2_pattern.circuit.selected": "Circuit: %s",
   "eae2_pattern.circuit.configuration": "Circuit configuration: %s",
   "eae2_pattern.circuit.matches": "%s recipes for this machine",
-  "eae2_pattern.circuit.hint": "Select configurations; drag a configured circuit here from JEI."
+  "eae2_pattern.circuit.hint": "Select configurations; drag a configured circuit here from JEI.",
+  "eae2_pattern.workbench.input_consumption_help": "Checks inputs other than programmed circuits. Filter circuits separately."
 }

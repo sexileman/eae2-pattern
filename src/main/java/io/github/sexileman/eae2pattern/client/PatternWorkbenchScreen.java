@@ -106,7 +106,7 @@ public final class PatternWorkbenchScreen extends AeToolScreen implements Genera
         outputBox.setResponder(value -> { if (value.equals(outputText)) return; outputText = value; exactOutput = null; searchDebounce.changed(); });
         boolean stacked=panelWidth<420&&panelHeight>=260;
         int q=stacked?(panelWidth-24)/2:(panelWidth-32)/4;
-        inputFilter=action(left+10,top+filterY,q,()->choose(inputFilter,"input_mode.",4,inputMode,value->{inputMode=value;refresh();}));
+        inputFilter=action(left+10,top+filterY,q,()->choose(inputFilter,"input_mode.",4,inputMode,value->{inputMode=value;refresh();})).help("input_consumption_help");
         outputFilter=action(left+14+q,top+filterY,q,()->choose(outputFilter,"output_mode.",6,outputMode,value->{outputMode=value;refresh();}));
         tools=action(stacked?left+10:left+18+q*2,top+filterY+(stacked?22:0),q,()->{dropTools=!dropTools;optionsChanged();}).toggle(()->dropTools);
         products=action(stacked?left+14+q:left+22+q*3,top+filterY+(stacked?22:0),q,()->choose(products,"policy.",3,outputPolicy,value->{outputPolicy=value;optionsChanged();}));

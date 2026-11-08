@@ -67,10 +67,10 @@
   "eae2_pattern.workbench.title": "样板编码",
   "eae2_pattern.workbench.input": "搜索输入…",
   "eae2_pattern.workbench.output": "搜索输出…",
-  "eae2_pattern.workbench.input_mode.0": "输入：全部",
-  "eae2_pattern.workbench.input_mode.1": "输入：含不消耗材料",
-  "eae2_pattern.workbench.input_mode.2": "输入：含概率消耗",
-  "eae2_pattern.workbench.input_mode.3": "输入：均正常消耗",
+  "eae2_pattern.workbench.input_mode.0": "材料：全部",
+  "eae2_pattern.workbench.input_mode.1": "材料：含不消耗",
+  "eae2_pattern.workbench.input_mode.2": "材料：含概率消耗",
+  "eae2_pattern.workbench.input_mode.3": "材料：均正常消耗",
   "eae2_pattern.workbench.output_mode.0": "输出：全部",
   "eae2_pattern.workbench.output_mode.1": "输出：均必定产出",
   "eae2_pattern.workbench.output_mode.2": "输出：含副产物",
@@ -442,5 +442,6 @@
   "eae2_pattern.circuit.selected": "电路：%s",
   "eae2_pattern.circuit.configuration": "电路配置：%s",
   "eae2_pattern.circuit.matches": "当前机器匹配 %s 条配方",
-  "eae2_pattern.circuit.hint": "选择电路编号，或从 JEI 拖入已配置的电路。"
+  "eae2_pattern.circuit.hint": "选择电路编号，或从 JEI 拖入已配置的电路。",
+  "eae2_pattern.workbench.input_consumption_help": "仅判断电路以外的输入材料；电路使用独立条件筛选。"
 }
