@@ -6,7 +6,7 @@ import java.util.*;
 public final class TwoRecipeGrowth {
     public static final int MAX_STAGES=512;
     public static final long MAX_OPERATIONS=1_000_000;
-    public record Stage(int recipe,long times){public Stage{if((recipe!=0&&recipe!=1)||times<=0)throw new IllegalArgumentException("Invalid cycle stage");}}
+    public record Stage(int recipe,long times){public Stage{if((recipe<0||recipe>2)||times<=0)throw new IllegalArgumentException("Invalid cycle stage");}}
     public record Result(List<Stage> stages,long operations,long finalA,long finalB){public Result{stages=List.copyOf(stages);}}
     private TwoRecipeGrowth(){}
     public static Result plan(long aIn,long bOut,long bIn,long aOut,long seedA,long seedB,long targetA,long targetB){
@@ -18,6 +18,8 @@ public final class TwoRecipeGrowth {
         long bSeed=Math.multiplyExact(bIn,reverseB),bGain=Math.subtractExact(Math.multiplyExact(bOut,reverseA),bSeed);
         var state=new State(aIn,bOut,bIn,aOut,seedA,seedB);
         while(state.a<targetA||state.b<targetB){
+            long surplusB=state.b>targetB?state.b-targetB:0;
+            if(state.a<targetA&&surplusB>=bIn){state.add(1,Math.min(surplusB/bIn,ceil(targetA-state.a,aOut)));continue;}
             long finalBSteps=ceil(Math.max(0,targetB-state.b),bOut);
             long neededA=Math.addExact(targetA,Math.multiplyExact(finalBSteps,aIn));
             if(state.a>=neededA){if(finalBSteps>0)state.add(0,finalBSteps);break;}

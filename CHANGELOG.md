@@ -1,5 +1,11 @@
 # Changelog
 
+## 6.6.0-cycle-alpha.3 — 2026-11-08
+
+- 支持单层上游 C 配方消耗循环中的 A、B（或其中一种）：汇总双侧需求，先完成增殖，再执行 C。
+- 结合已有 A/B 库存与启动保护量，合计循环和 C 的全部外部耗材，并按整份 C 配方取整。
+- 增加第三阶段保存/恢复格式，兼容旧二配方任务；保留原生 CraftingPlan，继续兼容 AE2CT 预览。
+
 ## 6.6.0-cycle-alpha.2 — 2026-11-08
 
 - 修复 AE2CT 预览摘要把实验计划强转为 CraftingPlan 导致的 ClassCastException：对外返回原生 CraftingPlan，在对象上附加循环阶段信息，CPU 从附件读取执行数据。

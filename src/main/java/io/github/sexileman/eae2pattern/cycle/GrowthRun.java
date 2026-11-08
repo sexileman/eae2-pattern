@@ -16,9 +16,9 @@ public final class GrowthRun {
     private final List<IPatternDetails> recipes;
     private final List<TwoRecipeGrowth.Stage> stages;
     private GrowthLedger<AEKey> ledger;
-    private final long[] batchLimits={64,64};
-    public GrowthRun(GrowthCraftingPlan plan){recipes=plan.recipes();stages=plan.stages();ledger=new GrowthLedger<>(stages);}
-    private GrowthRun(List<IPatternDetails> recipes,List<TwoRecipeGrowth.Stage> stages){this.recipes=List.copyOf(recipes);this.stages=List.copyOf(stages);ledger=new GrowthLedger<>(stages);}
+    private final long[] batchLimits={64,64,64};
+    public GrowthRun(GrowthCraftingPlan plan){recipes=plan.recipes();stages=plan.stages();GrowthDemand.counts(stages,recipes.size());ledger=new GrowthLedger<>(stages);}
+    private GrowthRun(List<IPatternDetails> recipes,List<TwoRecipeGrowth.Stage> stages){this.recipes=List.copyOf(recipes);this.stages=List.copyOf(stages);GrowthDemand.counts(stages,recipes.size());ledger=new GrowthLedger<>(stages);}
     private static GrowthJobAccessor job(GrowthCpuView cpu){return (GrowthJobAccessor)(Object)cpu.eae2$job();}
     public int step(GrowthCpuView cpu,int max,CraftingService service,IEnergyService energy,Level level){
         if(max<1||ledger.waiting())return 0;
@@ -80,18 +80,18 @@ public final class GrowthRun {
         else cpu.eae2$cluster().updateOutput(new GenericStack(key,job.eae2$remaining()));
     }
     public CompoundTag save(){
-        var tag=new CompoundTag();tag.putInt("version",1);var definitions=new ListTag();for(var recipe:recipes)definitions.add(recipe.getDefinition().toTag());tag.put("recipes",definitions);
+        var tag=new CompoundTag();tag.putInt("version",recipes.size()==2?1:2);var definitions=new ListTag();for(var recipe:recipes)definitions.add(recipe.getDefinition().toTag());tag.put("recipes",definitions);
         var phases=new ListTag();for(var phase:stages){var row=new CompoundTag();row.putInt("recipe",phase.recipe());row.putLong("times",phase.times());phases.add(row);}tag.put("stages",phases);
         var state=ledger.snapshot();tag.putInt("stage",state.stage());tag.putLong("remaining",state.remaining());tag.putLong("in_flight",state.inFlight());
         var waiting=new ListTag();for(var entry:state.awaiting().entrySet())waiting.add(GenericStack.writeTag(new GenericStack(entry.getKey(),entry.getValue())));tag.put("awaiting",waiting);
         return tag;
     }
     public static GrowthRun load(CompoundTag tag,GrowthCpuView cpu){
-        if(tag.getInt("version")!=1)throw new IllegalArgumentException("Unknown cycle state");
-        var definitions=tag.getList("recipes",10);if(definitions.size()!=2)throw new IllegalArgumentException("Invalid cycle recipes");
-        var recipes=new ArrayList<IPatternDetails>();for(int i=0;i<2;i++){
+        int version=tag.getInt("version");var definitions=tag.getList("recipes",10);
+        if(!((version==1&&definitions.size()==2)||(version==2&&definitions.size()==3)))throw new IllegalArgumentException("Unknown cycle state or invalid recipe count");
+        var recipes=new ArrayList<IPatternDetails>();for(int i=0;i<definitions.size();i++){
             var key=AEItemKey.fromTag(definitions.getCompound(i));var details=key==null?null:PatternDetailsHelper.decodePattern(key,cpu.eae2$cluster().getLevel());
-            if(!(details instanceof appeng.crafting.pattern.AEProcessingPattern))throw new IllegalArgumentException("Cycle recipe unavailable");recipes.add(details);
+            if(!(details instanceof appeng.crafting.pattern.AEProcessingPattern)&&!(i==2&&details instanceof appeng.crafting.pattern.AECraftingPattern))throw new IllegalArgumentException("Cycle recipe unavailable");recipes.add(details);
         }
         var phases=tag.getList("stages",10);if(phases.isEmpty()||phases.size()>TwoRecipeGrowth.MAX_STAGES)throw new IllegalArgumentException("Invalid phase count");
         var stages=new ArrayList<TwoRecipeGrowth.Stage>();long count=0;
@@ -105,7 +105,7 @@ public final class GrowthRun {
         result.ledger=new GrowthLedger<>(stages,new GrowthLedger.Snapshot<>(stage,remaining,inFlight,awaiting));
         for(var entry:awaiting.entrySet())if(job(cpu).eae2$waiting().extract(entry.getKey(),Long.MAX_VALUE,Actionable.SIMULATE)!=entry.getValue())throw new IllegalArgumentException("Cycle wait counts disagree");
         for(var entry:job(cpu).eae2$waiting().list)if(entry.getLongValue()>0&&awaiting.getOrDefault(entry.getKey(),0L)!=entry.getLongValue())throw new IllegalArgumentException("Unexpected native cycle wait");
-        for(int i=0;i<2;i++){var progress=job(cpu).eae2$tasks().get(recipes.get(i));long value=progress==null?0:((GrowthProgressAccessor)progress).eae2$value();if(value!=result.ledger.remainingOperations(i))throw new IllegalArgumentException("Cycle task counts disagree");}
+        for(int i=0;i<recipes.size();i++){var progress=job(cpu).eae2$tasks().get(recipes.get(i));long value=progress==null?0:((GrowthProgressAccessor)progress).eae2$value();if(value!=result.ledger.remainingOperations(i))throw new IllegalArgumentException("Cycle task counts disagree");}
         return result;
     }
 }

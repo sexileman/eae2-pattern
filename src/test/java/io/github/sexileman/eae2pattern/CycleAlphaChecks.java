@@ -59,7 +59,57 @@ public final class CycleAlphaChecks {
         refused(()->new GrowthLedger<String>(stages,new GrowthLedger.Snapshot<>(0,-1,0,Map.of())),"negative persisted phase remainder is refused");
         refused(()->new GrowthLedger<String>(stages,new GrowthLedger.Snapshot<>(2,0,1,Map.of("B",1L))),"completed state cannot retain in-flight materials");
         var independent=new GrowthLedger<String>(stages);refused(()->independent.sent(65,Map.of("B",130L)),"oversized batches are refused before changing the ledger");check(independent.batch()==64,"rejected batch does not advance progress");
+        consumers();
         return checks;
+    }
+    private static void consumers(){
+        var demand=GrowthDemand.consumer(11,10,2,3,1,0,1,0,1,2,1,2);
+        check(demand.times()==2&&demand.demandA()==4&&demand.demandB()==6,"C demand rounds whole crafts and sums both loop inputs");
+        var loop=TwoRecipeGrowth.plan(1,2,1,2,demand.initialA(),demand.initialB(),demand.goalA(),demand.goalB());
+        replay(loop,1,2,1,2,demand.initialA(),demand.initialB(),demand.goalA(),demand.goalB());
+        var phases=GrowthDemand.appendConsumer(loop,demand.times());var counts=GrowthDemand.counts(phases,3);
+        check(phases.get(phases.size()-1).recipe()==2&&counts[2]==2,"C is scheduled only after both A and B goals are ready");
+        check(loop.finalA()-demand.demandA()>=1&&loop.finalB()-demand.demandB()>=0,"C consumption leaves the protected startup stock intact");
+        var budget=GrowthMaterials.budget(List.of(Map.of("A",1L,"X",3L),Map.of("B",1L,"Y",2L),Map.of("A",2L,"B",3L,"X",1L,"Z",5L)),counts,Set.of("A","B"),Map.of("A",demand.initialA()));
+        check(budget.get("X")==counts[0]*3+2&&budget.get("Y")==counts[1]*2&&budget.get("Z")==10,"combined budget includes external costs from the loop and root C");
+        check(budget.get("A")==demand.initialA()&&!budget.containsKey("B"),"C internal requirements are produced in the loop rather than falsely reserved twice");
+        check(GrowthMaterials.missing(budget,k->k.equals("Z")?9:budget.get(k)).equals(Map.of("Z",1L)),"one missing C-only external material blocks the entire task");
+        var abundantA=GrowthDemand.consumer(11,10,2,3,1,0,100,0,1,2,1,2);
+        check(abundantA.initialA()==8,"existing surplus A can pay the conversions needed for B without withdrawing all stock");
+        var fromA=TwoRecipeGrowth.plan(1,2,1,2,abundantA.initialA(),abundantA.initialB(),abundantA.goalA(),abundantA.goalB());
+        var fromACounts=GrowthDemand.counts(GrowthDemand.appendConsumer(fromA,2),3);
+        check(fromACounts[0]==3&&fromACounts[1]==0,"existing A avoids unnecessary B-to-A growth and its external cost");
+        var abundantB=GrowthDemand.consumer(11,10,2,3,1,0,1,100,1,2,1,2);
+        check(abundantB.initialB()==8,"existing B may supply both the consumer and conversion inputs for missing A");
+        var fromB=TwoRecipeGrowth.plan(1,2,1,2,abundantB.initialA(),abundantB.initialB(),abundantB.goalA(),abundantB.goalB());
+        var fromBCounts=GrowthDemand.counts(GrowthDemand.appendConsumer(fromB,2),3);
+        check(fromBCounts[0]==0&&fromBCounts[1]==2,"surplus B is used without unnecessary A-to-B growth");
+        var single=GrowthDemand.consumer(7,2,3,0,1,0,1,0,1,2,1,2);
+        check(single.times()==4&&single.demandA()==12&&single.demandB()==0,"one-loop-input C also uses whole recipe quantities");
+        refused(()->GrowthDemand.consumer(2,1,Long.MAX_VALUE,1,1,0,1,0,1,2,1,2),"C input multiplication overflow is refused");
+        refused(()->GrowthDemand.consumer(1,1,0,0,1,0,1,0,1,2,1,2),"unrelated root consumer cannot be attached to a cycle");
+        refused(()->GrowthDemand.counts(List.of(new TwoRecipeGrowth.Stage(2,1)),2),"legacy two-recipe jobs cannot reference a third recipe");
+        refused(()->GrowthDemand.appendConsumer(loop,TwoRecipeGrowth.MAX_OPERATIONS),"root operations count toward the same execution budget");
+        var ledger=new GrowthLedger<String>(phases);
+        int phaseIndex=0;boolean enteredRoot=false;
+        while(!ledger.done()){
+            ledger.advance();if(ledger.done())break;
+            int recipe=ledger.recipe();long batch=ledger.batch();String key=recipe==0?"B":recipe==1?"A":"C";
+            if(recipe==2){enteredRoot=true;check(ledger.remainingOperations(0)==0&&ledger.remainingOperations(1)==0,"root phase begins only after all loop operations have completed");}
+            ledger.sent(batch,Map.of(key,batch));
+            var restored=new GrowthLedger<String>(phases,ledger.snapshot());
+            check(restored.waiting()&&restored.recipe()==recipe&&restored.batch()==0,"three-recipe snapshots preserve in-flight stage identity");
+            restored.receive(key,batch);ledger=restored;phaseIndex++;
+            if(phaseIndex>1000)throw new AssertionError("consumer ledger failed to finish");
+        }
+        check(enteredRoot&&ledger.done()&&ledger.remainingOperations(2)==0,"consumer ledger completes only after C has physically returned");
+        for(int aStock=1;aStock<=7;aStock++)for(int bStock=0;bStock<=7;bStock++)for(int aNeed=0;aNeed<=3;aNeed++)for(int bNeed=0;bNeed<=3;bNeed++)if(aNeed+bNeed>0){
+            var request=GrowthDemand.consumer(13,4,aNeed,bNeed,1,0,aStock,bStock,1,2,1,2);
+            var growth=TwoRecipeGrowth.plan(1,2,1,2,request.initialA(),request.initialB(),request.goalA(),request.goalB());
+            check(request.initialA()<=aStock&&request.initialB()<=bStock,"consumer reservations cannot exceed actual stock");
+            check(growth.finalA()>=request.demandA()+1&&growth.finalB()>=request.demandB(),"varying C demands and starting stocks satisfy both inputs plus startup reserve");
+            check(GrowthDemand.counts(GrowthDemand.appendConsumer(growth,request.times()),3)[2]==4,"every C test case executes the rounded root craft count");
+        }
     }
     private static void replay(TwoRecipeGrowth.Result result,long ai,long bo,long bi,long ao,long seedA,long seedB,long goalA,long goalB){
         long a=seedA,b=seedB,operations=0;
