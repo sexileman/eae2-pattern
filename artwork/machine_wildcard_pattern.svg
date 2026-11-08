@@ -1,22 +1,18 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32" shape-rendering="crispEdges">
-<!-- Original AE2-family slanted card geometry; coordinates and artwork authored for EAE2 Pattern. -->
-<polygon points="0,10 20,2 22,2 32,14 32,22 16,30 14,30 0,18" fill="#53525C"/>
-<polygon points="2,16 14,24 30,16 30,21 15,28 2,18" fill="#777782"/>
-<polygon points="4,18 14,24 28,18 28,21 15,27 4,20" fill="#A0A0AA"/>
-<polygon points="2,10 20,4 30,14 14,23 2,15" fill="#BFC3CC"/>
-<polygon points="2,10 20,4 22,6 5,12 2,12" fill="#EDF0F3"/>
-<polygon points="5,13 20,7 27,14 14,21" fill="#777483"/>
-<polygon points="7,13 20,8 25,14 14,19" fill="#393844"/>
-<polygon points="2,14 5,13 13,21 10,22 2,17" fill="#326B78"/>
-<polygon points="3,14 5,14 12,21 10,21" fill="#70B8C5"/>
-<polygon points="5,14 6,14 12,20 11,20" fill="#B8E6E8"/>
-<!-- Six branches of the wildcard mark, with an offset highlight for a crisp small-scale silhouette. -->
-<polygon points="15,10 17,9 19,16 17,17" fill="#8A80A7"/>
-<polygon points="11,12 12,10 22,14 21,16" fill="#8A80A7"/>
-<polygon points="12,16 20,10 22,11 14,18" fill="#8A80A7"/>
-<polygon points="15,12 17,11 19,13 17,15" fill="#D2C6E7"/>
-<polygon points="14,23 30,14 30,16 15,25" fill="#EDF0F3"/>
-<polygon points="17,25 27,20 27,22 18,27" fill="#656772"/>
-<polygon points="20,24 22,23 22,25 20,26" fill="#B5B8B6"/>
-<polygon points="24,22 26,21 26,23 24,24" fill="#B5B8B6"/>
+<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 16 16" shape-rendering="crispEdges">
+<!-- Original 16px-grid thin card. Shared neutral casing; small wildcard inlay identifies state. -->
+<polygon points="0,5 10,1 12,2 16,7 16,11 8,15 6,14 0,9" fill="#797779"/>
+<polygon points="1,8 7,12 15,8 15,11 8,14 1,9" fill="#969494"/>
+<polygon points="2,9 7,12 14,9 14,11 8,13" fill="#B2B0B0"/>
+<polygon points="1,5 10,2 15,7 7,11 1,8" fill="#D0CFCF"/>
+<polygon points="1,5 10,2 11,3 3,6 1,6" fill="#E8E7E7"/>
+<polygon points="4,6 10,3 13,7 7,10" fill="#8A8789"/>
+<polygon points="5,6 10,4 12,7 7,9" fill="#575456"/>
+<polygon points="1,7 2,6 6,10 5,11 1,9" fill="#386A75"/>
+<polygon points="2,7 3,7 6,10 5,10" fill="#6CA8B4"/>
+<polygon points="7,5 8,5 9,8 8,8" fill="#858589"/>
+<polygon points="6,6 7,5 11,7 10,8" fill="#858589"/>
+<polygon points="6,8 10,5 11,6 7,9" fill="#858589"/>
+<polygon points="7,6 8,6 9,7 8,8" fill="#ABACAF"/>
+<polygon points="7,11 15,7 15,8 8,12" fill="#E8E7E7"/>
+<polygon points="9,12 14,10 14,11 10,13" fill="#777575"/>
 </svg>
