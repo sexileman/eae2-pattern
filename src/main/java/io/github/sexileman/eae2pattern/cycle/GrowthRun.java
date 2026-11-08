@@ -16,7 +16,7 @@ public final class GrowthRun {
     private final List<IPatternDetails> recipes;
     private final List<TwoRecipeGrowth.Stage> stages;
     private GrowthLedger<AEKey> ledger;
-    private final long[] batchLimits={64,64,64};
+    private final long[] batchLimits={TwoRecipeGrowth.MAX_OPERATIONS,TwoRecipeGrowth.MAX_OPERATIONS,TwoRecipeGrowth.MAX_OPERATIONS};
     public GrowthRun(GrowthCraftingPlan plan){recipes=plan.recipes();stages=plan.stages();GrowthDemand.counts(stages,recipes.size());ledger=new GrowthLedger<>(stages);}
     private GrowthRun(List<IPatternDetails> recipes,List<TwoRecipeGrowth.Stage> stages){this.recipes=List.copyOf(recipes);this.stages=List.copyOf(stages);GrowthDemand.counts(stages,recipes.size());ledger=new GrowthLedger<>(stages);}
     private static GrowthJobAccessor job(GrowthCpuView cpu){return (GrowthJobAccessor)(Object)cpu.eae2$job();}
@@ -25,7 +25,16 @@ public final class GrowthRun {
         ledger.advance();
         if(ledger.done()){deliver(cpu);return 0;}
         var job=job(cpu);var pattern=recipes.get(ledger.recipe());
-        var dispatch=GrowthBatchBridge.prepare(pattern,Math.min(ledger.batch(),batchLimits[ledger.recipe()]));
+        var perCraft=new HashMap<AEKey,Long>();
+        for(var input:pattern.getInputs()){
+            var options=input.getPossibleInputs();
+            if(options.length!=1)throw new IllegalStateException("Cycle input alternatives changed");
+            perCraft.merge(options[0].what(),Math.multiplyExact(options[0].amount(),input.getMultiplier()),Math::addExact);
+        }
+        long affordable=GrowthBatchSizing.affordable(Math.min(ledger.batch(),batchLimits[ledger.recipe()]),perCraft,
+                key->cpu.eae2$inventory().extract(key,Long.MAX_VALUE,Actionable.SIMULATE));
+        if(affordable==0)return 0;
+        var dispatch=GrowthBatchBridge.prepare(pattern,affordable);
         long batch=dispatch.times();var progress=(GrowthProgressAccessor)job.eae2$tasks().get(pattern);
         if(progress==null||progress.eae2$value()<batch)throw new IllegalStateException("Cycle task counts disagree");
         var outputs=new KeyCounter();var containers=new KeyCounter();
@@ -42,7 +51,7 @@ public final class GrowthRun {
                 if(provider.isBusy())continue;
                 attempted=true;
                 if(provider.pushPattern(dispatch.pattern(),inputs)){
-                    sent=true;batchLimits[ledger.recipe()]=Math.min(64,batch*2);energy.extractAEPower(power,Actionable.MODULATE,PowerMultiplier.CONFIG);
+                    sent=true;batchLimits[ledger.recipe()]=TwoRecipeGrowth.MAX_OPERATIONS;energy.extractAEPower(power,Actionable.MODULATE,PowerMultiplier.CONFIG);
                     var expected=new HashMap<AEKey,Long>();for(var output:outputs)expected.put(output.getKey(),output.getLongValue());ledger.sent(batch,expected);progress.eae2$value(progress.eae2$value()-batch);
                     if(progress.eae2$value()==0)job.eae2$tasks().remove(pattern);
                     for(var output:outputs){job.eae2$waiting().insert(output.getKey(),output.getLongValue(),Actionable.MODULATE);}
@@ -98,7 +107,7 @@ public final class GrowthRun {
         for(int i=0;i<phases.size();i++){var row=phases.getCompound(i);var phase=new TwoRecipeGrowth.Stage(row.getInt("recipe"),row.getLong("times"));count=Math.addExact(count,phase.times());if(count>TwoRecipeGrowth.MAX_OPERATIONS)throw new IllegalArgumentException("Too many cycle operations");stages.add(phase);}
         var result=new GrowthRun(recipes,stages);
         int stage=tag.getInt("stage");long remaining=tag.getLong("remaining"),inFlight=tag.getLong("in_flight");
-        var waiting=tag.getList("awaiting",10);if(waiting.size()>64||stage<0||stage>stages.size()||inFlight<0||inFlight>64)throw new IllegalArgumentException("Invalid pending phase");
+        var waiting=tag.getList("awaiting",10);if(waiting.size()>64||stage<0||stage>stages.size()||inFlight<0||inFlight>TwoRecipeGrowth.MAX_OPERATIONS)throw new IllegalArgumentException("Invalid pending phase");
         var allowed=new KeyCounter();if(stage<stages.size())for(var output:recipes.get(stages.get(stage).recipe()).getOutputs())allowed.add(output.what(),Math.multiplyExact(output.amount(),inFlight));
         var awaiting=new HashMap<AEKey,Long>();
         for(int i=0;i<waiting.size();i++){var stack=GenericStack.readTag(waiting.getCompound(i));if(stack==null||stack.amount()<=0||stack.amount()>allowed.get(stack.what())||awaiting.putIfAbsent(stack.what(),stack.amount())!=null)throw new IllegalArgumentException("Invalid pending cycle output");}

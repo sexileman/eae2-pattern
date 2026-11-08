@@ -40,11 +40,35 @@ public final class CycleAlphaChecks {
             replay(TwoRecipeGrowth.plan(ai,bo,bi,ao,seedA,0,seedA+17,13),ai,bo,bi,ao,seedA,0,seedA+17,13);
         }
         var plain=(appeng.api.crafting.IPatternDetails)java.lang.reflect.Proxy.newProxyInstance(CycleAlphaChecks.class.getClassLoader(),new Class[]{appeng.api.crafting.IPatternDetails.class},(object,method,args)->null);
+        var testKey=new appeng.api.stacks.AEKey(){
+            public appeng.api.stacks.AEKeyType getType(){return null;}
+            public appeng.api.stacks.AEKey dropSecondary(){return this;}
+            public net.minecraft.nbt.CompoundTag toTag(){return new net.minecraft.nbt.CompoundTag();}
+            public Object getPrimaryKey(){return this;}
+            public net.minecraft.resources.ResourceLocation getId(){return new net.minecraft.resources.ResourceLocation("test:batch");}
+            public void writeToPacket(net.minecraft.network.FriendlyByteBuf buffer){}
+            protected net.minecraft.network.chat.Component computeDisplayName(){return net.minecraft.network.chat.Component.literal("batch");}
+            public void addDrops(long amount,List<net.minecraft.world.item.ItemStack> drops,net.minecraft.world.level.Level level,net.minecraft.core.BlockPos position){}
+        };
+        var input=new appeng.api.crafting.IPatternDetails.IInput(){
+            public appeng.api.stacks.GenericStack[] getPossibleInputs(){return new appeng.api.stacks.GenericStack[]{new appeng.api.stacks.GenericStack(testKey,2)};}
+            public long getMultiplier(){return 3;}
+            public boolean isValid(appeng.api.stacks.AEKey key,net.minecraft.world.level.Level level){return true;}
+            public appeng.api.stacks.AEKey getRemainingKey(appeng.api.stacks.AEKey key){return null;}
+        };
+        var source=new appeng.api.crafting.IPatternDetails(){
+            public appeng.api.stacks.AEItemKey getDefinition(){return null;}
+            public IInput[] getInputs(){return new IInput[]{input};}
+            public appeng.api.stacks.GenericStack[] getOutputs(){return new appeng.api.stacks.GenericStack[]{new appeng.api.stacks.GenericStack(testKey,7)};}
+        };
+        var scaled=new GrowthBatchPattern(source,10000);
+        check(scaled.original()==source&&scaled.getInputs()[0].getMultiplier()==30000&&scaled.getInputs()[0].getPossibleInputs()[0].amount()==2,"scaled descriptor matches all six input units per craft without changing the registered pattern");
+        check(scaled.getOutputs()[0].amount()==70000&&source.getOutputs()[0].amount()==7,"batch output quota scales exactly and leaves original unchanged");
         var originalBatch=GrowthBatchBridge.prepare(plain,64);check(originalBatch.pattern()==plain&&originalBatch.times()==1,"unknown or vanilla provider path never receives artificially oversized pattern inputs");
-        refused(()->GrowthBatchBridge.prepare(plain,65),"batch bridge remains bounded");
+        refused(()->GrowthBatchBridge.prepare(plain,TwoRecipeGrowth.MAX_OPERATIONS+1),"batch bridge remains bounded");
         var stages=List.of(new TwoRecipeGrowth.Stage(0,65),new TwoRecipeGrowth.Stage(1,3));
         var ledger=new GrowthLedger<String>(stages);
-        check(ledger.batch()==64,"phase batch obeys bounded scaling");
+        check(ledger.batch()==65,"phase batch obeys bounded scaling");
         ledger.sent(64,Map.of("B",128L,"side",64L));
         check(ledger.waiting()&&ledger.batch()==0&&ledger.remainingOperations(0)==1,"future inputs are not credited when a batch is dispatched");
         check(ledger.expected("B",1000)==128&&ledger.snapshot().awaiting().get("B")==128,"simulation does not consume a return quota");
@@ -58,7 +82,14 @@ public final class CycleAlphaChecks {
         var done=new GrowthLedger<String>(stages,restored.snapshot());check(done.done()&&done.remainingOperations(0)==0&&done.remainingOperations(1)==0,"completed ledger restores without replaying operations");
         refused(()->new GrowthLedger<String>(stages,new GrowthLedger.Snapshot<>(0,-1,0,Map.of())),"negative persisted phase remainder is refused");
         refused(()->new GrowthLedger<String>(stages,new GrowthLedger.Snapshot<>(2,0,1,Map.of("B",1L))),"completed state cannot retain in-flight materials");
-        var independent=new GrowthLedger<String>(stages);refused(()->independent.sent(65,Map.of("B",130L)),"oversized batches are refused before changing the ledger");check(independent.batch()==64,"rejected batch does not advance progress");
+        var independent=new GrowthLedger<String>(stages);refused(()->independent.sent(66,Map.of("B",130L)),"oversized batches are refused before changing the ledger");check(independent.batch()==65,"rejected batch does not advance progress");
+        check(GrowthBatchSizing.affordable(10000,Map.of("A",1L),k->10000)==10000,"ten thousand available crafts dispatch without a 64-operation cap");
+        check(GrowthBatchSizing.affordable(10000,Map.of("A",2L,"fluid",1000L),k->k.equals("A")?20000:3500)==3,"fluid stock bounds the same batch as item stock");
+        check(GrowthBatchSizing.affordable(10000,Map.of("A",3L),k->8)==2,"combined duplicate-key input demand bounds affordability");
+        var bigLedger=new GrowthLedger<String>(List.of(new TwoRecipeGrowth.Stage(0,10000)));
+        bigLedger.sent(10000,Map.of("B",20000L));
+        var bigRestored=new GrowthLedger<String>(List.of(new TwoRecipeGrowth.Stage(0,10000)),bigLedger.snapshot());
+        check(bigRestored.waiting()&&bigRestored.receive("B",20000)==20000,"large in-flight batch persists exact return quotas");
         consumers();
         return checks;
     }

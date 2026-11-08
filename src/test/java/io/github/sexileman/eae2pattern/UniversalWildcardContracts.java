@@ -13,6 +13,12 @@ import javax.tools.ToolProvider;
 public final class UniversalWildcardContracts {
     private static int checks;
     private static final String BRIDGE = "io/github/sexileman/eae2pattern/compat/gtl/GtlWildcardBridge";
+    private static void providerBatchTarget(ClassNode provider){
+        int targets=0;
+        for(var method:provider.methods)if(method.name.equals("pushPattern"))for(var insn:method.instructions)
+            if(insn instanceof MethodInsnNode call&&call.owner.equals("java/util/List")&&call.name.equals("contains")&&call.desc.equals("(Ljava/lang/Object;)Z"))targets++;
+        check(targets==1,"provider has one precise original-pattern registration guard for phase batches");
+    }
     private static void check(boolean value, String message) { if (!value) throw new AssertionError(message); checks++; }
     private static byte[] bytes(ZipFile zip, String path) throws Exception {
         var entry = zip.getEntry(path); if (entry == null) throw new AssertionError("Missing " + path);
@@ -21,6 +27,9 @@ public final class UniversalWildcardContracts {
     private static ClassNode node(byte[] bytes) { var n = new ClassNode(); new ClassReader(bytes).accept(n, 0); return n; }
     public static void main(String[] args) throws Exception {
         Path own = Path.of(args[0]), mods = Path.of(args[1]);
+        try(var stream=appeng.helpers.patternprovider.PatternProviderLogic.class.getResourceAsStream("PatternProviderLogic.class")){
+            providerBatchTarget(node(stream.readAllBytes()));
+        }
         byte[] bridge;
         try (var app = new ZipFile(own.toFile())) {
             check(Collections.list(app.entries()).stream().noneMatch(e -> e.getName().endsWith(".jar") || e.getName().startsWith("org/leodreamer/") || e.getName().startsWith("org/gtlcore/")), "universal jar embeds neither original wildcard nor GTL classes");
@@ -45,7 +54,7 @@ public final class UniversalWildcardContracts {
             }
             check(providerRoute&&nativeInputs&&physicalReserve,"growth transport reuses native provider routing, exact input extraction and CPU inventory");
             var mixins=new String(bytes(app,"eae2_pattern.mixins.json"),java.nio.charset.StandardCharsets.UTF_8);
-            for(String adapter:List.of("GrowthCpuMixin","GrowthJobAccessor","GrowthProgressAccessor","GrowthTrackerInvoker","GrowthPlanMixin"))check(mixins.contains(adapter),"complete experimental CPU adapter is packaged: "+adapter);
+            for(String adapter:List.of("GrowthCpuMixin","GrowthJobAccessor","GrowthProgressAccessor","GrowthTrackerInvoker","GrowthPlanMixin","GrowthProviderBatchMixin"))check(mixins.contains(adapter),"complete experimental CPU adapter is packaged: "+adapter);
             var encoder=node(bytes(app,"io/github/sexileman/eae2pattern/pattern/PatternEncoder.class"));
             boolean nativeFluids=false;
             for(var method:encoder.methods)if(method.name.equals("encodeCrafting"))for(var instruction:method.instructions)
@@ -130,6 +139,7 @@ public final class UniversalWildcardContracts {
             check(UniversalMixinPlugin.supportedCycles(tree,process,calc),"installed AE2 planner supports the diagnostic hook set");
             var nativePlan=node(bytes(ae,"appeng/crafting/CraftingPlan.class"));
             check(UniversalMixinPlugin.supportedGrowthPlan(nativePlan),"installed AE2 supports the native phase attachment carrier");
+            providerBatchTarget(node(bytes(ae,"appeng/helpers/patternprovider/PatternProviderLogic.class")));
             nativePlan.methods.removeIf(m->m.name.equals("<init>"));check(!UniversalMixinPlugin.supportedGrowthPlan(nativePlan),"incompatible native plan disables experimental attachments");
             var cpu=node(bytes(ae,"appeng/crafting/execution/CraftingCpuLogic.class"));var job=node(bytes(ae,"appeng/crafting/execution/ExecutingCraftingJob.class"));var progress=node(bytes(ae,"appeng/crafting/execution/ExecutingCraftingJob$TaskProgress.class"));var tracker=node(bytes(ae,"appeng/crafting/execution/ElapsedTimeTracker.class"));
             check(UniversalMixinPlugin.supportedGrowth(cpu,job,progress,tracker),"installed AE2 supports the complete experimental CPU hook set");
