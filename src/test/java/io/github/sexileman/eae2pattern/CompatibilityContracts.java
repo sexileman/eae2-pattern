@@ -32,6 +32,17 @@ public final class CompatibilityContracts {
     }
     public static void main(String[] args) throws Exception {
         Path mods = Path.of(args[0]);
+        Path treeJar=jar(mods,n->n.startsWith("ae2ct-")&&n.endsWith(".jar"));
+        var summary=read(treeJar,"com/neuvillette/ae2ct/mixin/AE2CraftingPlanSummary");
+        boolean concreteCast=false;for(var method:summary.methods)for(var instruction:method.instructions)
+            if(instruction instanceof TypeInsnNode type&&type.getOpcode()==org.objectweb.asm.Opcodes.CHECKCAST&&type.desc.equals("appeng/crafting/CraftingPlan"))concreteCast=true;
+        check(concreteCast,"installed AE2CT requires a concrete native plan in its preview summary");
+        try(var treeLoader=new java.net.URLClassLoader(new java.net.URL[]{treeJar.toUri().toURL()},CompatibilityContracts.class.getClassLoader())){
+            var helper=treeLoader.loadClass("com.neuvillette.ae2ct.api.RecipeHelper");
+            var metadata=new io.github.sexileman.eae2pattern.cycle.GrowthCraftingPlan(null,42,new appeng.api.stacks.KeyCounter(),java.util.Map.of(),java.util.List.of(),java.util.List.of());
+            Object display=helper.getMethod("fromCraftingPlan",appeng.crafting.CraftingPlan.class).invoke(null,metadata.nativePlan());
+            check(display!=null&&helper.isInstance(display),"real installed AE2CT summary builder accepts the native experimental plan without ClassCastException");
+        }
         Path wildcard = args.length > 1 ? Path.of(args[1])
                 : jar(mods, n -> n.toLowerCase().contains("wildcard_pattern") && n.endsWith(".jar"));
         String logic = "org/leodreamer/wildcard_pattern/wildcard/WildcardPatternLogic";

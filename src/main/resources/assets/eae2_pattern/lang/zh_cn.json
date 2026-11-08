@@ -427,7 +427,7 @@
   "eae2_pattern.cycle.header": "最近合成：%s × %s · %s",
   "eae2_pattern.cycle.pattern": "样板：%s → %s",
   "eae2_pattern.cycle.limited": "循环诊断达到预算上限，结果可能不完整。",
-  "eae2_pattern.cycle.scope": "仅记录本次 AE2 规划遇到的候选循环；不代表它一定导致缺料，也尚未改变循环执行方式。",
+  "eae2_pattern.cycle.scope": "仅记录本次规划遇到的候选循环；实验执行状态请以循环实验提示和 CPU 进度为准。",
   "eae2_pattern.error.unsupported_ingredient": "配方包含无法编码的材料，已跳过整条配方。",
   "eae2_pattern.error.inspection_limited": "样板检查达到数量上限，结果可能不完整。",
   "eae2_pattern.workbench.slot_unknown_output": "产出概率未确认",

@@ -85,10 +85,14 @@ public final class UniversalMixinPlugin implements IMixinConfigPlugin {
             &&field(job,"link","Lappeng/crafting/CraftingLink;")&&field(job,"finalOutput","Lappeng/api/stacks/GenericStack;")&&field(job,"remainingAmount","J")
             &&field(progress,"value","J")&&method(tracker,"decrementItems","(JLappeng/api/stacks/AEKeyType;)V");
     }
+    public static boolean supportedGrowthPlan(ClassNode plan){
+        return plan!=null&&method(plan,"<init>","(Lappeng/api/stacks/GenericStack;JZZLappeng/api/stacks/KeyCounter;Lappeng/api/stacks/KeyCounter;Lappeng/api/stacks/KeyCounter;Ljava/util/Map;)V")
+            &&method(plan,"finalOutput","()Lappeng/api/stacks/GenericStack;")&&method(plan,"patternTimes","()Ljava/util/Map;");
+    }
     @Override public boolean shouldApplyMixin(String target, String mixin) {
-        if(mixin.endsWith("GrowthCpuMixin")||mixin.endsWith("GrowthJobAccessor")||mixin.endsWith("GrowthProgressAccessor")||mixin.endsWith("GrowthTrackerInvoker")){
+        if(mixin.endsWith("GrowthPlanMixin")||mixin.endsWith("GrowthCpuMixin")||mixin.endsWith("GrowthJobAccessor")||mixin.endsWith("GrowthProgressAccessor")||mixin.endsWith("GrowthTrackerInvoker")){
             try{
-                if(growthSupported==null){var provider=bytecode.get();growthSupported=supportedGrowth(provider.getClassNode("appeng.crafting.execution.CraftingCpuLogic"),provider.getClassNode("appeng.crafting.execution.ExecutingCraftingJob"),provider.getClassNode("appeng.crafting.execution.ExecutingCraftingJob$TaskProgress"),provider.getClassNode("appeng.crafting.execution.ElapsedTimeTracker"));
+                if(growthSupported==null){var provider=bytecode.get();growthSupported=supportedGrowthPlan(provider.getClassNode("appeng.crafting.CraftingPlan"))&&supportedGrowth(provider.getClassNode("appeng.crafting.execution.CraftingCpuLogic"),provider.getClassNode("appeng.crafting.execution.ExecutingCraftingJob"),provider.getClassNode("appeng.crafting.execution.ExecutingCraftingJob$TaskProgress"),provider.getClassNode("appeng.crafting.execution.ElapsedTimeTracker"));
                     io.github.sexileman.eae2pattern.cycle.CycleRuntimeGate.supported=growthSupported;
                     if(!growthSupported)com.mojang.logging.LogUtils.getLogger().warn("Experimental cycle execution disabled together: unsupported AE2 CPU shape");
                 }return growthSupported;

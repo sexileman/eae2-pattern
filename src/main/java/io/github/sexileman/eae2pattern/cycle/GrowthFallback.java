@@ -45,8 +45,12 @@ public final class GrowthFallback {
             if(!missing.isEmpty()){var entry=missing.entrySet().iterator().next();reason="external";detail=entry.getKey().getId()+" / "+entry.getValue();continue;}
             var used=new KeyCounter();budget.forEach(used::add);
             long bytes=Math.addExact(1024+64L*plan.stages().size()+64L*used.size(),Math.multiplyExact(plan.operations(),8));
+            var growth=new GrowthCraftingPlan(target,bytes,used,Map.of(recipes.get(0),times[0],recipes.get(1),times[1]),recipes,plan.stages());
+            var nativePlan=growth.nativePlan();
+            if(!((Object)nativePlan instanceof GrowthPlanView attached))throw new IllegalStateException("Native cycle plan attachment unavailable");
+            attached.eae2$growthPlan(growth);
             notify(level,requester,"ready",Component.literal(""+plan.stages().size()));
-            return new GrowthCraftingPlan(target,bytes,used,Map.of(recipes.get(0),times[0],recipes.get(1),times[1]),recipes,plan.stages());
+            return nativePlan;
         }catch(IllegalArgumentException|ArithmeticException unsupported){reason="unsupported";}
         if(!capture.candidates().isEmpty())notify(level,requester,reason,Component.literal(detail));
         return original;

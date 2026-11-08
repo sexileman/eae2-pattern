@@ -427,7 +427,7 @@
   "eae2_pattern.cycle.header": "Latest calculation: %s × %s · %s",
   "eae2_pattern.cycle.pattern": "Pattern: %s → %s",
   "eae2_pattern.cycle.limited": "Cycle diagnostics reached their budget; results may be incomplete.",
-  "eae2_pattern.cycle.scope": "Records candidate cycles encountered by this AE2 calculation; they do not necessarily cause missing items. Execution is unchanged.",
+  "eae2_pattern.cycle.scope": "Candidate cycles from this calculation only. Experimental execution is indicated by cycle-alpha messages and CPU progress.",
   "eae2_pattern.error.unsupported_ingredient": "Recipe contains an unsupported ingredient; the entire recipe was skipped.",
   "eae2_pattern.error.inspection_limited": "Pattern inspection reached its limit; results may be partial.",
   "eae2_pattern.workbench.slot_unknown_output": "Output probability unverified",

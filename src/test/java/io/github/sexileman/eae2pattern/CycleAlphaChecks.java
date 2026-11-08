@@ -8,6 +8,11 @@ public final class CycleAlphaChecks {
     private static void check(boolean value,String message){checks++;if(!value)throw new AssertionError(message);}
     private static void refused(Runnable action,String message){boolean rejected=false;try{action.run();}catch(IllegalArgumentException|ArithmeticException expected){rejected=true;}check(rejected,message);}
     public static int run(){
+        var used=new appeng.api.stacks.KeyCounter();
+        var metadata=new GrowthCraftingPlan(null,42,used,Map.of(),List.of(),List.of());
+        var nativePlan=metadata.nativePlan();
+        check(appeng.crafting.CraftingPlan.class.cast(nativePlan)==nativePlan,"experimental plan is the exact concrete AE2 type required by preview consumers");
+        check(nativePlan.usedItems()==used&&nativePlan.bytes()==42&&!nativePlan.simulation()&&nativePlan.patternTimes().isEmpty(),"native plan preserves costs and execution fields independently of phase metadata");
         var large=TwoRecipeGrowth.plan(1,2,1,2,1,0,10001,0);
         replay(large,1,2,1,2,1,0,10001,0);
         check(large.stages().size()<40,"large target uses growth phases instead of one stage per item");

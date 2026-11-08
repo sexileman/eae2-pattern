@@ -15,7 +15,8 @@
     "GrowthJobAccessor",
     "GrowthProgressAccessor",
     "GrowthTrackerInvoker",
-    "GrowthCpuMixin"
+    "GrowthCpuMixin",
+    "GrowthPlanMixin"
   ],
   "injectors": {
     "defaultRequire": 1

@@ -16,7 +16,9 @@ public abstract class CraftingCycleCalculationMixin implements CycleCalculation 
     @Inject(method="run",at=@At("RETURN"),cancellable=true)
     private void eae2$reportCycles(CallbackInfoReturnable<ICraftingPlan> cir){
         try {
-            cir.setReturnValue(GrowthFallback.replace(level,simRequester,networkInv,cir.getReturnValue(),eae2$capture));
+            var original=cir.getReturnValue();
+            var replacement=GrowthFallback.replace(level,simRequester,networkInv,original,eae2$capture);
+            if(replacement!=original)cir.setReturnValue(replacement);
             CycleReports.publish(level,simRequester,cir.getReturnValue(),eae2$capture);
         }
         catch(RuntimeException | LinkageError diagnosticFailure){io.github.sexileman.eae2pattern.EAE2Pattern.LOGGER.warn("Cycle experimental planning/diagnostics hook unavailable",diagnosticFailure);}

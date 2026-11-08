@@ -1,3 +1,5 @@
+> alpha.2 已修复整合包 AE2CT 的原生计划强制转换异常。构件更新为 `eae2-pattern-1.20.1-6.6.0-cycle-alpha.2.jar`。启用开关和其余使用方式不变。
+
 # 循环增殖实验版 alpha.1
 
 版本：6.6.0-cycle-alpha.1。构件：eae2-pattern-1.20.1-6.6.0-cycle-alpha.1.jar。
@@ -56,3 +58,14 @@ experimental_execution = true
 ## 验证边界
 
 自动检查包含独立整数库存重放、非对称配方取整、全量外部预算/缺一件/溢出、回流配额、部分返回、保存快照及任务阶段一致性；并检查编译用 AE2 15.2.16 与整合包 AE2 15.4.10 的 Mixin 字段和方法形状。未启动实际 Forge 世界，尚未验证 Mixin 在整合包全部转换后的应用结果、实际机器传输和世界重载。这是首次运行时实验包，不应当作已完成的通用循环合成支持。
+
+
+## alpha.2 类型兼容修复
+
+用户实测已进入 6 阶段循环规划，但在预览摘要阶段收到 GrowthCraftingPlan→CraftingPlan 的 ClassCastException。已直接核查整合包 ae2ct-1.20.1-1.1.1.jar：AE2CraftingPlanSummary.buildEX 对 ICraftingPlan 做 CHECKCAST CraftingPlan，并调用 RecipeHelper.fromCraftingPlan(CraftingPlan)。
+
+现在返回实际的 appeng.crafting.CraftingPlan，循环描述作为对象附件保存，CPU 从该附件取得阶段；不用全局缓存，不移除 AE2CT，也不修改整合包 jar。普通原生计划附件为 null。附件适配与 CPU 适配整体探测，无法支持时不产生实验计划。
+
+新增检查：原生强制类型转换、计划成本字段保留、实际 AE2CT RecipeHelper.fromCraftingPlan 调用、AE2 15.2.16/15.4.10 的计划载体形状与完整适配包装。仍未启动完整 Forge 世界，真实 Mixin 应用和整个任务执行仍需游戏内验收。
+
+alpha.2 自动构建通过：4520 项回归检查、123 项通用包装/接口检查和 37 项整合包接口检查，其中实际调用所提供 AE2CT jar 的摘要构造方法验证原生类型兼容。此验证不包含真实世界内的完整 CPU 执行。

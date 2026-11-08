@@ -30,7 +30,7 @@ public abstract class GrowthCpuMixin implements GrowthCpuView {
     @Invoker("finishJob") public abstract void eae2$finish(boolean success);
     @Inject(method="trySubmitJob",at=@At("RETURN"))
     private void eae2$startGrowth(IGrid grid,ICraftingPlan plan,IActionSource source,ICraftingRequester requester,CallbackInfoReturnable<ICraftingSubmitResult> ci){
-        if(plan instanceof GrowthCraftingPlan growth&&ci.getReturnValue().successful()&&job!=null){eae2$growth=new GrowthRun(growth);cluster.markDirty();}
+        if(plan instanceof GrowthPlanView attached&&attached.eae2$growthPlan()!=null&&ci.getReturnValue().successful()&&job!=null){eae2$growth=new GrowthRun(attached.eae2$growthPlan());cluster.markDirty();}
     }
     @Inject(method="executeCrafting",at=@At("HEAD"),cancellable=true)
     private void eae2$stepGrowth(int max,CraftingService service,IEnergyService energy,Level level,CallbackInfoReturnable<Integer> ci){

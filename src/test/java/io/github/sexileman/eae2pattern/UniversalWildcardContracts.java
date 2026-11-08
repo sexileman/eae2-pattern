@@ -45,7 +45,7 @@ public final class UniversalWildcardContracts {
             }
             check(providerRoute&&nativeInputs&&physicalReserve,"growth transport reuses native provider routing, exact input extraction and CPU inventory");
             var mixins=new String(bytes(app,"eae2_pattern.mixins.json"),java.nio.charset.StandardCharsets.UTF_8);
-            for(String adapter:List.of("GrowthCpuMixin","GrowthJobAccessor","GrowthProgressAccessor","GrowthTrackerInvoker"))check(mixins.contains(adapter),"complete experimental CPU adapter is packaged: "+adapter);
+            for(String adapter:List.of("GrowthCpuMixin","GrowthJobAccessor","GrowthProgressAccessor","GrowthTrackerInvoker","GrowthPlanMixin"))check(mixins.contains(adapter),"complete experimental CPU adapter is packaged: "+adapter);
             var encoder=node(bytes(app,"io/github/sexileman/eae2pattern/pattern/PatternEncoder.class"));
             boolean nativeFluids=false;
             for(var method:encoder.methods)if(method.name.equals("encodeCrafting"))for(var instruction:method.instructions)
@@ -120,11 +120,17 @@ public final class UniversalWildcardContracts {
         try(var cpu=loader.getResourceAsStream("appeng/crafting/execution/CraftingCpuLogic.class");var job=loader.getResourceAsStream("appeng/crafting/execution/ExecutingCraftingJob.class");var progress=loader.getResourceAsStream("appeng/crafting/execution/ExecutingCraftingJob$TaskProgress.class");var tracker=loader.getResourceAsStream("appeng/crafting/execution/ElapsedTimeTracker.class")){
             check(UniversalMixinPlugin.supportedGrowth(node(cpu.readAllBytes()),node(job.readAllBytes()),node(progress.readAllBytes()),node(tracker.readAllBytes())),"compile-baseline AE2 supports the complete experimental CPU hook set");
         }
+        try(var nativePlan=loader.getResourceAsStream("appeng/crafting/CraftingPlan.class")){
+            check(UniversalMixinPlugin.supportedGrowthPlan(node(nativePlan.readAllBytes())),"compile baseline supports the native phase attachment carrier");
+        }
         Path aeJar;
         try(var files=Files.list(mods)){aeJar=files.filter(p->p.getFileName().toString().startsWith("appliedenergistics2-")&&p.toString().endsWith(".jar")).findFirst().orElseThrow();}
         try(var ae=new ZipFile(aeJar.toFile())){
             var tree=node(bytes(ae,"appeng/crafting/CraftingTreeNode.class"));var process=node(bytes(ae,"appeng/crafting/CraftingTreeProcess.class"));var calc=node(bytes(ae,"appeng/crafting/CraftingCalculation.class"));
             check(UniversalMixinPlugin.supportedCycles(tree,process,calc),"installed AE2 planner supports the diagnostic hook set");
+            var nativePlan=node(bytes(ae,"appeng/crafting/CraftingPlan.class"));
+            check(UniversalMixinPlugin.supportedGrowthPlan(nativePlan),"installed AE2 supports the native phase attachment carrier");
+            nativePlan.methods.removeIf(m->m.name.equals("<init>"));check(!UniversalMixinPlugin.supportedGrowthPlan(nativePlan),"incompatible native plan disables experimental attachments");
             var cpu=node(bytes(ae,"appeng/crafting/execution/CraftingCpuLogic.class"));var job=node(bytes(ae,"appeng/crafting/execution/ExecutingCraftingJob.class"));var progress=node(bytes(ae,"appeng/crafting/execution/ExecutingCraftingJob$TaskProgress.class"));var tracker=node(bytes(ae,"appeng/crafting/execution/ElapsedTimeTracker.class"));
             check(UniversalMixinPlugin.supportedGrowth(cpu,job,progress,tracker),"installed AE2 supports the complete experimental CPU hook set");
             check(!UniversalMixinPlugin.supportedGrowth(cpu,job,null,tracker),"incomplete runtime adapters fail closed");
