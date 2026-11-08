@@ -16,7 +16,7 @@ public final class WildcardTooltipText {
         return boundName(typeNames.apply(data.getString("machine"), category));
     }
     public static Component boundName(Component type) {
-        return Component.translatable("eae2_pattern.wildcard.bound_name", type.copy()).withStyle(style -> style.withColor(0xC9B78C).withItalic(false));
+        return Component.translatable("eae2_pattern.wildcard.bound_name", type.copy()).withStyle(style -> style.withColor(0xE640E6).withItalic(false));
     }
     private WildcardTooltipText() {}
     public static boolean isGeneratedName(Component name) {
