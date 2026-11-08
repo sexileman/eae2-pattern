@@ -27,26 +27,150 @@ import java.util.List;
 public final class RegressionChecks {
     private static int checks;
     public static void main(String[] args) throws Exception {
-        policies(); wireFormat(); searches(); gtVersions(); layoutAndGrid(); manualMultiplier(); grouping(); inspectionPackets(); slotPresentation(); patternMetadata(); amountLabels(); machineWildcards(); heldWildcardWrites(); dynamicRules(); stackedCarriers(); wildcardTooltip();
+        policies(); wireFormat(); searches(); gtVersions(); layoutAndGrid(); manualMultiplier(); grouping(); inspectionPackets(); slotPresentation(); patternMetadata(); amountLabels(); machineWildcards(); heldWildcardWrites(); dynamicRules(); stackedCarriers(); wildcardTooltip(); materialPicker(); aeToolScreens(); encodingMessages(); recipeStripColumns(); searchDebounce(); wildcardStockStatus(); guidePages(); moreMenuLayout();
         System.out.println("Passed " + checks + " regression checks");
     }
     private static void check(boolean condition, String message) {
         checks++; if (!condition) throw new AssertionError(message);
+    }
+    private static void moreMenuLayout() {
+        var actions=io.github.sexileman.eae2pattern.client.WorkbenchMoreAction.values();
+        check(actions.length==8,"actual More menu has eight actions and no wildcard navigation");
+        for(int[] canvas:List.of(new int[]{320,180},new int[]{480,270},new int[]{640,360})) {
+            var popup=io.github.sexileman.eae2pattern.client.PopupLayout.measure(220,80,44,19,180,actions.length,canvas[0],canvas[1]);
+            check(popup.y()>=6&&popup.y()+popup.height()<=canvas[1]-6,"actual More menu fits compact and normal canvases without throwing");
+            for(int i=0;i<actions.length;i++)check(popup.indexAt(popup.x()+10,popup.y()+3+i*19+9)==i,"all actual More actions remain reachable");
+        }
+        check(actions[0].labelKey(true,false).equals("show_all")&&actions[2].labelKey(false,true).equals("unpin"),"contextual More labels retain their intended actions");
+    }
+    private static void guidePages() throws Exception {
+        var pages=new java.util.ArrayList<appeng.client.guidebook.compiler.ParsedGuidePage>();
+        for(String file:List.of("index.md","wildcard-patterns.md","batch-encoding.md")) {
+            String path="assets/eae2_pattern/ae2guide/"+file;
+            try(var stream=RegressionChecks.class.getClassLoader().getResourceAsStream(path)) {
+                check(stream!=null,"native AE2 guide resource exists: "+file);
+                var page=appeng.client.guidebook.compiler.PageCompiler.parse("eae2_pattern",new ResourceLocation("eae2_pattern",file),stream);
+                check(page.getFrontmatter().navigationEntry()!=null,"native AE2 parser accepts page navigation: "+file);
+                pages.add(page);
+            }
+        }
+        check(pages.get(1).getFrontmatter().additionalProperties().get("item_ids") instanceof List<?> items && items.equals(List.of("eae2_pattern:machine_wildcard_pattern")),"native AE2 parser retains the item target shared by blank and encoded carriers");
+    }
+    private static void wildcardStockStatus() {
+        var buffer=new FriendlyByteBuf(Unpooled.buffer());
+        var sent=new io.github.sexileman.eae2pattern.net.S2CNetworkStatusPacket(9,true,1234,0,"");
+        sent.encode(buffer);
+        var read=io.github.sexileman.eae2pattern.net.S2CNetworkStatusPacket.decode(buffer);
+        check(read.equals(sent), "ordinary stock and absent wildcard stock roundtrip independently");
+        io.github.sexileman.eae2pattern.client.ClientNetworkState.accept(read);
+        check(io.github.sexileman.eae2pattern.client.ClientNetworkState.blankPatterns()==1234 && io.github.sexileman.eae2pattern.client.ClientNetworkState.blankWildcards()==0, "ordinary blanks cannot satisfy wildcard UI stock");
+        buffer.clear();
+        sent=new io.github.sexileman.eae2pattern.net.S2CNetworkStatusPacket(10,true,0,12,"");sent.encode(buffer);
+        io.github.sexileman.eae2pattern.client.ClientNetworkState.accept(io.github.sexileman.eae2pattern.net.S2CNetworkStatusPacket.decode(buffer));
+        check(io.github.sexileman.eae2pattern.client.ClientNetworkState.blankWildcards()==12 && io.github.sexileman.eae2pattern.client.ClientNetworkState.blankPatterns()==0, "wildcard blanks do not satisfy normal pattern stock");
+        io.github.sexileman.eae2pattern.client.ClientNetworkState.reset();buffer.release();
+        var title=io.github.sexileman.eae2pattern.wildcard.WildcardTooltipText.boundName(Component.literal("Wiremill"));
+        check(title.getContents() instanceof net.minecraft.network.chat.contents.TranslatableContents t && t.getKey().equals("eae2_pattern.wildcard.bound_name") && ((Component)t.getArgs()[0]).getString().equals("Wiremill"), "bound name includes the machine and no recipe count");
+        check(title.getStyle().getColor().getValue()==0xC9B78C && !title.getStyle().isItalic(), "bound name uses muted champagne text without italics");
+        check(new GenerationReport(1,0,0,0,0,GenerationReport.StopReason.NOT_ENOUGH_WILDCARD_PATTERNS,List.of()).summaryKey().equals("eae2_pattern.report.no_wildcards"), "wildcard shortage has a distinct explanation");
+    }
+    private static void searchDebounce() {
+        var debounce = new io.github.sexileman.eae2pattern.client.SearchDebounce();
+        check(!debounce.poll(0), "idle field does not start a search");
+        debounce.changed(0);
+        check(!debounce.poll(199_999_999L), "search waits a full 200ms");
+        debounce.changed(150_000_000L);
+        check(!debounce.poll(200_000_000L), "typing restarts the trailing delay");
+        check(debounce.pending(), "pending search remains guarded");
+        check(debounce.poll(350_000_000L), "one search runs 200ms after the last change");
+        check(!debounce.pending() && !debounce.poll(900_000_000L), "unchanged text does not repeat the search");
+        debounce.changed(1_000_000_000L);
+        check(debounce.poll(1_700_000_000L), "slow ticks run one overdue search without catchup repeats");
+    }
+    private static void recipeStripColumns() {
+        for(int width:new int[]{86,100,118,130}){
+            var columns=io.github.sexileman.eae2pattern.client.RecipeStripLayout.measure(width);
+            check(columns.inputMax()*22<=columns.inputWidth(),"narrow row keeps input icons inside their column");
+            check(columns.outputX()+columns.outputMax()*22<=width,"narrow row keeps output icons inside the row");
+            check(columns.inputMax()*22+3+io.github.sexileman.eae2pattern.client.RecipeStripLayout.overflowWidth(columns.inputWidth(),columns.inputMax())<=columns.inputWidth(),"narrow overflow text cannot enter the arrow gutter");
+        }
+
+        for (int width : new int[]{136,170,220,280}) {
+            var columns=io.github.sexileman.eae2pattern.client.RecipeStripLayout.measure(width);
+            check(columns.inputMax()*22+30<=columns.arrowX(), "input icons and overflow stay before the arrow");
+            check(columns.outputX()+columns.outputMax()*22+30<=width, "output icons and overflow stay within the row");
+            check(columns.outputX()>columns.arrowX()+9, "arrow has a separate gutter before outputs");
+        }
+    }
+    private static void encodingMessages() {
+        String raw="gtceu:macerator/macerate_titanium_buzzsaw: pattern has no ingredients after filtering: gtceu:macerator/macerate_titanium_buzzsaw";
+        check(io.github.sexileman.eae2pattern.client.EncodingMessages.key(raw).equals("filtered_input"),"duplicated source ID diagnostic is reduced to an actionable input-filter explanation");
+        var message=io.github.sexileman.eae2pattern.client.EncodingMessages.explain(raw);
+        check(message.getContents() instanceof net.minecraft.network.chat.contents.TranslatableContents t&&t.getArgs().length==0,"raw recipe IDs are not inserted into the player-facing error");
+        check(io.github.sexileman.eae2pattern.client.EncodingMessages.key("ME network unavailable or changed").equals("network"),"network failure has a concise localized explanation");
+        check(io.github.sexileman.eae2pattern.client.EncodingMessages.key("Held wildcard changed; no item was modified").equals("held_changed"),"changed carrier message asks to reopen");
+        check(io.github.sexileman.eae2pattern.client.EncodingMessages.key("unrecognized internal detail").equals("failed"),"unknown diagnostics do not leak raw exception text into the UI");
+        for(int width:new int[]{320,480,640})check(io.github.sexileman.eae2pattern.client.Tooltips.maxWidth(width)<=260&&io.github.sexileman.eae2pattern.client.Tooltips.maxWidth(width)<=width-32,"tooltips wrap within a bounded GUI width");
+    }
+    private static void aeToolScreens() throws Exception {
+        for(int[] size:List.of(new int[]{320,180},new int[]{400,240},new int[]{480,270},new int[]{640,360},new int[]{960,540})){
+            var frame=io.github.sexileman.eae2pattern.client.ToolViewport.measure(size[0],size[1],552,440);
+            check(frame.left()>=0&&frame.top()>=0&&frame.left()+frame.width()<=size[0]&&frame.top()+frame.height()<=size[1],"AE tool stays within logical canvas "+size[0]);
+            check(frame.contains(frame.left(),frame.top())&&!frame.contains(frame.left()-1,frame.top())&&!frame.contains(frame.left()+frame.width(),frame.top()),"JEI side lanes do not belong to tool input area");
+            if(size[0]>=400)check(frame.left()>=72&&size[0]-frame.left()-frame.width()>=72,"both JEI side lanes retain four ingredient columns");
+            if(size[1]>=220)check(size[1]-frame.top()-frame.height()>=26,"JEI bottom search field has reserved space");
+        }
+        var screens=new java.util.LinkedHashMap<Class<?>,mezz.jei.api.gui.handlers.IScreenHandler<?>>();
+        var ghosts=new java.util.LinkedHashMap<Class<?>,mezz.jei.api.gui.handlers.IGhostIngredientHandler<?>>();
+        var globals=new java.util.ArrayList<mezz.jei.api.gui.handlers.IGlobalGuiHandler>();
+        var registration=(mezz.jei.api.registration.IGuiHandlerRegistration)java.lang.reflect.Proxy.newProxyInstance(RegressionChecks.class.getClassLoader(),new Class[]{mezz.jei.api.registration.IGuiHandlerRegistration.class},(proxy,method,args)->{
+            switch(method.getName()){
+                case "addGuiScreenHandler"->screens.put((Class<?>)args[0],(mezz.jei.api.gui.handlers.IScreenHandler<?>)args[1]);
+                case "addGhostIngredientHandler"->ghosts.put((Class<?>)args[0],(mezz.jei.api.gui.handlers.IGhostIngredientHandler<?>)args[1]);
+                case "addGlobalGuiHandler"->globals.add((mezz.jei.api.gui.handlers.IGlobalGuiHandler)args[0]);
+                default->throw new AssertionError("Unexpected JEI registration call "+method.getName());
+            }return null;
+        });
+        io.github.sexileman.eae2pattern.compat.jei.ToolJeiHandlers.register(registration);
+        check(screens.size()==6&&ghosts.size()==6&&globals.size()==1,"all six tool pages register screen, ghost and shared ingredient integration");
+        check(screens.keySet().equals(ghosts.keySet()),"every JEI-visible page participates in ghost drag lifecycle");
+        for(Class<?> type:screens.keySet())check(io.github.sexileman.eae2pattern.client.AeToolScreen.class.isAssignableFrom(type),"JEI page implements bounded panel/input contract: "+type.getSimpleName());
+        var unsupported=new mezz.jei.api.ingredients.ITypedIngredient<String>(){
+            public mezz.jei.api.ingredients.IIngredientType<String> getType(){return ()->String.class;}
+            public String getIngredient(){return "unsupported";}
+            public java.util.Optional<ItemStack> getItemStack(){return java.util.Optional.empty();}
+            public <V> java.util.Optional<V> getIngredient(mezz.jei.api.ingredients.IIngredientType<V> type){return java.util.Optional.empty();}
+        };
+        for(var handler:ghosts.values())check(handler.getTargetsTyped(null,unsupported,false).isEmpty(),"unsupported JEI ingredient produces no mutable drag targets");
+    }
+    private static void materialPicker() {
+        var source=StackSpec.of(StackType.ITEM,new ResourceLocation("gtceu:iron_ingot"),64);
+        var name=Component.literal("Iron");var detail=Component.literal("gtceu:iron");
+        var option=new io.github.sexileman.eae2pattern.client.PickerOption("iron",name,detail,source);
+        check(option.value().equals("iron")&&option.detail().getString().equals("gtceu:iron"),"full displayed material ID does not change the persisted family filter");
+        check(option.icon().amount()==1&&source.amount()==64,"representative icon is normalized without changing recipe quantity");
+        check(option.matches("gtceu:iron")&&option.matches("gtceu:iron_ingot"),"material picker searches complete material and example item IDs");
+        check(option.matches("IRON")&&!option.matches("copper"),"material picker preserves ordinary name matching");
+        name.append(" changed");detail.append(" changed");check(option.label().getString().equals("Iron")&&option.detail().getString().equals("gtceu:iron"),"picker owns display components");
+        var any=new io.github.sexileman.eae2pattern.client.PickerOption("",Component.literal("All materials"));
+        check(any.icon()==null&&any.detail().getString().isEmpty()&&any.value().isEmpty(),"unrestricted option has no invented item identity");
+        check(io.github.sexileman.eae2pattern.client.MaterialChoiceCatalog.rank(java.util.Set.of("ingots"),true)<io.github.sexileman.eae2pattern.client.MaterialChoiceCatalog.rank(java.util.Set.of("plates"),true),"material thumbnail prefers a representative ingot over a processed plate");
+        check(io.github.sexileman.eae2pattern.client.MaterialChoiceCatalog.rank(java.util.Set.of("dusts"),true)<io.github.sexileman.eae2pattern.client.MaterialChoiceCatalog.rank(java.util.Set.of(),false),"available material item is preferred over fluid fallback");
     }
     private static void wildcardTooltip() {
         var generated=Component.translatable("eae2_pattern.wildcard.name","gtceu:wiremill",325);
         check(io.github.sexileman.eae2pattern.wildcard.WildcardTooltipText.isGeneratedName(generated),"old generated item names normalize without rewriting saved NBT");
         check(!io.github.sexileman.eae2pattern.wildcard.WildcardTooltipText.isGeneratedName(Component.literal("My custom pattern")),"player-chosen literal names remain untouched");
         var type=Component.literal("Wiremill");var lines=io.github.sexileman.eae2pattern.wildcard.WildcardTooltipText.lines(type,325,true,"player");
-        check(lines.size()==8&&lines.get(0).getString().isEmpty()&&lines.get(4).getString().isEmpty(),"primary fields and metadata have explicit spacing");
+        check(lines.size()==3&&lines.stream().noneMatch(c->c.getString().isEmpty()),"compact tooltip has no blank spacer or redundant mode lines");
         var encoding=(net.minecraft.network.chat.contents.TranslatableContents)lines.get(1).getContents();
         check(encoding.getKey().endsWith("encoding_type")&&((Component)encoding.getArgs()[0]).getString().equals("Wiremill"),"encoding type displays the local category title, not a GT-only metadata field");
         var count=(net.minecraft.network.chat.contents.TranslatableContents)lines.get(2).getContents();
         check(count.getKey().endsWith("matched_patterns")&&((Component)count.getArgs()[0]).getString().equals("325"),"matched count is a separate primary field");
-        check(((net.minecraft.network.chat.contents.TranslatableContents)lines.get(3).getContents()).getKey().endsWith("dynamic_note"),"dynamic count is marked as last-encoding observation");
+        check(((Component)encoding.getArgs()[0]).getStyle().getColor().equals(net.minecraft.network.chat.TextColor.fromLegacyFormat(net.minecraft.ChatFormatting.LIGHT_PURPLE)),"recipe type uses the native processing-pattern purple");
         check(type.getStyle().getColor()==null,"tooltip styling does not mutate cached JEI titles");
         var fixed=io.github.sexileman.eae2pattern.wildcard.WildcardTooltipText.lines(Component.literal("test:machine"),20,false,"");
-        check(fixed.size()==7&&((net.minecraft.network.chat.contents.TranslatableContents)fixed.get(3).getContents()).getKey().endsWith("fixed_note"),"non-GT fallback and fixed snapshot count remain available without encoder metadata");
+        check(fixed.size()==2&&((net.minecraft.network.chat.contents.TranslatableContents)fixed.get(1).getContents()).getKey().endsWith("matched_patterns"),"fixed tooltip has two useful lines when encoder is absent");
     }
     private static void stackedCarriers() {
         check(io.github.sexileman.eae2pattern.wildcard.WildcardCarrierRules.isResetRecipe("eae2_pattern:machine_wildcard_pattern_reset"),"reset recipe is excluded from generic blank-to-blank batch encoding");

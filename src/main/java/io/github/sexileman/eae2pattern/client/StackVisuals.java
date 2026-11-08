@@ -28,20 +28,25 @@ public final class StackVisuals {
         var fluid = fluid(spec);
         return fluid.isEmpty() ? Component.literal(spec.id().toString()) : fluid.getDisplayName();
     }
-    public void draw(GuiGraphics g, StackSpec spec, int x, int y) {
+    private boolean drawBase(GuiGraphics g, StackSpec spec, int x, int y) {
         if (spec.isItem()) g.renderItem(item(spec), x, y);
         else {
             var fluid = fluid(spec);
-            if (fluid.isEmpty()) return;
+            if (fluid.isEmpty()) return false;
             var extension = IClientFluidTypeExtensions.of(fluid.getFluid());
             var texture = extension.getStillTexture(fluid);
-            if (texture == null) return;
+            if (texture == null) return false;
             var sprite = Minecraft.getInstance().getTextureAtlas(InventoryMenu.BLOCK_ATLAS).apply(texture);
             int tint = extension.getTintColor(fluid);
             g.setColor(((tint >> 16) & 255) / 255f, ((tint >> 8) & 255) / 255f, (tint & 255) / 255f, ((tint >>> 24) & 255) / 255f);
             try { g.blit(x, y, 0, 16, 16, sprite); }
             finally { g.setColor(1, 1, 1, 1); }
         }
+        return true;
+    }
+    public void drawIcon(GuiGraphics g, StackSpec spec, int x, int y) { drawBase(g,spec,x,y); }
+    public void draw(GuiGraphics g, StackSpec spec, int x, int y) {
+        if(!drawBase(g,spec,x,y))return;
         String amount = StackAmountLabel.format(spec.amount(), !spec.isItem());
         if (!amount.isEmpty()) {
             var font = Minecraft.getInstance().font;

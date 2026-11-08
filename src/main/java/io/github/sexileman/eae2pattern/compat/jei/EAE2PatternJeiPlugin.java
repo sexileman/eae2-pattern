@@ -21,6 +21,8 @@ public final class EAE2PatternJeiPlugin implements IModPlugin {
     public ResourceLocation getPluginUid() {
         return UID;
     }
+    @Override public void registerGuiHandlers(mezz.jei.api.registration.IGuiHandlerRegistration registration) { ToolJeiHandlers.register(registration); }
+
     @Override
     public void registerRecipes(mezz.jei.api.registration.IRecipeRegistration registration) {
         registration.addIngredientInfo(io.github.sexileman.eae2pattern.wildcard.WildcardItems.MACHINE_PATTERN.get().getDefaultInstance(),

@@ -15,17 +15,17 @@ import org.jetbrains.annotations.Nullable;
  * costs real time. Doing that inside a click handler freezes the window long enough for the OS to offer to kill the
  * game, so the work is spread over ticks behind this progress screen.</p>
  */
-public final class CollectingScreen extends Screen {
+public final class CollectingScreen extends AeToolScreen {
 
     /** Roughly half a frame's worth of work; keeps the progress bar animating. */
     private static final long BUDGET_NANOS = 8_000_000L;
     private static final int MIN_PER_TICK = 4;
     private static final int MAX_PER_TICK = 128;
 
-    private static final int COLOR_TEXT = 0xE0E0E0;
-    private static final int COLOR_DIM = 0x909090;
-    private static final int COLOR_BAR_BG = 0xFF202020;
-    private static final int COLOR_BAR_FG = 0xFF3A6EA5;
+    private static final int COLOR_TEXT = WorkbenchTheme.TEXT;
+    private static final int COLOR_DIM = WorkbenchTheme.DIM;
+    private static final int COLOR_BAR_BG = 0xFF8B8B8B;
+    private static final int COLOR_BAR_FG = WorkbenchTheme.ACCENT;
 
     private final JeiRecipeCollector.Collector collector;
     private final Component machineName;
@@ -51,15 +51,9 @@ public final class CollectingScreen extends Screen {
 
     @Override
     protected void init() {
-        this.panelWidth = Math.min(300, this.width - 40);
-        this.panelHeight = 72;
-        this.panelLeft = (this.width - this.panelWidth) / 2;
-        this.panelTop = (this.height - this.panelHeight) / 2;
+        var frame=ToolViewport.measure(width,height,300,84);panelWidth=frame.width();panelHeight=frame.height();panelLeft=frame.left();panelTop=frame.top();
 
-        this.addRenderableWidget(Button.builder(Component.translatable("eae2_pattern.collecting.cancel"), b ->
-                        this.onClose())
-                .bounds(this.panelLeft + (this.panelWidth - 80) / 2, this.panelTop + this.panelHeight - 24, 80, 18)
-                .build());
+        this.addRenderableWidget(new AeTextButton(panelLeft+(panelWidth-80)/2,panelTop+panelHeight-24,80,18,Component.translatable("eae2_pattern.collecting.cancel"),this::onClose));
     }
 
     @Override
@@ -97,15 +91,16 @@ public final class CollectingScreen extends Screen {
 
     @Override
     public void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
+        WorkbenchTheme.panel(graphics,panelLeft,panelTop,panelWidth,panelHeight);
         super.render(graphics, mouseX, mouseY, partialTick);
 
         int total = this.collector.total();
         int processed = this.collector.processed();
 
-        graphics.drawCenteredString(this.font, this.title, this.width / 2, this.panelTop + 8, COLOR_TEXT);
-        graphics.drawCenteredString(this.font,
-                Component.translatable("eae2_pattern.collecting.progress", processed, total),
-                this.width / 2, this.panelTop + 24, COLOR_DIM);
+        var header=net.minecraft.locale.Language.getInstance().getVisualOrder(font.substrByWidth(title,panelWidth-16));
+        graphics.drawString(font,header,panelLeft+(panelWidth-font.width(header))/2,panelTop+8,COLOR_TEXT,false);
+        var progress=Component.translatable("eae2_pattern.collecting.progress",processed,total);
+        graphics.drawString(font,progress,panelLeft+(panelWidth-font.width(progress))/2,panelTop+24,COLOR_DIM,false);
 
         int barLeft = this.panelLeft + 12;
         int barWidth = this.panelWidth - 24;
@@ -128,4 +123,6 @@ public final class CollectingScreen extends Screen {
     public boolean isPauseScreen() {
         return false;
     }
+    @Override public net.minecraft.client.renderer.Rect2i toolBounds(){return new net.minecraft.client.renderer.Rect2i(panelLeft,panelTop,panelWidth,panelHeight);}
+
 }

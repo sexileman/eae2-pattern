@@ -16,7 +16,7 @@ import net.minecraft.world.item.ItemStack;
 import java.util.*;
 
 /** Independent wildcard workflow: rules, virtualized recipe preview, encoding settings. */
-public final class WildcardEditorScreen extends Screen implements GenerationListener {
+public final class WildcardEditorScreen extends AeToolScreen implements GenerationListener {
     private final RecipePlan plan;
     private final Screen parent;
     private final boolean savedCopy;
@@ -34,7 +34,7 @@ public final class WildcardEditorScreen extends Screen implements GenerationList
     private final List<Hit> hits = new ArrayList<>();
     private EditBox[] boxes;
     private String[] query = {"", "", "", ""};
-    private int tab, x, y, w, h, split, listTop, listBottom, cursor, delay, multiplier = 1, outputPolicy;
+    private int tab, x, y, w, h, split, listTop, listBottom, cursor, multiplier = 1, outputPolicy;
     private int inScope, outScope, previewRequest = -1, previewDelay;
     private boolean inAll, outAll, searchTools = true, dropTools = true, filtering, sending, sourceView, dragging, detailDragging;
     private double scroll, detailScroll;
@@ -45,7 +45,7 @@ public final class WildcardEditorScreen extends Screen implements GenerationList
     private Component ruleError;
     private int chosenCount=-1;
     private final Set<ResourceLocation> catalogued=new HashSet<>();
-    private final SortedSet<String> availableMaterials=new TreeSet<>();
+    private final MaterialChoiceCatalog materialCatalog=new MaterialChoiceCatalog();
     private final Map<ResourceLocation,RuleRecipe> sourceRecipes=new HashMap<>();
     private final Set<ResourceLocation> unsupportedSources=new HashSet<>();
     private RecipePlan.Entry focus;
@@ -53,9 +53,10 @@ public final class WildcardEditorScreen extends Screen implements GenerationList
     private Component previewError;
     private final Map<ResourceLocation, Component> previewErrors = new HashMap<>();
     private Component status = Component.empty();
+    private final SearchDebounce searchDebounce = new SearchDebounce();
     private Control generate;
     private Control generateNetwork;
-    private static final int TEXT = WorkbenchTheme.TEXT, DIM = WorkbenchTheme.DIM, ROW = 42;
+    private static final int TEXT = WorkbenchTheme.TEXT, DIM = WorkbenchTheme.DIM, ROW = RecipeListRow.HEIGHT;
 
     public WildcardEditorScreen(RecipePlan plan, Screen parent, CompoundTag state, Set<ResourceLocation> included, boolean savedCopy) {
         this(plan, parent, state, included, savedCopy, null);
@@ -103,8 +104,8 @@ public final class WildcardEditorScreen extends Screen implements GenerationList
         else mc.setScreen(new WildcardMachineScreen(categories, mc.screen, target));
     }
     @Override protected void init() {
-        controls.clear(); w = Math.min(900, width - 12); h = Math.min(530, height - 12); x = (width - w) / 2; y = (height - h) / 2;
-        split = x + w * 3 / 5; listTop = y + 76; listBottom = y + h - 36;
+        controls.clear(); var frame=ToolViewport.measure(width,height,552,420);w=frame.width();h=frame.height();x=frame.left();y=frame.top();
+        split = x + w * 11 / 20; listTop = y + 76; listBottom = y + h - 36;
         button(x + w - 58, y + 7, 48, -1, () -> onClose(), "back");
         for (int i = 0; i < 4; i++) { final int n = i; int tw=Math.min(94,(w-20)/4); button(x + 10 + i * tw, y + 30, tw-6, -1, () -> { tab = n; sync(); }, "tab_" + i); }
         boxes = new EditBox[4]; int col = (w - 34) / 2, first = h < 220 ? 57 : 70;
@@ -112,7 +113,7 @@ public final class WildcardEditorScreen extends Screen implements GenerationList
             final int n = i; int side = i / 2;
             boxes[i] = addRenderableWidget(new WorkbenchSearchBox(font, x + 16 + side * (col + 12), y + first + (i % 2) * 26, col - 10, tr("query_" + i), tr("query_" + i)));
             boxes[i].setMaxLength(256); boxes[i].setBordered(false); boxes[i].setValue(query[i]);
-            boxes[i].setResponder(v -> { query[n] = v; changedRules(); });
+            boxes[i].setResponder(v -> { if (v.equals(query[n])) return; query[n] = v; changedRules(); });
         }
         int opts = y + first + 52;
         button(x + 10, opts, col, 3, () -> { inAll = !inAll; changedRules(); }, "input_match");
@@ -125,7 +126,7 @@ public final class WildcardEditorScreen extends Screen implements GenerationList
         button(x+10,quickY+75,w-20,0,()->{dynamic=!dynamic;changedRules();},"mode");
         button(x + 10, y + 53, 62, 1, () -> { matches.forEach(e -> selected.add(e.recipeId())); chosenCount=-1; updateControls(); }, "select_all");
         button(x + 78, y + 53, 62, 1, () -> { matches.forEach(e -> selected.remove(e.recipeId())); chosenCount=-1; updateControls(); }, "select_none");
-        int modeWidth = Math.max(48, Math.min(82, w - (split - x) - 70));
+        int modeWidth = Math.max(36, Math.min(82, w - (split - x) - 70));
         button(split + 10, y + 53, modeWidth, 1, () -> { sourceView = !sourceView; detailScroll = 0; updateControls(); }, "source");
         button(split + 16 + modeWidth, y + 53, 44, 1, () -> { if (focus != null) RecipeNavigation.show(plan, focus); }, "jei");
         button(x + 10, y + 65, Math.min(240, w / 2 - 15), 2, () -> { dropTools = !dropTools; changedPolicy(); }, "drop_tools");
@@ -151,7 +152,7 @@ public final class WildcardEditorScreen extends Screen implements GenerationList
         for (var c : controls) c.visible = c.page < 0 || c.page == tab;
         updateControls();
     }
-    private int chosen() { if(chosenCount>=0)return chosenCount; int n = 0; for (var e : matches) if (selected.contains(e.recipeId()) && (dynamic ? sourceRecipe(e)!=null&&sourceRecipe(e).canEncode(outputPolicy,dropTools) : e.canEncode(outputPolicy, dropTools)) && !previewErrors.containsKey(e.recipeId())) n++; return chosenCount=n; }
+    private int chosen() { if(filtering||searchDebounce.pending())return 0; if(chosenCount>=0)return chosenCount; int n = 0; for (var e : matches) if (selected.contains(e.recipeId()) && (dynamic ? sourceRecipe(e)!=null&&sourceRecipe(e).canEncode(outputPolicy,dropTools) : e.canEncode(outputPolicy, dropTools)) && !previewErrors.containsKey(e.recipeId())) n++; return chosenCount=n; }
     private void updateControls() {
         int chosen = chosen();
         for (var c : controls) {
@@ -175,20 +176,20 @@ public final class WildcardEditorScreen extends Screen implements GenerationList
             });
             if (c.key.equals("halve")) c.active &= multiplier > 1;
             if (c.key.equals("double")) c.active &= multiplier < ProcessingMultiplier.MAX;
-            if (c.key.equals("material") || c.key.equals("select_all") || c.key.equals("select_none")) c.active &= !filtering && delay == 0;
+            if (c.key.equals("material") || c.key.equals("select_all") || c.key.equals("select_none")) c.active &= !filtering && !searchDebounce.pending();
         }
-        boolean ready = !sending && !filtering && delay == 0 && heldRefreshTicks == 0 && chosen > 0 && (!dynamic||chosen<=MachineWildcardData.MAX_RECIPES) && ruleError==null;
-        boolean networkReady = ready && ClientNetworkState.hasNetwork() && ClientNetworkState.blankPatterns() >= (dynamic ? 1 : (chosen + 2047) / 2048);
+        boolean ready = !sending && !filtering && !searchDebounce.pending() && heldRefreshTicks == 0 && chosen > 0 && (!dynamic||chosen<=MachineWildcardData.MAX_RECIPES) && ruleError==null;
+        boolean networkReady = ready && ClientNetworkState.hasNetwork() && ClientNetworkState.blankWildcards() >= (dynamic ? 1 : (chosen + 2047) / 2048);
         generate.active = heldTarget == null ? networkReady : ready && chosen <= MachineWildcardData.MAX_RECIPES
                 && minecraft.player != null && WildcardItems.writable(minecraft.player.getItemInHand(heldTarget.hand()));
         if (generateNetwork != null) generateNetwork.active = networkReady;
         for (var box : boxes) box.active = !sending;
     }
-    private void changedRules() { chosenCount=-1;previewErrors.clear();previewError=null; delay = 5; filtering = true; preview = null; previewRequest = -1; updateControls(); }
+    private void changedRules() { chosenCount=-1;previewErrors.clear();previewError=null; searchDebounce.changed(); filtering = true; preview = null; previewRequest = -1; updateControls(); }
     private void changedPolicy() { chosenCount=-1; previewErrors.clear(); previewError = null; preview = null; previewRequest = -1; previewDelay = 4; updateControls(); }
     private void startFilter() {
         ruleError=null;portableRule=null;
-        try{if(dynamic)portableRule=new DynamicRule(state());}catch(IllegalArgumentException invalid){ruleError=tr("dynamic_query_help");}
+        try{if(dynamic)portableRule=new DynamicRule(state());}catch(IllegalArgumentException invalid){ruleError=tr("invalid_rule");}
         rules = new WildcardRules(WildcardRules.Side.of(query[0], query[1], inAll, inScope), WildcardRules.Side.of(query[2], query[3], outAll, outScope));
         working.clear(); cursor = 0; filtering = true;
     }
@@ -198,12 +199,12 @@ public final class WildcardEditorScreen extends Screen implements GenerationList
             var current = minecraft.player.getItemInHand(heldTarget.hand());
             if (MachineWildcard.isOwnItem(current)) heldTarget = new HeldTarget(heldTarget.hand(), current);
         }
-        if (delay > 0 && --delay == 0) startFilter();
-        if (filtering && delay == 0) {
+        if (searchDebounce.poll()) startFilter();
+        if (filtering && !searchDebounce.pending()) {
             long end = System.nanoTime() + 3_000_000; int n = 0;
             while (cursor < plan.entries().size() && n++ < 96 && System.nanoTime() < end) {
                 var e = plan.entries().get(cursor++);
-                if(catalogued.add(e.recipeId()))for(var slots:List.of(e.inputs(),e.outputs()))for(var i:slots)availableMaterials.addAll(MaterialForms.materials(i.spec()));
+                if(catalogued.add(e.recipeId()))for(var slots:List.of(e.inputs(),e.outputs()))for(var i:slots)materialCatalog.add(i.spec());
                 if (e.kind() == PatternKind.PROCESSING) {
                     if(dynamic){var raw=sourceRecipe(e);if(portableRule!=null&&raw!=null&&portableRule.matches(raw))working.add(e);}
                     else if(rules.matches(e, searchTools)&&formMatches(e))working.add(e);
@@ -215,19 +216,24 @@ public final class WildcardEditorScreen extends Screen implements GenerationList
                 else previewDelay = 4;
             }
         }
-        if (!sending && !filtering && delay == 0 && previewDelay > 0 && --previewDelay == 0 && focus != null) {
-            var spec = specFor(focus);
-            if (spec != null) previewRequest = PatternRequestSender.send(List.of(spec), 2);
-            else previewError = tr("policy_empty");
+        if (!sending && !filtering && !searchDebounce.pending() && previewDelay > 0 && --previewDelay == 0 && focus != null) {
+            try {
+                var spec = specFor(focus);
+                if (spec != null) previewRequest = PatternRequestSender.send(List.of(spec), 2);
+                else previewError = tr("policy_empty");
+            } catch (IllegalArgumentException | ArithmeticException invalid) {
+                previewRequest=-1;previewError=EncodingMessages.explain(invalid.getMessage());
+            }
         }
         updateControls();
     }
-    private void focus(RecipePlan.Entry entry) { focus = entry; detailScroll = 0; previewError = null; preview = null; previewRequest = -1; previewDelay = 4; }
+    private void focus(RecipePlan.Entry entry) { focus = entry; detailScroll = 0; renderedDetailHeight = 0; previewError = null; preview = null; previewRequest = -1; previewDelay = 4; }
     private void inspected(S2CInspectionPacket response) {
         if (response.requestId() != previewRequest || response.operation() != 2) return;
         if (response.success() && !response.preview().isEmpty()) preview = response.preview().get(0);
         else {
-            status = response.details().isEmpty() ? tr("preview_failed") : Component.literal(response.details().get(0));
+            io.github.sexileman.eae2pattern.EAE2Pattern.LOGGER.warn("Wildcard preview rejected: {}",response.details());
+            status = response.details().isEmpty() ? tr("preview_failed") : EncodingMessages.explain(response.details().get(0));
             chosenCount=-1; previewError = status; if (focus != null) previewErrors.put(focus.recipeId(), status);
         }
         updateControls();
@@ -245,11 +251,14 @@ public final class WildcardEditorScreen extends Screen implements GenerationList
         generate(heldTarget != null);
     }
     private void generate(boolean held) {
-        if (sending || filtering || delay != 0) return;
+        if (sending || filtering || searchDebounce.pending()) return;
         if (!held && (generateNetwork != null ? !generateNetwork.active : !generate.active)) return;
-        List<PatternSpec> specs = new ArrayList<>();
-        for (var e : matches) if (selected.contains(e.recipeId()) && !previewErrors.containsKey(e.recipeId())) { var spec = specFor(e); if (spec != null) specs.add(spec); }
         try {
+            List<PatternSpec> specs = new ArrayList<>();
+            for (var e : matches) if (selected.contains(e.recipeId()) && !previewErrors.containsKey(e.recipeId())) {
+                var spec = specFor(e);
+                if (spec != null) { specs.add(spec); if(dynamic)break; }
+            }
             CompoundTag rules = state();
             if(dynamic){var exceptions=new TreeSet<ResourceLocation>(Comparator.comparing(ResourceLocation::toString));exceptions.addAll(storedExclusions);for(var e:plan.entries())if(e.kind()==PatternKind.PROCESSING){if(!selected.contains(e.recipeId()))exceptions.add(e.recipeId());else exceptions.remove(e.recipeId());}var excluded=new net.minecraft.nbt.ListTag();for(var id:exceptions)excluded.add(net.minecraft.nbt.StringTag.valueOf(id.toString()));rules.put("exclude_ids",excluded);rules=WildcardEditorState.clean(rules);}
             int operation = 4;
@@ -260,33 +269,33 @@ public final class WildcardEditorScreen extends Screen implements GenerationList
             if(dynamic&&specs.size()>1)specs=List.of(specs.get(0));
             PatternRequestSender.send(specs, operation, rules); writingHeld = held; sending = true; status = tr("preparing");
         }
-        catch (IllegalArgumentException e) { status = Component.literal(e.getMessage()); }
+        catch (IllegalArgumentException | ArithmeticException e) { status = EncodingMessages.explain(e.getMessage()); }
         updateControls();
     }
     @Override public void onGenerationFinished(GenerationReport report) {
         sending = false; status = ClientGenerationFeedback.describe(report);
         if (writingHeld && report.isSuccess()) { status = tr(heldTarget.snapshot().getCount()>1?"held_saved_inventory":"held_saved"); heldRefreshTicks = 2; }
-        if (!report.details().isEmpty()) status = status.copy().append(" · ").append(report.details().get(0));
+        if (!report.details().isEmpty()) status = status.copy().append(" · ").append(EncodingMessages.explain(report.details().get(0)));
         PacketHandler.sendToServer(new C2SQueryNetworkStatusPacket(0)); updateControls();
     }
     @Override public void render(GuiGraphics g, int mx, int my, float partial) {
-        hits.clear(); g.fill(0, 0, width, height, 0xCC000000); g.fill(x, y, x + w, y + h, WorkbenchTheme.BACKGROUND);
+        hits.clear();  WorkbenchTheme.panel(g,x,y,w,h);
         label(g, title.copy().append(" / ").append(plan.machineName()), x + 10, y + 10, w - 80, TEXT, 1);
         g.fill(x + 10, y + 26, x + w - 10, y + 27, WorkbenchTheme.LINE);
         if (tab == 0) {
             if(h>=250){label(g,tr("input_rules"),x+12,y+55,w/2-20,TEXT,.85f);label(g,tr("output_rules"),x+w/2+6,y+55,w/2-20,TEXT,.85f);}
-            wrapped(g,ruleError!=null?ruleError:tr(dynamic?"dynamic_help":"fixed_help"),x+14,y+(h<250?160:173),w-28,ruleError!=null?WorkbenchTheme.WARNING:DIM,.8f);
+            if(ruleError!=null)wrapped(g,ruleError,x+14,y+(h<250?160:173),w-28,WorkbenchTheme.WARNING,1);
         } else if (tab == 3) {
             if (h >= 220) {
                 label(g, tr("input_rules"), x + 12, y + 55, w / 2 - 20, TEXT, .85f);
                 label(g, tr("output_rules"), x + w / 2 + 6, y + 55, w / 2 - 20, TEXT, .85f);
             }
             for (var box : boxes) WorkbenchTheme.control(g, box.getX() - 5, box.getY() - 4, box.getWidth() + 10, 19, WorkbenchTheme.INPUT, WorkbenchTheme.LINE);
-            if (h > 250) wrapped(g, tr(dynamic?"dynamic_query_help":"rule_help"), x + 14, y + 160, w - 28, DIM, .8f);
+            if (h > 250 && ruleError!=null) wrapped(g,ruleError,x+14,y+160,w-28,WorkbenchTheme.WARNING,1);
         } else if (tab == 1) renderRecipes(g, mx, my);
-        else if (h > 210) wrapped(g, tr(heldTarget == null ? "settings_help" : "held_settings_help"), x + 14, y + (heldTarget == null ? 147 : 169), w - 28, DIM, .8f);
+        else if (h > 210) wrapped(g,encodingSummary(),x+14,y+(heldTarget==null?147:169),w-28,DIM,1);
         g.fill(x + 10, y + h - 34, x + w - 10, y + h - 33, WorkbenchTheme.LINE);
-        label(g, filtering ? tr("filtering", cursor, plan.entries().size()) : heldTarget != null ? tr("summary_held", matches.size(), chosen()) : tr("summary", matches.size(), chosen(), ClientNetworkState.blankPatterns()), x + 10, y + h - 24, w - 160, DIM, .8f);
+        label(g, filtering ? tr("filtering", cursor, plan.entries().size()) : heldTarget != null ? tr("summary_held", matches.size(), chosen()) : tr("summary", matches.size(), chosen(), ClientNetworkState.blankWildcards()), x + 10, y + h - 24, w - 160, DIM, .8f);
         if (!status.getString().isEmpty()) label(g, status, x + 10, y + h - 13, w - 160, WorkbenchTheme.WARNING, .7f);
         super.render(g, mx, my, partial);
         for (var hit : hits) if (tab == 1 && my >= listTop && my < listBottom && mx >= hit.x && mx < hit.x + 18 && my >= hit.y && my < hit.y + 18) {
@@ -297,29 +306,37 @@ public final class WildcardEditorScreen extends Screen implements GenerationList
                 else lines.add(visuals.name(hit.spec));
             } catch (RuntimeException malformedTooltip) { lines.add(visuals.name(hit.spec)); }
             lines.add(Component.literal(hit.spec.amount() + (hit.spec.isItem() ? "" : " mB")));
-            lines.add(hit.presentation.description()); g.renderComponentTooltip(font, lines, mx, my); break;
+            lines.add(hit.presentation.description()); Tooltips.show(g,font,width, lines, mx, my); break;
         }
         for (int i = 0; i < boxes.length; i++) if (boxes[i].visible && boxes[i].isMouseOver(mx, my))
-            g.renderComponentTooltip(font, List.of(tr("query_" + i), tr("syntax_help")), mx, my);
-        if (generate.isMouseOver(mx, my)) g.renderComponentTooltip(font, List.of(tr(dynamic?"dynamic_help":heldTarget == null ? "capacity_help" : "held_capacity_help")), mx, my);
-        for (var control : controls) if (control != generate && control.visible && control.isMouseOver(mx, my))
-            g.renderComponentTooltip(font, List.of(control.getMessage()), mx, my);
+            Tooltips.show(g,font,width, List.of(tr("syntax_help")), mx, my);
+        if (generate.isMouseOver(mx, my)) Tooltips.show(g,font,width, List.of(encodingSummary()), mx, my);
+        for (var control : controls) if (control != generate && control.visible && control.isMouseOver(mx, my) && font.width(control.getMessage()) > control.getWidth()-10)
+            Tooltips.show(g,font,width, List.of(control.getMessage()), mx, my);
         if (mx >= x + 10 && mx < x + w - 145 && my >= y + h - 30 && my < y + h - 2)
-            g.renderComponentTooltip(font, List.of(tr(heldTarget!=null?"summary_held":"summary", matches.size(), chosen(), ClientNetworkState.blankPatterns()), status), mx, my);
+            Tooltips.show(g,font,width, List.of(tr(heldTarget!=null?"summary_held":"summary", matches.size(), chosen(), ClientNetworkState.blankWildcards()), status), mx, my);
+    }
+    private Component encodingSummary() {
+        if(ruleError!=null)return ruleError;
+        if(filtering||searchDebounce.pending())return tr("filtering",cursor,plan.entries().size());
+        int count=chosen();
+        if(count==0)return Component.translatable("eae2_pattern.report.nothing");
+        if((dynamic||heldTarget!=null)&&count>MachineWildcardData.MAX_RECIPES)return tr("limit_exceeded",count);
+        if(heldTarget!=null)return tr("target_held");
+        if(!ClientNetworkState.hasStatus())return Component.translatable("eae2_pattern.workbench.querying");
+        if(!ClientNetworkState.hasNetwork())return Component.translatable("eae2_pattern.workbench.no_network");
+        return tr(dynamic?"stock_exact":"stock_minimum",ClientNetworkState.blankWildcards(),dynamic?1:(count+2047)/2048);
     }
     private void renderRecipes(GuiGraphics g, int mx, int my) {
         g.enableScissor(x + 10, listTop, split - 5, listBottom);
         int first = (int) scroll / ROW, visible = (listBottom - listTop) / ROW + 2;
         for (int i = first; i < Math.min(matches.size(), first + visible); i++) {
             var e = matches.get(i); int ry = listTop + i * ROW - (int) scroll;
-            if (e == focus) g.fill(x + 10, ry, split - 8, ry + ROW - 2, WorkbenchTheme.HOVER);
-            g.fill(x + 14, ry + 12, x + 22, ry + 20, selected.contains(e.recipeId()) ? WorkbenchTheme.TEXT : WorkbenchTheme.LINE);
-            label(g, e.label(), x + 29, ry + 2, split - x - 47, TEXT, 1);
-            var in = new ArrayList<>(e.inputs()); in.addAll(e.catalysts()); int ix = x + 29;
-            int maxIn = split - x > 230 ? 3 : 2;
-            ix = strip(g, in, ix, ry + 18, maxIn, 0);
-            label(g, Component.literal("→"), ix + 4, ry + 22, 14, DIM, 1);
-            strip(g, e.outputs(), ix + 26, ry + 18, 1, 1);
+            boolean skipped=previewErrors.containsKey(e.recipeId())||!e.canEncode(outputPolicy,dropTools);
+            Component badge=skipped?Component.literal("!"):e.hasProbabilisticInput()||e.hasProbabilisticOutput()?Component.translatable("eae2_pattern.workbench.chance_badge"):Component.empty();
+            RecipeListRow.draw(g,font,visuals,e,x+10,ry,split-8,selected.contains(e.recipeId()),e==focus,
+                    mx>=x+10&&mx<split-8&&my>=ry&&my<ry+ROW,badge,
+                    (hx,hy,ingredient,side)->hits.add(new Hit(hx,hy,ingredient.spec(),IngredientPresentation.of(ingredient,side),side)));
         }
         g.disableScissor();
         scrollbar(g, split - 7, listTop, listBottom, scroll, matches.size() * ROW);
@@ -327,66 +344,87 @@ public final class WildcardEditorScreen extends Screen implements GenerationList
         if (focus == null) return;
         g.enableScissor(split + 8, listTop, x + w - 10, listBottom);
         int dy = listTop - (int) detailScroll, dx = split + 10, room = x + w - dx - 14;
-        label(g, focus.label(), dx, dy + 2, room, TEXT, 1); dy += 20;
+        label(g, focus.label(), dx, dy + 2, room, TEXT, 1); dy += 18;
         List<Ingredient> in = new ArrayList<>(), out = new ArrayList<>();
         if (sourceView) { in.addAll(focus.inputs()); in.addAll(focus.catalysts()); out.addAll(focus.outputs()); }
         else if (preview != null) {
             for (var s : preview.inputs()) in.add(new Ingredient(s, 1, true));
             for (var s : preview.outputs()) out.add(Ingredient.produced(s, 1));
-        } else { label(g, previewError == null ? tr("preview_wait") : previewError, dx, dy, room, previewError == null ? DIM : WorkbenchTheme.WARNING, .8f); }
-        dy = materialRows(g, in, dx, dy, room, 0); materialRows(g, out, dx, dy, room, 1);
+        } else { dy=detailNotice(g,previewError==null?tr("preview_wait"):previewError,dx,dy,room); }
+        if(sourceView||preview!=null){dy = materialRows(g, in, dx, dy, room, 0); dy = materialRows(g, out, dx, dy, room, 1);}
+        if(!sourceView&&preview!=null&&focus.hasNeverConsumedInput()) {
+            var tools=new ArrayList<Ingredient>();
+            for(var ingredient:focus.inputs())if(ingredient.neverConsumed())tools.add(ingredient);
+            tools.addAll(focus.catalysts());
+            if(!tools.isEmpty())dy=setupRows(g,tools,dx,dy,room);
+        }
+        if(!sourceView&&preview!=null){
+            if(focus.hasProbabilisticOutput())dy=detailNotice(g,Component.translatable("eae2_pattern.workbench.chance_warning"),dx,dy,room);
+            if(focus.hasProbabilisticInput())dy=detailNotice(g,Component.translatable("eae2_pattern.workbench.chance_input_warning"),dx,dy,room);
+        }
+        renderedDetailHeight=dy-listTop+(int)detailScroll;
         g.disableScissor();
         int content = detailHeight(); scrollbar(g, x + w - 9, listTop, listBottom, detailScroll, content);
     }
-    private int strip(GuiGraphics g, List<Ingredient> slots, int px, int py, int max, int side) {
-        for (int i = 0; i < Math.min(max, slots.size()); i++) {
-            var item = slots.get(i); var presentation = IngredientPresentation.of(item, side);
-            visuals.draw(g, item.spec(), px, py); visuals.drawRule(g, presentation, px, py);
-            hits.add(new Hit(px, py, item.spec(), presentation, side)); px += 22;
-        }
-        if (slots.size() > max) { String n = "+" + (slots.size() - max); label(g, Component.literal(n), px + 3, py + 5, 35, DIM, .8f); px += font.width(n) + 8; }
-        return px;
+    private int setupRows(GuiGraphics g,List<Ingredient> tools,int dx,int dy,int room) {
+        label(g,Component.translatable("eae2_pattern.workbench."+(dropTools?"machine_setup":"required_tools")),dx,dy+2,room,WorkbenchTheme.WARNING,1);
+        return ingredientRows(g,tools,dx,dy+18,room,0,true);
+    }
+    private int detailNotice(GuiGraphics g,Component text,int dx,int dy,int room) {
+        var lines=font.split(text,Math.max(1,room-16));int height=32+lines.size()*9;
+        g.fill(dx,dy+5,dx+room,dy+height-4,WorkbenchTheme.SURFACE);
+        g.fill(dx,dy+5,dx+2,dy+height-4,WorkbenchTheme.WARNING);
+        label(g,Component.translatable("eae2_pattern.workbench.notice_warning"),dx+8,dy+10,room-16,WorkbenchTheme.WARNING,1);
+        int ty=dy+24;for(var line:lines){g.drawString(font,line,dx+8,ty,DIM,false);ty+=9;}
+        return dy+height;
     }
     private int materialRows(GuiGraphics g, List<Ingredient> ingredients, int dx, int dy, int room, int side) {
-        label(g, tr(side == 0 ? "inputs" : "outputs"), dx, dy + 2, room, TEXT, .85f); dy += 17;
+        label(g, sourceView?tr(side == 0 ? "inputs" : "outputs"):Component.translatable("eae2_pattern.workbench."+(side==0?"encoded_inputs":"encoded_outputs")), dx, dy + 4, room, WorkbenchTheme.ACCENT, 1); dy += 18;
+        return ingredientRows(g,ingredients,dx,dy,room,side,sourceView);
+    }
+    private int ingredientRows(GuiGraphics g,List<Ingredient> ingredients,int dx,int dy,int room,int side,boolean original) {
         for (var ingredient : ingredients) {
-            var p = sourceView ? IngredientPresentation.of(ingredient, side) : IngredientPresentation.encoded(focus, ingredient.spec(), side, dropTools);
-            if (dy + 40 >= listTop && dy < listBottom) {
-                WorkbenchTheme.slot(g, dx, dy + 2, p); visuals.draw(g, ingredient.spec(), dx + 4, dy + 6); visuals.drawRule(g, p, dx + 4, dy + 6);
-                label(g, visuals.name(ingredient.spec()), dx + 30, dy + 3, room - 30, TEXT, 1);
-                label(g, Component.literal(ingredient.spec().amount() + (ingredient.spec().isItem() ? "" : " mB")), dx + 30, dy + 16, room - 30, DIM, .8f);
-                if (p.kind() != IngredientPresentation.Kind.REGULAR) label(g, p.description(), dx + 30, dy + 27, room - 30, p.color(), .8f);
-                hits.add(new Hit(dx + 4, dy + 6, ingredient.spec(), p, side));
+            var p = original ? IngredientPresentation.of(ingredient, side) : IngredientPresentation.encoded(focus, ingredient.spec(), side, dropTools);
+            if (dy + 42 >= listTop && dy < listBottom) {
+                WorkbenchTheme.slot(g, dx, dy + 2, p); visuals.draw(g, ingredient.spec(), dx + 1, dy + 3); visuals.drawRule(g, p, dx + 1, dy + 3);
+                label(g, ingredientName(ingredient), dx + 24, dy + 3, room - 24, TEXT, 1);
+                label(g, Component.translatable("eae2_pattern.workbench."+(ingredient.spec().isItem()?"item_amount":"fluid_amount"),ingredient.spec().amount()), dx + 24, dy + 16, room - 24, DIM, .8f);
+                if (p.kind() != IngredientPresentation.Kind.REGULAR) label(g, p.description(), dx + 24, dy + 28, room - 24, p.color(), .8f);
+                hits.add(new Hit(dx + 1, dy + 3, ingredient.spec(), p, side));
             }
-            dy += 40;
+            dy += p.kind()==IngredientPresentation.Kind.REGULAR?30:42;
         }
         return dy;
     }
-    private int detailHeight() { return focus == null ? 0 : 60 + (sourceView ? focus.inputs().size() + focus.catalysts().size() + focus.outputs().size() : preview == null ? 0 : preview.inputs().size() + preview.outputs().size()) * 40; }
+    private Component ingredientName(Ingredient ingredient) {
+        var name=visuals.name(ingredient.spec());var tag=ingredient.spec().tag();
+        return tag!=null&&tag.contains("Configuration")?name.copy().append(" · ").append(Component.translatable("eae2_pattern.workbench.circuit_setting",tag.getInt("Configuration"))):name;
+    }
+    private int detailHeight() { return renderedDetailHeight; }
+    private int renderedDetailHeight;
     private void scrollbar(GuiGraphics g, int sx, int top, int bottom, double amount, int content) {
         int size = Math.max(1, bottom - top); if (content <= size) return;
         int thumb = Math.max(12, size * size / content), sy = top + (int) ((size - thumb) * amount / Math.max(1, content - size));
         g.fill(sx, top, sx + 3, bottom, WorkbenchTheme.LINE); g.fill(sx, sy, sx + 3, sy + thumb, DIM);
     }
-    private void label(GuiGraphics g, Component text, int px, int py, int room, int color, float scale) {
-        if (room < 1) return; g.pose().pushPose();
-        try { g.pose().translate(px, py, 0); g.pose().scale(scale, scale, 1); g.drawString(font, net.minecraft.locale.Language.getInstance().getVisualOrder(font.substrByWidth(text, (int) (room / scale))), 0, 0, color, false); }
-        finally { g.pose().popPose(); }
+    private void label(GuiGraphics g,Component text,int px,int py,int room,int color,float ignoredScale) {
+        if(room<1)return;
+        g.drawString(font,net.minecraft.locale.Language.getInstance().getVisualOrder(font.substrByWidth(text,room)),px,py,color,false);
     }
-    private void wrapped(GuiGraphics g, Component text, int px, int py, int room, int color, float scale) {
-        for (var part : font.split(text, Math.max(1, (int) (room / scale)))) {
-            if (py + font.lineHeight * scale > y + h - 36) break;
-            g.pose().pushPose(); try { g.pose().translate(px, py, 0); g.pose().scale(scale, scale, 1); g.drawString(font, part, 0, 0, color, false); }
-            finally { g.pose().popPose(); } py += 10;
+    private void wrapped(GuiGraphics g,Component text,int px,int py,int room,int color,float ignoredScale) {
+        for(var part:font.split(text,Math.max(1,room))){
+            if(py+font.lineHeight>y+h-36)break;
+            g.drawString(font,part,px,py,color,false);py+=font.lineHeight+1;
         }
     }
     private static double clamp(double value, int content, int viewport) { return Math.max(0, Math.min(value, Math.max(0, content - viewport))); }
     @Override public boolean mouseScrolled(double mx, double my, double delta) {
-        if (tab != 1 || my < listTop || my > listBottom) return super.mouseScrolled(mx, my, delta);
+        if (!insidePanel(mx,my) || tab != 1 || my < listTop || my > listBottom) return super.mouseScrolled(mx, my, delta);
         if (mx < split) scroll = clamp(scroll - delta * ROW, matches.size() * ROW, listBottom - listTop);
         else detailScroll = clamp(detailScroll - delta * 30, detailHeight(), listBottom - listTop); return true;
     }
     @Override public boolean mouseClicked(double mx, double my, int button) {
+        if(!insidePanel(mx,my))return false;
         if (super.mouseClicked(mx, my, button)) return true;
         if(tab==1&&button==0&&!sending&&my>=listTop&&my<listBottom)for(var hit:hits)if(mx>=hit.x&&mx<hit.x+18&&my>=hit.y&&my<hit.y+18){chooseIngredient(hit);return true;}
         if (tab != 1 || my < listTop || my >= listBottom || button != 0) return false;
@@ -400,13 +438,13 @@ public final class WildcardEditorScreen extends Screen implements GenerationList
     }
     private static Component formName(String value){return tr(value.isEmpty()?"all_forms":"form_"+value);}
     private void chooseForm(boolean input){
-        var choices=MaterialForms.FORMS.stream().map(f->new WildcardChoiceScreen.Choice(f,formName(f))).toList();
+        var choices=MaterialForms.FORMS.stream().map(f->new PickerOption(f,formName(f))).toList();
         minecraft.setScreen(new WildcardChoiceScreen(this,tr(input?"input_rules":"output_rules"),choices,v->{if(input)inForm=v;else outForm=v;changedRules();}));
     }
     private void chooseMaterial(){
-        var names=availableMaterials;
-        var choices=new ArrayList<WildcardChoiceScreen.Choice>();choices.add(new WildcardChoiceScreen.Choice("",tr("all_materials")));
-        names.forEach(n->{String key="material.gtceu."+n;Component name=net.minecraft.locale.Language.getInstance().has(key)?Component.translatable(key).append(" · "+n):Component.literal(n);choices.add(new WildcardChoiceScreen.Choice(n,name));});
+        var choices=new ArrayList<PickerOption>();
+        choices.add(new PickerOption("",tr("all_materials")));
+        choices.addAll(materialCatalog.options());
         minecraft.setScreen(new WildcardChoiceScreen(this,tr("material"),choices,v->{material=v;changedRules();}));
     }
     private RuleRecipe sourceRecipe(RecipePlan.Entry e){
@@ -424,15 +462,15 @@ public final class WildcardEditorScreen extends Screen implements GenerationList
         var e=focus;if(e==null){status=tr("extract_choose");tab=1;sync();return;}
         var inputs=new TreeSet<String>();var outputs=new TreeSet<String>();
         for(var i:e.inputs())if(!i.neverConsumed())inputs.addAll(MaterialForms.forms(i.spec()));for(var i:e.outputs())outputs.addAll(MaterialForms.forms(i.spec()));
-        var choices=new ArrayList<WildcardChoiceScreen.Choice>();for(String in:inputs)for(String out:outputs)choices.add(new WildcardChoiceScreen.Choice(in+">"+out,formName(in).copy().append(" → ").append(formName(out))));
+        var choices=new ArrayList<PickerOption>();for(String in:inputs)for(String out:outputs)choices.add(new PickerOption(in+">"+out,formName(in).copy().append(" → ").append(formName(out))));
         if(choices.isEmpty()){status=tr("extract_none");return;}
         minecraft.setScreen(new WildcardChoiceScreen(this,tr("extract"),choices,v->{var pair=v.split(">");inForm=pair[0];outForm=pair[1];material="";query[0]="";query[2]="";inAll=false;outAll=false;status=tr("extract_applied");tab=0;changedRules();}));
     }
     private void chooseIngredient(Hit hit){
-        int index=hit.side==0?0:2;var choices=new ArrayList<WildcardChoiceScreen.Choice>();
-        for(String form:MaterialForms.forms(hit.spec))choices.add(new WildcardChoiceScreen.Choice("form:"+form,tr("use_form",formName(form))));
-        for(String tag:MaterialForms.tags(hit.spec))if(tag.length()<240)choices.add(new WildcardChoiceScreen.Choice("tag:"+tag,Component.literal("$"+tag)));
-        choices.add(new WildcardChoiceScreen.Choice("id:"+hit.spec.id(),tr("use_id",hit.spec.id().toString())));
+        int index=hit.side==0?0:2;var choices=new ArrayList<PickerOption>();
+        for(String form:MaterialForms.forms(hit.spec))choices.add(new PickerOption("form:"+form,tr("use_form",formName(form))));
+        for(String tag:MaterialForms.tags(hit.spec))if(tag.length()<240)choices.add(new PickerOption("tag:"+tag,Component.literal("$"+tag)));
+        choices.add(new PickerOption("id:"+hit.spec.id(),tr("use_id",hit.spec.id().toString())));
         minecraft.setScreen(new WildcardChoiceScreen(this,tr("ingredient_rule"),choices,v->{if(v.startsWith("form:")){if(index==0)inForm=v.substring(5);else outForm=v.substring(5);tab=0;}else{query[index]=(v.startsWith("tag:")?"$":"&")+v.substring(v.indexOf(':')+1);tab=3;}changedRules();}));
     }
     private void drag(double my, boolean detail) {
@@ -453,9 +491,21 @@ public final class WildcardEditorScreen extends Screen implements GenerationList
         Control(int x, int y, int width, int page, Runnable action, String key) { super(x, y, width, 18, tr(key)); this.page = page; this.action = action; this.key = key; }
         @Override public void onPress() { action.run(); }
         @Override protected void renderWidget(GuiGraphics g, int mx, int my, float partial) {
-            WorkbenchTheme.control(g, getX(), getY(), getWidth(), getHeight(), isHoveredOrFocused() && active ? WorkbenchTheme.HOVER : WorkbenchTheme.SURFACE, WorkbenchTheme.LINE);
-            int tw = font.width(getMessage()); label(g, getMessage(), getX() + Math.max(5, (getWidth() - tw) / 2), getY() + 5, getWidth() - 10, active ? TEXT : DIM, 1);
+            WorkbenchTheme.control(g, getX(), getY(), getWidth(), getHeight(), key.equals("tab_"+tab)?WorkbenchTheme.PRIMARY:isHoveredOrFocused() && active ? WorkbenchTheme.HOVER : WorkbenchTheme.SURFACE, WorkbenchTheme.LINE);
+            int tw = font.width(getMessage()); label(g, getMessage(), getX() + Math.max(5, (getWidth() - tw) / 2), getY() + (getHeight() - font.lineHeight) / 2, getWidth() - 10, active ? TEXT : DIM, 1);
         }
         @Override protected void updateWidgetNarration(NarrationElementOutput output) { defaultButtonNarrationText(output); }
     }
+    @Override public net.minecraft.client.renderer.Rect2i toolBounds(){return new net.minecraft.client.renderer.Rect2i(x,y,w,h);}
+
+    @Override public java.util.Optional<IngredientArea> jeiIngredientAt(double mx,double my){
+        if(tab!=1||my<listTop||my>=listBottom)return java.util.Optional.empty();
+        for(var hit:hits)if(mx>=hit.x&&mx<hit.x+18&&my>=hit.y&&my<hit.y+18)return java.util.Optional.of(new IngredientArea(hit.spec,new net.minecraft.client.renderer.Rect2i(hit.x,hit.y,18,18)));
+        return java.util.Optional.empty();
+    }
+    @Override public List<GhostField> jeiGhostFields(){
+        if(tab!=3||sending)return List.of();
+        var targets=new ArrayList<GhostField>();for(var box:boxes)if(box.visible&&box.active)targets.add(ghostField(box,s->box.setValue("&"+s.id())));return targets;
+    }
+
 }

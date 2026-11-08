@@ -139,6 +139,12 @@ public final class NetworkAccess {
         return this.actionHost == null ? IActionSource.ofPlayer(player) : IActionSource.ofPlayer(player, this.actionHost);
     }
 
+    public long blankWildcards() { return storedAmount(blankWildcardKey()); }
+
+    public static AEItemKey blankWildcardKey() {
+        return AEItemKey.of(io.github.sexileman.eae2pattern.wildcard.WildcardItems.MACHINE_PATTERN.get());
+    }
+
     public static AEItemKey blankPatternKey() {
         return AEItemKey.of(AEItems.BLANK_PATTERN.asItem());
     }

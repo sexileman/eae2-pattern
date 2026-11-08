@@ -19,14 +19,14 @@ import java.util.List;
  * block that appears as a catalyst for several of its own machines. Picking before building the plan matters,
  * because the plan for a broad category can be thousands of entries.</p>
  */
-public final class MachinePickerScreen extends Screen {
+public final class MachinePickerScreen extends AeToolScreen {
 
     private static final int ROW_HEIGHT = 20;
     private static final int HEADER_HEIGHT = 40;
     private static final int FOOTER_HEIGHT = 30;
 
-    private static final int COLOR_TEXT = 0xE0E0E0;
-    private static final int COLOR_DIM = 0x909090;
+    private static final int COLOR_TEXT = WorkbenchTheme.TEXT;
+    private static final int COLOR_DIM = WorkbenchTheme.DIM;
     private static final int COLOR_ROW_ALT = 0x30FFFFFF;
 
     private final List<IRecipeCategory<?>> categories;
@@ -38,6 +38,7 @@ public final class MachinePickerScreen extends Screen {
     private int listTop;
     private int listBottom;
     private int scroll;
+    private boolean dragging;
 
     public MachinePickerScreen(ItemStack machine, List<IRecipeCategory<?>> categories) {
         this(Component.translatable("eae2_pattern.picker.title", machine.getHoverName()), categories);
@@ -51,29 +52,24 @@ public final class MachinePickerScreen extends Screen {
 
     @Override
     protected void init() {
-        this.panelWidth = Math.min(320, this.width - 40);
-        this.panelHeight = Math.min(220, this.height - 40);
-        this.panelLeft = (this.width - this.panelWidth) / 2;
-        this.panelTop = (this.height - this.panelHeight) / 2;
+        var frame=ToolViewport.measure(width,height,360,260);panelWidth=frame.width();panelHeight=frame.height();panelLeft=frame.left();panelTop=frame.top();
         this.listTop = this.panelTop + HEADER_HEIGHT;
         this.listBottom = this.panelTop + this.panelHeight - FOOTER_HEIGHT;
         this.scroll = 0;
 
         int buttonY = this.panelTop + this.panelHeight - 24;
-        this.addRenderableWidget(Button.builder(Component.translatable("gui.cancel"), b -> this.onClose())
-                .bounds(this.panelLeft + this.panelWidth - 68, buttonY, 60, 18).build());
+        this.addRenderableWidget(new AeTextButton(panelLeft+panelWidth-68,buttonY,60,18,Component.translatable("gui.cancel"),this::onClose));
     }
 
     @Override
     public void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
-        this.renderBackground(graphics);
+
 
         int left = this.panelLeft;
         int top = this.panelTop;
-        graphics.fill(left - 1, top - 1, left + this.panelWidth + 1, top + this.panelHeight + 1, 0xFF101010);
-        graphics.fill(left, top, left + this.panelWidth, top + this.panelHeight, 0xFF202020);
+        WorkbenchTheme.panel(graphics,left,top,panelWidth,panelHeight);
 
-        graphics.drawString(this.font, this.title, left + 8, top + 8, COLOR_TEXT, false);
+        graphics.drawString(this.font, net.minecraft.locale.Language.getInstance().getVisualOrder(font.substrByWidth(title,panelWidth-16)), left + 8, top + 8, COLOR_TEXT, false);
         graphics.drawString(this.font,
                 Component.translatable("eae2_pattern.picker.hint"),
                 left + 8, top + 20, COLOR_DIM, false);
@@ -97,7 +93,7 @@ public final class MachinePickerScreen extends Screen {
             boolean hovered = mouseX >= this.panelLeft + 4 && mouseX <= this.panelLeft + this.panelWidth - 12
                     && mouseY >= rowY && mouseY < rowY + ROW_HEIGHT;
             if (hovered) {
-                graphics.fill(this.panelLeft + 4, rowY, this.panelLeft + this.panelWidth - 12, rowY + ROW_HEIGHT - 1, 0x40FFFFFF);
+                graphics.fill(this.panelLeft + 4, rowY, this.panelLeft + this.panelWidth - 12, rowY + ROW_HEIGHT - 1, WorkbenchTheme.HOVER);
             } else if (i % 2 == 1) {
                 graphics.fill(this.panelLeft + 4, rowY, this.panelLeft + this.panelWidth - 12, rowY + ROW_HEIGHT - 1, COLOR_ROW_ALT);
             }
@@ -124,12 +120,13 @@ public final class MachinePickerScreen extends Screen {
         int maxScroll = contentHeight - trackHeight;
         int barY = this.listTop + (trackHeight - barHeight) * this.scroll / maxScroll;
         graphics.fill(barX, this.listTop, barX + 4, this.listBottom, 0x40000000);
-        graphics.fill(barX, barY, barX + 4, barY + barHeight, 0xC0A0A0A0);
+        graphics.fill(barX, barY, barX + 4, barY + barHeight, WorkbenchTheme.LINE);
     }
 
     @Override
     public boolean mouseClicked(double mouseX, double mouseY, int button) {
         if (button == 0 && mouseY >= this.listTop && mouseY < this.listBottom) {
+            if(mouseX>=panelLeft+panelWidth-12&&mouseX<panelLeft+panelWidth){dragging=true;dragTo(mouseY);return true;}
             int index = (int) ((mouseY - this.listTop + this.scroll) / ROW_HEIGHT);
             if (index >= 0 && index < this.categories.size() && mouseX >= this.panelLeft + 4
                     && mouseX <= this.panelLeft + this.panelWidth - 12) {
@@ -143,6 +140,7 @@ public final class MachinePickerScreen extends Screen {
 
     @Override
     public boolean mouseScrolled(double mouseX, double mouseY, double delta) {
+        if(!insidePanel(mouseX,mouseY))return false;
         int trackHeight = this.listBottom - this.listTop;
         int contentHeight = this.categories.size() * ROW_HEIGHT;
         int maxScroll = Math.max(0, contentHeight - trackHeight);
@@ -154,4 +152,10 @@ public final class MachinePickerScreen extends Screen {
     public boolean isPauseScreen() {
         return false;
     }
+    @Override public net.minecraft.client.renderer.Rect2i toolBounds(){return new net.minecraft.client.renderer.Rect2i(panelLeft,panelTop,panelWidth,panelHeight);}
+
+    private void dragTo(double my){int viewport=listBottom-listTop,content=categories.size()*ROW_HEIGHT;scroll=Math.max(0,Math.min(Math.max(0,content-viewport),(int)((my-listTop)/Math.max(1,viewport)*content)));}
+    @Override public boolean mouseDragged(double mx,double my,int button,double dx,double dy){if(dragging){dragTo(my);return true;}return super.mouseDragged(mx,my,button,dx,dy);}
+    @Override public boolean mouseReleased(double mx,double my,int button){dragging=false;return super.mouseReleased(mx,my,button);}
+
 }

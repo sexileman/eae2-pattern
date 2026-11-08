@@ -12,17 +12,18 @@ import java.util.function.Supplier;
  * actually stored instead of guessing. {@code hasNetwork} being false means the player has no AE2 network we
  * can address at all, which is a different problem from "not enough blanks" and gets its own message.</p>
  */
-public record S2CNetworkStatusPacket(int requestId, boolean hasNetwork, long blankPatterns, String detail) {
+public record S2CNetworkStatusPacket(int requestId, boolean hasNetwork, long blankPatterns, long blankWildcards, String detail) {
 
     public void encode(FriendlyByteBuf buf) {
         buf.writeVarInt(requestId);
         buf.writeBoolean(hasNetwork);
         buf.writeVarLong(blankPatterns);
+        buf.writeVarLong(blankWildcards);
         buf.writeUtf(detail, 2048);
     }
 
     public static S2CNetworkStatusPacket decode(FriendlyByteBuf buf) {
-        return new S2CNetworkStatusPacket(buf.readVarInt(), buf.readBoolean(), buf.readVarLong(), buf.readUtf(2048));
+        return new S2CNetworkStatusPacket(buf.readVarInt(), buf.readBoolean(), buf.readVarLong(), buf.readVarLong(), buf.readUtf(2048));
     }
 
     public void handle(Supplier<NetworkEvent.Context> contextSupplier) {

@@ -25,9 +25,9 @@ import java.util.function.IntConsumer;
 import org.lwjgl.glfw.GLFW;
 
 /** Virtual recipe list and independent inspector: work per frame depends on viewport size, not recipe count. */
-public final class PatternWorkbenchScreen extends Screen implements GenerationListener {
+public final class PatternWorkbenchScreen extends AeToolScreen implements GenerationListener {
     private static final int BG = WorkbenchTheme.BACKGROUND, SURFACE = WorkbenchTheme.SURFACE, LINE = WorkbenchTheme.LINE;
-    private static final int TEXT = WorkbenchTheme.TEXT, DIM = WorkbenchTheme.DIM, ACCENT = WorkbenchTheme.ACCENT, ROW = 38;
+    private static final int TEXT = WorkbenchTheme.TEXT, DIM = WorkbenchTheme.DIM, ACCENT = WorkbenchTheme.ACCENT, ROW = RecipeListRow.HEIGHT;
     private final RecipePlan plan;
     private final Screen parent;
     private final RecipeNavigation.ReturnContext jeiReturn;
@@ -67,10 +67,10 @@ public final class PatternWorkbenchScreen extends Screen implements GenerationLi
     private int filterCursor;
     private double listScroll, detailScroll;
     private int left, top, panelWidth, panelHeight, split, bodyTop, bodyBottom;
-    private int selectedCount, eligibleCount, tickCount, searchDelay;
+    private int selectedCount, eligibleCount, tickCount;
     private int footerStatusX, footerStatusY, footerStatusWidth;
     private Component notice = Component.empty();
-    private Action generationMode;
+    private final SearchDebounce searchDebounce = new SearchDebounce();
     private Action generate, inputFilter, outputFilter, tools, products, multiplier, halveMultiplier, doubleMultiplier, resetMultiplier, grouping, more, detailMode;
 
     public PatternWorkbenchScreen(RecipePlan plan, Screen parent) {
@@ -91,15 +91,16 @@ public final class PatternWorkbenchScreen extends Screen implements GenerationLi
         outputBox = addRenderableWidget(new WorkbenchSearchBox(font, left + 24 + half, top + searchY + 5, half - 12, tr("output")));
         inputBox.setMaxLength(160); outputBox.setMaxLength(160);
         inputBox.setBordered(false); outputBox.setBordered(false);
-        inputBox.setTextColor(TEXT); outputBox.setTextColor(TEXT);
+        inputBox.setTextColor(WorkbenchTheme.INPUT_TEXT); outputBox.setTextColor(WorkbenchTheme.INPUT_TEXT);
         inputBox.setValue(inputText); outputBox.setValue(outputText);
-        inputBox.setResponder(value -> { inputText = value; exactInput = null; searchDelay = 3; });
-        outputBox.setResponder(value -> { outputText = value; exactOutput = null; searchDelay = 3; });
-        int q = (panelWidth - 32) / 4;
-        inputFilter = action(left + 10, top + filterY, q, () -> choose(inputFilter, "input_mode.", 4, inputMode, value -> { inputMode = value; refresh(); }));
-        outputFilter = action(left + 14 + q, top + filterY, q, () -> choose(outputFilter, "output_mode.", 6, outputMode, value -> { outputMode = value; refresh(); }));
-        tools = action(left + 18 + q * 2, top + filterY, q, () -> { dropTools = !dropTools; optionsChanged(); }).toggle(() -> dropTools);
-        products = action(left + 22 + q * 3, top + filterY, q, () -> choose(products, "policy.", 3, outputPolicy, value -> { outputPolicy = value; optionsChanged(); }));
+        inputBox.setResponder(value -> { if (value.equals(inputText)) return; inputText = value; exactInput = null; searchDebounce.changed(); });
+        outputBox.setResponder(value -> { if (value.equals(outputText)) return; outputText = value; exactOutput = null; searchDebounce.changed(); });
+        boolean stacked=panelWidth<420&&panelHeight>=260;
+        int q=stacked?(panelWidth-24)/2:(panelWidth-32)/4;
+        inputFilter=action(left+10,top+filterY,q,()->choose(inputFilter,"input_mode.",4,inputMode,value->{inputMode=value;refresh();}));
+        outputFilter=action(left+14+q,top+filterY,q,()->choose(outputFilter,"output_mode.",6,outputMode,value->{outputMode=value;refresh();}));
+        tools=action(stacked?left+10:left+18+q*2,top+filterY+(stacked?22:0),q,()->{dropTools=!dropTools;optionsChanged();}).toggle(()->dropTools);
+        products=action(stacked?left+14+q:left+22+q*3,top+filterY+(stacked?22:0),q,()->choose(products,"policy.",3,outputPolicy,value->{outputPolicy=value;optionsChanged();}));
         int w = (split - left - 30) / 5;
         grouping = action(left + 10, top + toolbarY, w * 2, () -> choose(grouping, "grouping.", 4, groupingMode, value -> {
             groupingMode = value; expanded.clear(); refresh();
@@ -108,8 +109,7 @@ public final class PatternWorkbenchScreen extends Screen implements GenerationLi
         action(left + 18 + w * 3, top + toolbarY, w, () -> { if (filtering || checking) return; visible.forEach(e -> e.setSelected(false)); refresh(); }).help("selection_help").setMessage(tr("none"));
         more = action(left + 22 + w * 4, top + toolbarY, w, this::moreMenu);
         detailMode = action(split + 10, top + toolbarY, Math.max(35, left + panelWidth - split - 65), () -> {
-            choice = new Choice(detailMode, List.of(tr("final_view"), tr("source_view")), sourceView ? 1 : 0,
-                    index -> { sourceView = index == 1; rebuildDetails(); });
+            sourceView = !sourceView; detailScroll = 0; rebuildDetails(); updateButtons();
         });
         action(left + panelWidth - 50, top + toolbarY, 40, () -> {
             if (focused != null && focused.jeiRecipe() != null) {
@@ -118,22 +118,17 @@ public final class PatternWorkbenchScreen extends Screen implements GenerationLi
                 RecipeNavigation.show(plan, focused);
             }
         }).help("jei_help").setMessage(Component.literal("JEI ↗"));
-        generationMode = null;
-        if (layout.footerTitle()) {
-            generationMode = action(left + 18, layout.footerTop() + 1, 128, this::toggleWildcard).help("wildcard_mode_help");
-            generationMode.setHeight(14);
-        }
-        halveMultiplier = action(left + 18, layout.footerControlsY(), 26,
+        halveMultiplier = action(left + 18, layout.footerControlsY(), panelWidth<300?22:26,
                 () -> changeMultiplier(ProcessingMultiplier.halveAmount(ProcessingMultiplier.parse(multiplierText))))
                 .help("multiplier_halve_help");
-        multiplier = action(left + 47, layout.footerControlsY(), 42, () -> {}).help("multiplier_help");
-        doubleMultiplier = action(left + 92, layout.footerControlsY(), 26,
+        multiplier = action(left + (panelWidth<300?43:47), layout.footerControlsY(), panelWidth<300?34:42, () -> {}).help("multiplier_help");
+        doubleMultiplier = action(left + (panelWidth<300?80:92), layout.footerControlsY(), panelWidth<300?22:26,
                 () -> changeMultiplier(ProcessingMultiplier.doubleAmount(ProcessingMultiplier.parse(multiplierText))))
                 .help("multiplier_double_help");
         resetMultiplier = action(left + 121, layout.footerControlsY(), 38,
                 () -> changeMultiplier(ProcessingMultiplier.DEFAULT)).help("multiplier_reset_help");
         action(left + panelWidth - 62, top + 9, 52, this::onClose).help("close_help").setMessage(tr("close"));
-        generate = action(left + panelWidth - 138, layout.footerControlsY(), 120, this::generate).help("scope_help");
+        generate = action(left + panelWidth - (panelWidth<300?118:138), layout.footerControlsY(), panelWidth<300?100:120, this::generate).help("scope_help");
         choice = null; navigatingToJei = false;
         ClientGenerationFeedback.setListener(this); InspectionFeedback.setListener(this::inspectionFinished);
         ClientNetworkState.reset(); queryNetwork(); queuePreview(); rebuildDetails(); updateButtons();
@@ -146,9 +141,9 @@ public final class PatternWorkbenchScreen extends Screen implements GenerationLi
     private void queryNetwork() { PacketHandler.sendToServer(new C2SQueryNetworkStatusPacket(0)); }
     @Override public void tick() {
         inputBox.tick(); outputBox.tick();
-        if (searchDelay > 0 && --searchDelay == 0) { input = ItemSearchQuery.parse(inputText); output = ItemSearchQuery.parse(outputText); refresh(); }
-        if (filtering && searchDelay == 0) filterStep();
-        if (previewDelay > 0 && !sending && !checking && --previewDelay == 0) requestPreview();
+        if (searchDebounce.poll()) { input = ItemSearchQuery.parse(inputText); output = ItemSearchQuery.parse(outputText); refresh(); }
+        if (filtering && !searchDebounce.pending()) filterStep();
+        if (!filtering && !searchDebounce.pending() && previewDelay > 0 && !sending && !checking && --previewDelay == 0) requestPreview();
         if (++tickCount % 60 == 0 && !sending) queryNetwork();
         updateButtons();
     }
@@ -208,28 +203,15 @@ public final class PatternWorkbenchScreen extends Screen implements GenerationLi
         doubleMultiplier.active = !checking && !sending && ProcessingMultiplier.parse(multiplierText) < ProcessingMultiplier.MAX;
         resetMultiplier.active = !checking && !sending && ProcessingMultiplier.parse(multiplierText) != 1;
         more.active = !checking && !sending;
-        if (generationMode != null) {
-            generationMode.setMessage(tr("open_wildcard_editor"));
-            generationMode.active = !sending && !checking;
-        }
-        generate.setMessage(tr(sending ? "sending" : checking ? "checking" : filtering ? "filtering" : "generate_current", eligibleCount));
-        generate.active = !sending && !checking && !filtering && searchDelay == 0 && ProcessingMultiplier.parse(multiplierText) > 0
+        generate.setMessage(sending ? tr("sending") : tr("generate", requiredBlanks()));
+        generate.active = !sending && !checking && !filtering && !searchDebounce.pending() && ProcessingMultiplier.parse(multiplierText) > 0
                 && eligibleCount > 0 && ClientNetworkState.hasNetwork() && ClientNetworkState.blankPatterns() >= requiredBlanks();
     }
     private int requiredBlanks() { return eligibleCount; }
-    private void toggleWildcard() {
-        if (sending || checking) return;
-        var state = new net.minecraft.nbt.CompoundTag();
-        state.putString("in_include", inputBox.getValue()); state.putString("out_include", outputBox.getValue());
-        state.putInt("multiplier", ProcessingMultiplier.parse(multiplierText)); state.putInt("output_policy", outputPolicy);
-        state.putBoolean("drop_tools", dropTools); state.putBoolean("search_tools", true);
-        minecraft.setScreen(new WildcardEditorScreen(plan, this, state, null, false));
-    }
     private void generate() {
         if (!generate.active) return;
-        List<PatternSpec> specs = selectedSpecs();
-        try { PatternRequestSender.send(specs); sending = true; notice = tr("sending"); }
-        catch (IllegalArgumentException e) { notice = Component.literal(e.getMessage()); }
+        try { PatternRequestSender.send(selectedSpecs()); sending = true; notice = tr("sending"); }
+        catch (IllegalArgumentException | ArithmeticException e) { notice = EncodingMessages.explain(e.getMessage()); }
         updateButtons();
     }
     private List<PatternSpec> selectedSpecs() {
@@ -275,19 +257,21 @@ public final class PatternWorkbenchScreen extends Screen implements GenerationLi
     private void requestPreview() {
         if (focused == null) return;
         int scale = ProcessingMultiplier.parse(multiplierText);
-        PatternSpec spec = scale == 0 ? null : focused.specForPolicy(scale, outputPolicy, dropTools);
-        if (spec == null) {
-            previewNotice = scale == 0 ? tr("multiplier_invalid", ProcessingMultiplier.MAX) : tr(RecipeDiagnostics.skipReason(focused, outputPolicy, dropTools));
-            rebuildDetails(); return;
-        }
-        try { previewRequest = PatternRequestSender.send(List.of(spec), 2); }
-        catch (IllegalArgumentException e) { previewNotice = Component.literal(e.getMessage()); }
+        try {
+            PatternSpec spec = scale == 0 ? null : focused.specForPolicy(scale, outputPolicy, dropTools);
+            if (spec == null) {
+                previewNotice = scale == 0 ? tr("multiplier_invalid", ProcessingMultiplier.MAX) : tr(RecipeDiagnostics.skipReason(focused, outputPolicy, dropTools));
+                rebuildDetails(); return;
+            }
+            previewRequest = PatternRequestSender.send(List.of(spec), 2);
+        } catch (IllegalArgumentException | ArithmeticException e) { previewRequest=-1;previewNotice = EncodingMessages.explain(e.getMessage()); }
         rebuildDetails();
     }
     private void inspectionFinished(S2CInspectionPacket result) {
         if (result.operation() == 2 && result.requestId() == previewRequest) {
             preview = !result.success() || result.preview().isEmpty() ? null : result.preview().get(0);
-            previewNotice = preview != null ? tr("server_preview") : result.details().isEmpty() ? tr("preview_failed") : Component.literal(result.details().get(0));
+            if(preview==null&&!result.details().isEmpty())io.github.sexileman.eae2pattern.EAE2Pattern.LOGGER.warn("Pattern preview rejected: {}",result.details());
+            previewNotice = preview != null ? tr("server_preview") : result.details().isEmpty() ? tr("preview_failed") : EncodingMessages.explain(result.details().get(0));
             if (preview == null) previewErrors.put(focused.recipeId(), previewNotice); else previewErrors.remove(focused.recipeId());
             recount(); rebuildDetails();
         } else if (result.operation() == 1 && result.requestId() == existingRequest) {
@@ -309,7 +293,7 @@ public final class PatternWorkbenchScreen extends Screen implements GenerationLi
         try {
             existing.clear(); existingRequest = PatternRequestSender.send(selectedSpecs(), 1);
             checking = true; notice = tr("checking"); updateButtons();
-        } catch (IllegalArgumentException e) { notice = Component.literal(e.getMessage()); }
+        } catch (IllegalArgumentException | ArithmeticException e) { notice = EncodingMessages.explain(e.getMessage()); }
     }
     private void rebuildDetails() {
         details.clear(); referenceDetails.clear();
@@ -326,7 +310,7 @@ public final class PatternWorkbenchScreen extends Screen implements GenerationLi
             sourceDetails(focused);
         } else {
             details.add(new DetailLine(focused.label(), null, TEXT));
-            details.add(new DetailLine(previewNotice, null, preview == null ? WorkbenchTheme.WARNING : DIM));
+            if(preview==null)details.add(DetailLine.notice(previewNotice,WorkbenchTheme.WARNING));
             if (preview != null) {
                 details.add(new DetailLine(tr("encoded_inputs"), null, ACCENT));
                 for (StackSpec input : preview.inputs()) details.add(encodedLine(input, 0));
@@ -340,7 +324,6 @@ public final class PatternWorkbenchScreen extends Screen implements GenerationLi
                 for (Ingredient input : focused.inputs()) if (input.neverConsumed()) addIngredient(input, false, false);
                 for (Ingredient input : focused.catalysts()) addIngredient(input, false, false);
             }
-            details.add(DetailLine.notice(tr("server_preview_help"), DIM));
         }
         int detailWidth = left + panelWidth - 18 - (split + 12);
         if (!referenceDetails.isEmpty()) detailWidth = (left + panelWidth - split) / 2 - 24;
@@ -361,8 +344,6 @@ public final class PatternWorkbenchScreen extends Screen implements GenerationLi
     }
     private void sourceDetails(RecipePlan.Entry entry) {
         details.add(new DetailLine(entry.label(), null, TEXT));
-        details.add(new DetailLine(Component.literal(entry.recipeId().toString()), null, DIM));
-        details.add(new DetailLine(Component.translatable("eae2_pattern.kind." + entry.kind().name().toLowerCase(Locale.ROOT)), null, DIM));
         details.add(new DetailLine(tr("inputs"), null, ACCENT));
         for (Ingredient input : entry.inputs()) addIngredient(input, false, false);
         for (Ingredient input : entry.catalysts()) addIngredient(input, false, false);
@@ -372,16 +353,15 @@ public final class PatternWorkbenchScreen extends Screen implements GenerationLi
     }
     private void moreMenu() {
         if (checking || sending) return;
-        List<Component> labels = List.of(tr(selectedOnly ? "show_all" : "selected"), tr("invert"),
-                tr(pinned != null ? "unpin" : "pin"), tr("check_stored"),
-                tr("skip_summary"), tr("collapse"), tr("clear_search"), tr("reset_settings"), tr("switch_wildcard"));
+        var actions = WorkbenchMoreAction.values();
+        List<Component> labels = java.util.Arrays.stream(actions).map(action -> tr(action.labelKey(selectedOnly,pinned!=null))).toList();
         choice = new Choice(more, labels, -1, index -> {
-            switch (index) {
-                case 0 -> { selectedOnly = !selectedOnly; refresh(); }
-                case 1 -> { if (!filtering) { visible.forEach(RecipePlan.Entry::toggle); refresh(); } }
-                case 2 -> { pinned = pinned != null ? null : focused; sourceView = true; rebuildDetails(); }
-                case 3 -> checkExisting();
-                case 4 -> {
+            switch (actions[index]) {
+                case SELECTED_ONLY -> { selectedOnly = !selectedOnly; refresh(); }
+                case INVERT -> { if (!filtering) { visible.forEach(RecipePlan.Entry::toggle); refresh(); } }
+                case PIN -> { pinned = pinned != null ? null : focused; sourceView = true; rebuildDetails(); }
+                case CHECK_STORED -> checkExisting();
+                case SKIP_SUMMARY -> {
                     Map<String, Integer> reasons = new LinkedHashMap<>();
                     for (RecipePlan.Entry e : visible) if (e.isSelected()) {
                         String reason = skipReason(e);
@@ -390,10 +370,9 @@ public final class PatternWorkbenchScreen extends Screen implements GenerationLi
                     notice = tr("skipped_count", skippedCount);
                     for (var reason : reasons.entrySet()) notice = notice.copy().append(" · ").append(tr(reason.getKey())).append(" ×" + reason.getValue());
                 }
-                case 5 -> { expanded.clear(); rebuildRows(); }
-                case 6 -> { inputBox.setValue(""); outputBox.setValue(""); }
-                case 8 -> toggleWildcard();
-                case 7 -> {
+                case COLLAPSE -> { expanded.clear(); rebuildRows(); }
+                case CLEAR_SEARCH -> { inputBox.setValue(""); outputBox.setValue(""); }
+                case RESET_SETTINGS -> {
                     dropTools = true; outputPolicy = inputMode = outputMode = groupingMode = 0;
                     selectedOnly = false; sourceView = false; pinned = null; expanded.clear(); changeMultiplier(1);
                     inputBox.setValue(""); outputBox.setValue(""); optionsChanged(); refresh();
@@ -404,8 +383,8 @@ public final class PatternWorkbenchScreen extends Screen implements GenerationLi
     }
     @Override public void render(GuiGraphics g, int mx, int my, float partial) {
         iconHits.clear();
-        g.fill(0, 0, width, height, 0xCC000000);
-        WorkbenchTheme.rounded(g, left, top, panelWidth, panelHeight, BG);
+
+        WorkbenchTheme.panel(g, left, top, panelWidth, panelHeight);
         text(g, tr("title").copy().append(" / ").append(plan.machineName()), left + 10, top + 10, panelWidth - 86, TEXT);
         if (panelHeight >= 230) g.fill(left + 10, top + 27, left + panelWidth - 10, top + 28, LINE);
         searchSurface(g, inputBox); searchSurface(g, outputBox);
@@ -419,28 +398,28 @@ public final class PatternWorkbenchScreen extends Screen implements GenerationLi
         super.render(g, mx, my, partial);
         if (choice != null) { choice.render(g, mx, my); return; }
         if (over(mx, my, left + 10, layout.statsY() - 2, left + panelWidth - 10, layout.statsY() + 11))
-            g.renderComponentTooltip(font, List.of(summary, tr("scope_help")), mx, my);
+            Tooltips.show(g,font,width, List.of(summary, tr("scope_help")), mx, my);
         if (over(mx, my, footerStatusX, footerStatusY - 2, footerStatusX + footerStatusWidth, footerStatusY + 11))
-            g.renderComponentTooltip(font, List.of(status), mx, my);
+            Tooltips.show(g,font,width, List.of(status), mx, my);
         if (inputBox.isMouseOver(mx, my) || outputBox.isMouseOver(mx, my)) {
             boolean exact = inputBox.isMouseOver(mx, my) ? exactInput != null : exactOutput != null;
-            g.renderComponentTooltip(font, exact ? List.of(tr("exact_filter"), tr("search_help")) : List.of(tr("search_help")), mx, my);
+            Tooltips.show(g,font,width, exact ? List.of(tr("exact_filter"), tr("search_help")) : List.of(tr("search_help")), mx, my);
         }
         for (var child : children()) if (child instanceof Action a && a.isHovered())
-            g.renderComponentTooltip(font, List.of(a.getMessage(), tr(a.helpKey != null ? a.helpKey : a == tools ? "tools_help" : a == multiplier ? "multiplier_help" : a == more ? "more_help" : a == grouping ? "group_help" : "option_help", ProcessingMultiplier.MAX)), mx, my);
+            Tooltips.show(g,font,width, List.of(a.getMessage(), tr(a.helpKey != null ? a.helpKey : a == tools ? "tools_help" : a == multiplier ? "multiplier_help" : a == more ? "more_help" : a == grouping ? "group_help" : "option_help", ProcessingMultiplier.MAX)), mx, my);
         IconHit hit = iconAt(mx, my);
         if (hit != null) {
             if (hit.spec.isItem()) {
                 var stack = visuals.item(hit.spec);
                 g.renderTooltip(font, iconTooltip(hit), stack.getTooltipImage(), stack, mx, my);
-            } else g.renderComponentTooltip(font, iconTooltip(hit), mx, my);
+            } else Tooltips.show(g,font,width, iconTooltip(hit), mx, my);
             return;
         }
         if (over(mx, my, left + 10, bodyTop, split - 12, bodyBottom)) {
             int index = (int) ((my - bodyTop + listScroll) / ROW);
             if (index < rows.size()) {
                 RecipeGroups.Row row = rows.get(index);
-                g.renderComponentTooltip(font, row.header() ? List.of(row.group().key().label(), tr("group_hint", row.group().entries().size())) : rowTooltip(row.entry()), mx, my);
+                Tooltips.show(g,font,width, row.header() ? List.of(row.group().key().label(), tr("group_hint", row.group().entries().size())) : rowTooltip(row.entry()), mx, my);
             }
         } else if (over(mx, my, split + 4, bodyTop, left + panelWidth - 18, bodyBottom)) {
             boolean reference = !referenceDetails.isEmpty() && mx < (split + left + panelWidth) / 2;
@@ -448,18 +427,18 @@ public final class PatternWorkbenchScreen extends Screen implements GenerationLi
             List<DetailLine> hoveredDetails = reference ? referenceDetails : details;
             if (index >= 0 && index < hoveredDetails.size()) {
                 DetailLine line = hoveredDetails.get(index);
-                g.renderComponentTooltip(font, List.of(line.text), mx, my);
+                Tooltips.show(g,font,width, List.of(line.text), mx, my);
             }
         }
     }
     private void renderFooter(GuiGraphics g, Component status) {
-        WorkbenchTheme.control(g, left + 8, layout.footerTop(), panelWidth - 16, layout.footerHeight(), 0xFF202020, LINE);
+        WorkbenchTheme.control(g, left + 8, layout.footerTop(), panelWidth - 16, layout.footerHeight(), WorkbenchTheme.BACKGROUND, LINE);
         boolean ready = ClientNetworkState.hasNetwork() && ClientNetworkState.blankPatterns() >= requiredBlanks()
                 && ProcessingMultiplier.parse(multiplierText) > 0;
-        footerStatusX = left + 168;
+        footerStatusX = left + (layout.footerTitle()?18:168);
         if (layout.footerTitle()) {
             footerStatusY = layout.footerTop() + (layout.footerHeight() >= 50 ? 9 : 4);
-            footerStatusWidth = panelWidth - 186;
+            footerStatusWidth = panelWidth - 36;
 
             int room = panelWidth - 314;
             if (room >= 70) text(g, tr("processing_only"), left + 168, layout.footerControlsY() + 5, room, DIM);
@@ -468,7 +447,7 @@ public final class PatternWorkbenchScreen extends Screen implements GenerationLi
             footerStatusWidth = Math.max(0, panelWidth - 314);
         }
         if (footerStatusWidth < 12) return;
-        text(g, !layout.footerTitle() && footerStatusWidth < 70 ? Component.literal(ready ? "✓" : "!") : status,
+        text(g, !layout.footerTitle() && footerStatusWidth < 70 ? Component.literal(ready ? "✓" : "!") : panelWidth<420&&ClientNetworkState.hasNetwork()?tr("stock_short",ClientNetworkState.blankPatterns(),requiredBlanks()):status,
                 footerStatusX, footerStatusY, footerStatusWidth, ready ? DIM : WorkbenchTheme.WARNING);
     }
     private void searchSurface(GuiGraphics g, EditBox box) {
@@ -487,7 +466,7 @@ public final class PatternWorkbenchScreen extends Screen implements GenerationLi
                 int chosen = groupSelected.getOrDefault(group, 0);
                 boolean all = chosen == group.entries().size();
                 WorkbenchTheme.rounded(g, x, y, right - x, ROW - 2, SURFACE);
-                checkbox(g, x + 4, y + 13, all);
+                checkbox(g, x + 4, y + 3, all);
                 if (!all && chosen > 0) g.fill(x + 6, y + 17, x + 11, y + 18, DIM);
                 g.drawString(font, expanded.contains(group.key().id()) ? "▾" : "▸", x + 18, y + 13, DIM, false);
                 text(g, group.key().label(), x + 29, y + 7, right - x - 34, TEXT);
@@ -495,43 +474,17 @@ public final class PatternWorkbenchScreen extends Screen implements GenerationLi
                 continue;
             }
             RecipePlan.Entry e = row.entry();
-            if (e == focused || over(mx, my, x, y, right, y + ROW)) WorkbenchTheme.rounded(g, x, y, right - x, ROW - 1, e == focused ? WorkbenchTheme.HOVER : SURFACE);
-            checkbox(g, x + 4, y + 13, e.isSelected());
             String flag = existing.contains(e.recipeId()) ? tr("stored_badge").getString() : !skipReason(e).isEmpty() ? "!" : e == pinned ? tr("reference").getString()
                     : e.hasProbabilisticInput() || e.hasProbabilisticOutput() ? tr("chance_badge").getString() : "";
-            int flagWidth = flag.isEmpty() ? 0 : font.width(flag) + 5;
-            text(g, e.label(), x + 19, y + 3, right - x - 23 - flagWidth, e.isSelected() ? TEXT : DIM);
-            if (!flag.isEmpty()) g.drawString(font, flag, right - flagWidth, y + 3, DIM, false);
-            int inputMax = right - x >= 220 ? 3 : 2, outputMax = right - x >= 220 ? 2 : 1;
-            List<Ingredient> inputs = new ArrayList<>(e.inputs()); inputs.addAll(e.catalysts());
-            while (ingredientStripWidth(inputs.size(), inputMax) + ingredientStripWidth(e.outputs().size(), outputMax) + 24 > right - x - 19
-                    && (inputMax > 1 || outputMax > 1)) {
-                if (inputMax > 1) inputMax--; else outputMax--;
-            }
-            int iconX = drawIngredients(g, inputs, x + 19, y + 17, inputMax, 0);
-            g.drawString(font, ">", iconX + 6, y + 22, DIM, false);
-            drawIngredients(g, e.outputs(), iconX + 24, y + 17, outputMax, 1);
+            RecipeListRow.draw(g,font,visuals,e,x,y,right,e.isSelected(),e==focused,over(mx,my,x,y,right,y+ROW),Component.literal(flag),
+                    (hx,hy,ingredient,side)->iconHits.add(new IconHit(hx,hy,ingredient.spec(),side,IngredientPresentation.of(ingredient,side))));
         }
         if (visible.isEmpty()) text(g, tr("empty"), x + 6, bodyTop + 12, right - x - 12, DIM);
         g.disableScissor(); scrollbar(g, split - 10, listScroll, rows.size() * ROW);
     }
-    private void checkbox(GuiGraphics g, int x, int y, boolean checked) {
-        g.fill(x, y, x + 9, y + 9, checked ? 0xFF777777 : LINE);
-        g.fill(x + 1, y + 1, x + 8, y + 8, checked ? WorkbenchTheme.PRIMARY : BG);
-        if (checked) { g.fill(x + 2, y + 4, x + 4, y + 6, TEXT); g.fill(x + 4, y + 2, x + 6, y + 6, TEXT); }
-    }
-    private int ingredientStripWidth(int count, int max) {
-        return Math.min(count, max) * 22 + (count > max ? font.width("+" + (count - max)) + 8 : 0);
-    }
-    private int drawIngredients(GuiGraphics g, List<Ingredient> ingredients, int x, int y, int max, int side) {
-        for (int i = 0; i < Math.min(max, ingredients.size()); i++) {
-            Ingredient ingredient = ingredients.get(i);
-            visuals.draw(g, ingredient.spec(), x, y);
-            visuals.drawRule(g, IngredientPresentation.of(ingredient, side), x, y);
-            iconHits.add(new IconHit(x, y, ingredient.spec(), side, IngredientPresentation.of(ingredient, side))); x += 22;
-        }
-        if (ingredients.size() > max) { String extra = "+" + (ingredients.size() - max); g.drawString(font, extra, x + 3, y + 5, DIM, false); x += font.width(extra) + 8; }
-        return x;
+    private void checkbox(GuiGraphics g,int x,int y,boolean checked) {
+        g.fill(x,y,x+9,y+9,LINE);g.fill(x+1,y+1,x+8,y+8,checked?WorkbenchTheme.PRIMARY:BG);
+        if(checked){g.fill(x+2,y+4,x+4,y+6,TEXT);g.fill(x+4,y+2,x+6,y+6,TEXT);}
     }
     private void renderDetails(GuiGraphics g) {
         int x = split + 12, right = left + panelWidth - 18;
@@ -545,7 +498,7 @@ public final class PatternWorkbenchScreen extends Screen implements GenerationLi
     }
     private int detailHeight(DetailLine line, int width) {
         if (line.spec != null) return line.presentation.kind() == IngredientPresentation.Kind.REGULAR ? 30 : 42;
-        if (line.notice) return 32 + font.split(line.text, Math.max(1, (int) ((width - 16) / .75f))).size() * 9;
+        if (line.notice) return 32 + font.split(line.text, Math.max(1, (int) (width - 16))).size() * 9;
         return DetailRowLayout.TEXT_HEIGHT;
     }
     private int detailContentHeight() { return Math.max(detailRows.height(), referenceRows.height()); }
@@ -559,28 +512,28 @@ public final class PatternWorkbenchScreen extends Screen implements GenerationLi
             DetailLine line = lines.get(n);
             if (line.spec != null) {
                 WorkbenchTheme.slot(g, x, y + 2, line.presentation);
-                visuals.draw(g, line.spec, x + 4, y + 6);
-                visuals.drawRule(g, line.presentation, x + 4, y + 6);
-                iconHits.add(new IconHit(x, y + 2, line.spec, line.side, line.presentation, 24));
-                text(g, line.text, x + 30, y + 3, right - x - 30, line.color);
+                visuals.draw(g, line.spec, x + 1, y + 3);
+                visuals.drawRule(g, line.presentation, x + 1, y + 3);
+                iconHits.add(new IconHit(x, y + 2, line.spec, line.side, line.presentation, 18));
+                text(g, line.text, x + 24, y + 3, right - x - 24, line.color);
                 Component amount = amountText(line.spec);
                 Component state = line.presentation.description();
-                int room = right - x - 30;
-                smallText(g, amount, x + 30, y + 16, room, DIM, .8f);
+                int room = right - x - 24;
+                smallText(g, amount, x + 24, y + 16, room, DIM, .8f);
                 if (line.presentation.kind() != IngredientPresentation.Kind.REGULAR)
-                    smallText(g, state, x + 30, y + 28, room, line.presentation.color(), .8f);
+                    smallText(g, state, x + 24, y + 28, room, line.presentation.color(), .8f);
             } else if (line.notice) {
                 int bottom = bodyTop + positions.top(n + 1) - (int) detailScroll - 4;
                 int color = line.color == WorkbenchTheme.WARNING ? WorkbenchTheme.WARNING : DIM;
-                g.fill(x, y + 5, right, bottom, WorkbenchTheme.INPUT);
+                g.fill(x, y + 5, right, bottom, WorkbenchTheme.SURFACE);
                 g.fill(x, y + 5, x + 2, bottom, color);
                 smallText(g, tr(line.color == WorkbenchTheme.WARNING ? "notice_warning" : "notice_info"), x + 8, y + 10, right - x - 16, color, .9f);
                 int ty = y + 24;
-                for (var part : font.split(line.text, Math.max(1, (int) ((right - x - 16) / .75f)))) {
+                for (var part : font.split(line.text, Math.max(1, (int) (right - x - 16)))) {
                     g.pose().pushPose();
                     try {
                         g.pose().translate(x + 8, ty, 0);
-                        g.pose().scale(.75f, .75f, 1);
+                        g.pose().scale(1, 1, 1);
                         g.drawString(font, part, 0, 0, DIM, false);
                     } finally { g.pose().popPose(); }
                     ty += 9;
@@ -628,7 +581,6 @@ public final class PatternWorkbenchScreen extends Screen implements GenerationLi
         if (entry.outputs().size() > 3) lines.add(tr("more_slots", entry.outputs().size() - 3));
         String reason = skipReason(entry);
         if (!reason.isEmpty()) lines.add(tr(reason));
-        lines.add(tr("row_help"));
         return lines;
     }
     private Component amountText(StackSpec spec) { return tr(spec.isItem() ? "item_amount" : "fluid_amount", spec.amount()); }
@@ -637,16 +589,14 @@ public final class PatternWorkbenchScreen extends Screen implements GenerationLi
         IngredientPresentation presentation = IngredientPresentation.of(ingredient, side);
         return presentation.kind() == IngredientPresentation.Kind.REGULAR ? text : text.copy().append(" · ").append(presentation.description());
     }
-    private void smallText(GuiGraphics g, Component value, int x, int y, int room, int color, float scale) {
-        g.pose().pushPose();
-        try {
-            g.pose().translate(x, y, 0);
-            g.pose().scale(scale, scale, 1);
-            text(g, value, 0, 0, Math.max(1, (int) (room / scale)), color);
-        } finally { g.pose().popPose(); }
+    private void smallText(GuiGraphics g,Component value,int x,int y,int room,int color,float ignoredScale) {
+        text(g,value,x,y,room,color);
     }
-    private void text(GuiGraphics g, Component value, int x, int y, int room, int color) {
-        String s = value.getString(); g.drawString(font, font.width(s) <= room ? s : font.plainSubstrByWidth(s, Math.max(0, room - 6)) + "…", x, y, color, false);
+    private void text(GuiGraphics g,Component value,int x,int y,int room,int color) {
+        if(room<1)return;
+        if(font.width(value)<=room){g.drawString(font,value,x,y,color,false);return;}
+        var clipped=net.minecraft.network.chat.FormattedText.composite(font.substrByWidth(value,Math.max(0,room-6)),Component.literal("…"));
+        g.drawString(font,net.minecraft.locale.Language.getInstance().getVisualOrder(clipped),x,y,color,false);
     }
     private int thumbHeight(int content) { int h = Math.max(1, bodyBottom - bodyTop); return Math.min(h, Math.max(16, h * h / Math.max(1, content))); }
     private void scrollbar(GuiGraphics g, int x, double offset, int content) {
@@ -659,12 +609,13 @@ public final class PatternWorkbenchScreen extends Screen implements GenerationLi
     private static boolean over(double x, double y, int l, int t, int r, int b) { return x >= l && x < r && y >= t && y < b; }
     private double clamp(double value, int content) { return Math.max(0, Math.min(value, Math.max(0, content - (bodyBottom - bodyTop)))); }
     @Override public boolean mouseScrolled(double mx, double my, double delta) {
-        if (choice != null) return true;
+        if (choice != null) return insidePanel(mx,my);
         if (over(mx, my, left + 8, bodyTop, split, bodyBottom)) { listScroll = clamp(listScroll - delta * ROW * 2, rows.size() * ROW); return true; }
         if (over(mx, my, split, bodyTop, left + panelWidth, bodyBottom)) { detailScroll = clamp(detailScroll - delta * 36, detailContentHeight()); return true; }
         return super.mouseScrolled(mx, my, delta);
     }
     @Override public boolean mouseClicked(double mx, double my, int button) {
+        if (!insidePanel(mx,my) && (choice==null || !new net.minecraft.client.renderer.Rect2i(choice.x,choice.y,choice.w,choice.h).contains((int)mx,(int)my))) {choice=null;return false;}
         if (choice != null) {
             Choice current = choice; choice = null;
             if (button == 0) current.click(mx, my);
@@ -675,7 +626,7 @@ public final class PatternWorkbenchScreen extends Screen implements GenerationLi
             if (hit != null && hit.side >= 0) {
                 if (hit.side == 0) { inputBox.setValue("&" + hit.spec.id()); exactInput = hit.spec; setFocused(inputBox); }
                 else { outputBox.setValue("&" + hit.spec.id()); exactOutput = hit.spec; setFocused(outputBox); }
-                searchDelay = 3; return true;
+                searchDebounce.changed(); return true;
             }
             dragList = mx >= split - 12 && mx < split; dragDetails = mx >= left + panelWidth - 18 && mx < left + panelWidth - 8;
             if (dragList || dragDetails) { dragTo(my); return true; }
@@ -724,6 +675,10 @@ public final class PatternWorkbenchScreen extends Screen implements GenerationLi
             }
         }
         return super.keyPressed(key, scan, modifiers);
+    }
+    public void prepareTransition(Screen next){
+        var runtime=io.github.sexileman.eae2pattern.compat.jei.JeiRuntimeHolder.get();
+        navigatingToJei=next instanceof AeToolScreen || runtime!=null&&runtime.getRecipesGui()==next;
     }
     @Override public void onClose() { if (jeiReturn != null) jeiReturn.restore(); minecraft.setScreen(parent); }
     @Override public void removed() {
@@ -797,21 +752,34 @@ public final class PatternWorkbenchScreen extends Screen implements GenerationLi
         @Override protected void renderWidget(GuiGraphics g, int mx, int my, float partial) {
             boolean primary = this == generate, hovered = isHoveredOrFocused() && active;
             int color = primary && active ? (hovered ? WorkbenchTheme.PRIMARY_HOVER : WorkbenchTheme.PRIMARY) : hovered ? WorkbenchTheme.HOVER : SURFACE;
-            int border = primary && active ? 0xFF686868 : hovered ? 0xFF494949 : color;
+            int border = LINE;
             WorkbenchTheme.control(g, getX(), getY(), getWidth(), getHeight(), color, border);
-            int textColor = !active && this != multiplier ? 0xFF707070 : TEXT;
+            int textColor = !active && this != multiplier ? WorkbenchTheme.DIM : TEXT;
             int reserve = this == multiplier ? 4 : state == null ? 10 : 25;
             String label = getMessage().getString();
             String value = font.width(label) <= getWidth() - reserve ? label : font.plainSubstrByWidth(label, Math.max(0, getWidth() - reserve - 6)) + "…";
-            if (state == null) g.drawString(font, value, getX() + (getWidth() - font.width(value)) / 2, getY() + 5, textColor, false);
+            if (state == null) g.drawString(font, value, getX() + (getWidth() - font.width(value)) / 2, getY() + (getHeight() - font.lineHeight) / 2, textColor, false);
             else {
-                g.drawString(font, value, getX() + 6, getY() + 5, textColor, false);
+                g.drawString(font, value, getX() + 6, getY() + (getHeight() - font.lineHeight) / 2, textColor, false);
                 boolean on = state.getAsBoolean();
-                int sx = getX() + getWidth() - 19, sy = getY() + 6;
-                WorkbenchTheme.rounded(g, sx, sy, 14, 8, on ? 0xFFBFBFBF : 0xFF484848);
-                WorkbenchTheme.rounded(g, sx + (on ? 7 : 1), sy + 1, 6, 6, on ? BG : DIM);
+                int sx = getX() + getWidth() - 19, sy = getY() + (getHeight() - 8) / 2;
+                WorkbenchTheme.rounded(g, sx, sy, 14, 8, on ? WorkbenchTheme.ACCENT : WorkbenchTheme.LINE);
+                WorkbenchTheme.rounded(g, sx + (on ? 7 : 1), sy + 1, 6, 6, on ? 0xFFECECEC : WorkbenchTheme.BACKGROUND);
             }
         }
         @Override protected void updateWidgetNarration(NarrationElementOutput out) { defaultButtonNarrationText(out); }
     }
+    @Override public net.minecraft.client.renderer.Rect2i toolBounds(){return new net.minecraft.client.renderer.Rect2i(left,top,panelWidth,panelHeight);}
+
+    @Override public java.util.Optional<IngredientArea> jeiIngredientAt(double mx,double my){
+        if(choice!=null)return java.util.Optional.empty();
+        var hit=iconAt(mx,my);
+        return hit==null?java.util.Optional.empty():java.util.Optional.of(new IngredientArea(hit.spec,new net.minecraft.client.renderer.Rect2i(hit.x,hit.y,hit.size,hit.size)));
+    }
+    @Override public List<GhostField> jeiGhostFields(){
+        if(sending||checking||choice!=null)return List.of();
+        return List.of(ghostField(inputBox,s->{inputBox.setValue("&"+s.id());exactInput=s;searchDebounce.changed();}),ghostField(outputBox,s->{outputBox.setValue("&"+s.id());exactOutput=s;searchDebounce.changed();}));
+    }
+    @Override public List<net.minecraft.client.renderer.Rect2i> jeiExtraAreas(){return choice==null?List.of():List.of(new net.minecraft.client.renderer.Rect2i(choice.x,choice.y,choice.w,choice.h));}
+
 }

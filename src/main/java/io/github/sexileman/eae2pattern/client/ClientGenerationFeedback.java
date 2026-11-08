@@ -42,7 +42,7 @@ public final class ClientGenerationFeedback {
             int shown = Math.min(MAX_CHAT_DETAILS, report.details().size());
             for (int i = 0; i < shown; i++) {
                 minecraft.player.displayClientMessage(
-                        Component.literal("  " + report.details().get(i)).withStyle(style), false);
+                        Component.literal("  ").append(EncodingMessages.explain(report.details().get(i))).withStyle(style), false);
             }
         }
 
@@ -63,6 +63,7 @@ public final class ClientGenerationFeedback {
                 }
                 yield base;
             }
+            case NOT_ENOUGH_WILDCARD_PATTERNS -> Component.translatable("eae2_pattern.report.no_wildcards");
             case NOT_ENOUGH_BLANK_PATTERNS -> Component.translatable("eae2_pattern.report.no_blanks",
                     report.requested(), report.blankPatternsUsed());
             case STORAGE_FULL -> Component.translatable("eae2_pattern.report.storage_full",

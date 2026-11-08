@@ -34,6 +34,11 @@ public final class ClientNetworkState {
         return status == null ? 0L : status.blankPatterns();
     }
 
+    public static long blankWildcards() {
+        var status = lastStatus;
+        return status == null ? 0L : status.blankWildcards();
+    }
+
     public static String detail() {
         S2CNetworkStatusPacket status = lastStatus;
         return status == null ? "" : status.detail();

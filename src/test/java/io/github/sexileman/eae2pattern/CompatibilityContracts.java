@@ -54,6 +54,9 @@ public final class CompatibilityContracts {
         check(chemical.methods.stream().anyMatch(m->m.name.equals("getPrefix")&&m.desc.equals("(Lnet/minecraft/world/level/ItemLike;)Lcom/gregtechceu/gtceu/api/data/tag/TagPrefix;")),"GT form recognition uses the public unification prefix API");
         check(chemical.methods.stream().anyMatch(m->m.name.equals("getMaterial")&&m.desc.equals("(Lnet/minecraft/world/item/ItemStack;)Lcom/gregtechceu/gtceu/api/data/chemical/material/stack/MaterialStack;")),"GT material picker uses public stack material API");
         check(read(gt,"com/gregtechceu/gtceu/api/data/tag/TagPrefix").methods.stream().anyMatch(m->m.name.equals("name")&&m.desc.equals("()Ljava/lang/String;")),"GT prefix identity accessor exists");
+        var material=read(gt,"com/gregtechceu/gtceu/api/data/chemical/material/Material");
+        check(material.methods.stream().anyMatch(m->m.name.equals("getResourceLocation")&&m.desc.equals("()Lnet/minecraft/resources/ResourceLocation;")),"material picker uses the actual namespaced GT material identity");
+        check(material.methods.stream().anyMatch(m->m.name.equals("getLocalizedName")&&m.desc.equals("()Lnet/minecraft/network/chat/MutableComponent;")),"material picker uses GT localized names across namespaces");
         var gtlBuffer=read(gtl,"org/gtlcore/gtlcore/integration/wildcard/MEWildcardPatternBufferPartMachine");
         var update=gtlBuffer.methods.stream().filter(m->m.name.equals("update")&&m.desc.equals("()V")).findFirst().orElseThrow();
         boolean hotExpansion=false;for(var insn:update.instructions)if(insn instanceof MethodInsnNode call&&call.name.equals("expandPatterns"))hotExpansion=true;
@@ -67,6 +70,21 @@ public final class CompatibilityContracts {
             });
             check(baseLogic, "ExtendedAE provider must use standard AE2 provider logic: " + name);
         }
+        Path jei=jar(mods,n->n.startsWith("jei-")&&n.endsWith(".jar"));
+        var guiHandlers=read(jei,"mezz/jei/api/registration/IGuiHandlerRegistration");
+        check(guiHandlers.methods.stream().anyMatch(m->m.name.equals("addGuiScreenHandler")&&m.desc.equals("(Ljava/lang/Class;Lmezz/jei/api/gui/handlers/IScreenHandler;)V")),"installed JEI supports custom screen footprints");
+        check(guiHandlers.methods.stream().anyMatch(m->m.name.equals("addGhostIngredientHandler")&&m.desc.equals("(Ljava/lang/Class;Lmezz/jei/api/gui/handlers/IGhostIngredientHandler;)V")),"installed JEI supports ghost ingredient targets");
+        check(read(jei,"mezz/jei/api/gui/handlers/IGlobalGuiHandler").methods.stream().anyMatch(m->m.name.equals("getClickableIngredientUnderMouse")&&m.desc.equals("(DD)Ljava/util/Optional;")),"installed JEI supports tool ingredient bookmark/focus keys");
+        check(read(jei,"mezz/jei/api/runtime/IIngredientManager").methods.stream().anyMatch(m->m.name.equals("createClickableIngredient")&&m.desc.equals("(Lmezz/jei/api/ingredients/IIngredientType;Ljava/lang/Object;Lnet/minecraft/client/renderer/Rect2i;Z)Ljava/util/Optional;")),"installed JEI accepts typed item and fluid ingredient regions");
+        var wrapper=read(jei,"mezz/jei/gui/input/GuiContainerWrapper");boolean preservesClick=false;
+        for(var method:wrapper.methods)for(var insn:method.instructions)if(insn instanceof MethodInsnNode call&&call.owner.equals("mezz/jei/gui/input/ClickableIngredientInternal")&&call.name.equals("<init>")){
+            var last=insn.getPrevious();while(last!=null&&last.getOpcode()<0)last=last.getPrevious();
+            var previous=last==null?null:last.getPrevious();while(previous!=null&&previous.getOpcode()<0)previous=previous.getPrevious();
+            preservesClick=last!=null&&previous!=null&&last.getOpcode()==org.objectweb.asm.Opcodes.ICONST_0&&previous.getOpcode()==org.objectweb.asm.Opcodes.ICONST_0;
+        }
+        check(preservesClick,"native JEI plugin ingredients preserve the tool's normal left-click behavior");
+        Path ae=jar(mods,n->n.toLowerCase().startsWith("appliedenergistics2")&&n.endsWith(".jar"));
+        try(var aeZip=new ZipFile(ae.toFile())){check(aeZip.getEntry("assets/ae2/textures/guis/background.png")!=null,"installed AE2 provides the native panel texture");}
         Path jec;
         try(var files=Files.list(mods)){jec=files.filter(p->p.getFileName().toString().contains("jecharacters-")&&p.toString().endsWith(".jar")).findFirst().orElse(null);}
         if(jec!=null)try(var loader=new java.net.URLClassLoader(new java.net.URL[]{jec.toUri().toURL()},CompatibilityContracts.class.getClassLoader())){
