@@ -79,3 +79,18 @@ AE2 的普通计划只有一个最终目标，但该目标的配方树能同时�
 后续优先研究：非循环任务继续使用原有智能倍增；循环部分保留原配方身份与阶段信息，限制或阻止跨阶段整单合并，只合并当前可安全执行的阶段。不得全局关闭用户供应器的智能倍增开关。若附属模组已包装配方，识别原配方与倍率后统一计算，防止重复放大。任务重载时还要验证原定义、包装倍率、阶段、剩余次数和在途数量都能正确恢复；仅持久化原样板 ID 不足以代表整个循环状态。
 
 字节码核查记录在本地 .tools/compat/eap-scale-plan-review.txt、eap-scaled-review.txt、addon-batch-review.txt。此次仍仅为分析，未声称 ExtendedAE、GTLCore、MAE2 的所有相关路径已经完成兼容验证。
+
+
+## 合成 CPU 对循环方案的作用（追加）
+
+- CPU 多方块是一次合成任务的执行与材料状态归属单位。原版一个 CPU 同时处理一个独立任务；同一任务内部仍可包含很多子配方，并非只能执行一个配方。多个并行处理单元不等于多个独立任务槽。
+- 合成存储器提供计划字节容量。CraftingCpuLogic.trySubmitJob 按 plan.bytes() 检查容量，再提取初始材料进入内部库存；不能把字节数理解为固定物品格数，也不能只凭启动材料少就断言长循环只需要很小 CPU。循环计划应计算必要的阶段与任务开销，不能绕过容量检查。
+- 并行处理单元增加投料操作预算。原生 tickCraftingLogic 使用 getCoProcessors()+1 和最近使用记录决定可推送任务数；这不是 JVM 新线程，也不会使 GT 机器本身加工加速，不保证输入未回流的下一阶段可以提前执行。
+- 普通合成单元主要用于填充多方块，监控器用于显示当前任务。内部选出的 core block 承载集群的保存/恢复等归属，不是额外赋予循环求解能力的独立硬件。
+- 需求计算发生在 CraftingCalculation 的模拟流程，容量/并行单元不是增加配方求解能力的开关。CPU 执行现成计划，并保存内部库存、任务次数、等待回流和完成目标。
+
+对循环的优先设计是同一个 CPU 承载同一次原生合成任务，在其内部增添有限的阶段和配额控制。启动材料真实提取后避免公共库存重复占用；下一阶段只认可实际回流，按阶段可用量批量投料；不额外占用一个 CPU 执行每一轮。两个独立请求仍遵守两个 CPU 的材料隔离规则，不能假定共享种子。若原生集成最终无法满足恢复/路由正确性，再评估额外执行组件。
+
+附属兼容：整合包 extendedae_plus 的 CraftingCPUClusterMixin 修改单块高线程部件的接入路径；MAE2 也包含 CPU 集群钩子。后续应读取实际集群容量和能力，不硬编码为原版单块上限。这里只确认钩子存在和上述 EAP 行为，未断言所有附属 CPU 行为均已兼容。大容量、更多并行或智能倍增均不会自动补齐循环阶段规划与回流配额。
+
+依据：[CPU 官方指南](https://guide.appliedenergistics.org/1.20.1/items-blocks-machines/crafting_cpu_multiblock/)、[CraftingCPUCluster](https://github.com/AppliedEnergistics/Applied-Energistics-2/blob/forge/v15.4.10/src/main/java/appeng/me/cluster/implementations/CraftingCPUCluster.java)、前文 CraftingCalculation/CraftingCpuLogic/ExecutingCraftingJob。
