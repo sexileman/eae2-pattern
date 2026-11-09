@@ -28,12 +28,10 @@ public final class GrowthLedger<K> {
         inFlight = state.inFlight();
         long operations = 0;
         for (var phase : stages) operations = Math.addExact(operations, phase.times());
-        if (operations > TwoRecipeGrowth.MAX_OPERATIONS
-                || stage < 0
+        if (stage < 0
                 || stage > stages.size()
                 || remaining < 0
                 || inFlight < 0
-                || inFlight > TwoRecipeGrowth.MAX_OPERATIONS
                 || (stage == stages.size()
                         ? remaining != 0 || !state.awaiting().isEmpty()
                         : remaining > stages.get(stage).times())

@@ -6,7 +6,7 @@ import java.util.*;
 /** Integer-complete growth rounds avoid rounding a positive ratio into a deadlocked half-round. */
 public final class TwoRecipeGrowth {
     public static final int MAX_STAGES = CycleLimits.MAX_STAGES;
-    public static final long MAX_OPERATIONS = CycleLimits.MAX_OPERATIONS;
+    public static final long MAX_QUANTITY = CycleLimits.MAX_QUANTITY;
 
     public record Stage(int recipe, long times) {
         public Stage {
@@ -32,7 +32,7 @@ public final class TwoRecipeGrowth {
             long seedB,
             long targetA,
             long targetB) {
-        return calculate(aIn, bOut, bIn, aOut, seedA, seedB, targetA, targetB, MAX_OPERATIONS);
+        return calculate(aIn, bOut, bIn, aOut, seedA, seedB, targetA, targetB, MAX_QUANTITY);
     }
 
     /**

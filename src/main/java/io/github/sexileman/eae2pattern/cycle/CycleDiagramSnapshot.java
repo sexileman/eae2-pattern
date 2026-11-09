@@ -135,10 +135,8 @@ public record CycleDiagramSnapshot(
             var row = phaseTags.getCompound(i);
             int recipe = row.getInt("recipe");
             long times = row.getLong("times");
-            if (recipe >= 0
-                    && recipe < recipes.size()
-                    && times > 0
-                    && times <= CycleLimits.MAX_OPERATIONS) phases.add(new Phase(recipe, times));
+            if (recipe >= 0 && recipe < recipes.size() && times > 0)
+                phases.add(new Phase(recipe, times));
         }
         var materials = new ArrayList<Material>();
         var materialTags = data.getList("material_needs", 10);

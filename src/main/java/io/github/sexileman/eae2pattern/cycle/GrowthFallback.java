@@ -175,28 +175,16 @@ public final class GrowthFallback {
                                 Set.of(a, b),
                                 key -> stock.extract(key, Long.MAX_VALUE, Actionable.SIMULATE));
                 boolean lacks = needs.stream().anyMatch(n -> n.missing() > 0);
-                boolean overLimit = operations > CycleLimits.MAX_OPERATIONS;
                 String materialReason =
-                        overLimit
-                                ? "limit"
-                                : lacks
-                                        ? "external"
-                                        : !enabled
-                                                ? "disabled"
-                                                : !CycleRuntimeGate.supported
-                                                        ? "runtime"
-                                                        : !cpuSupported ? "cpu" : "ready";
+                        lacks
+                                ? "external"
+                                : !enabled
+                                        ? "disabled"
+                                        : !CycleRuntimeGate.supported
+                                                ? "runtime"
+                                                : !cpuSupported ? "cpu" : "ready";
                 capture.materials(
                         new CycleCapture.Materials(candidate.path(), needs, false, materialReason));
-                if (overLimit) {
-                    io.github.sexileman.eae2pattern.EAE2Pattern.LOGGER.warn(
-                            "[EAE2/Cycles] event=execution_limit trace={} operations={} limit={}; retaining material budget",
-                            capture.id(),
-                            operations,
-                            CycleLimits.MAX_OPERATIONS);
-                    reason = "limit";
-                    continue;
-                }
                 if (lacks) {
                     var entry =
                             needs.stream().filter(n -> n.missing() > 0).findFirst().orElseThrow();

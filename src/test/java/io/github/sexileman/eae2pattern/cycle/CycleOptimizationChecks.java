@@ -166,9 +166,9 @@ public final class CycleOptimizationChecks {
                 "executable plans retain their phase inspection view");
 
         // Screenshot-sized fluid request: 1,000,000 B = 1,000,000,000 mB.
-        var hugePlan = TwoRecipeGrowth.analyze(10, 1, 64, 10000, 1440, 48, 1_000_001_440L, 48);
+        var hugePlan = TwoRecipeGrowth.plan(10, 1, 64, 10000, 1440, 48, 1_000_001_440L, 48);
         check(
-                hugePlan.operations() > CycleLimits.MAX_OPERATIONS
+                hugePlan.operations() > 1_000_000
                         && hugePlan.stages().size() < CycleLimits.MAX_STAGES,
                 "large cycle material analysis survives the execution-operation cap without expanding per-item jobs");
         var hugeCounts = GrowthDemand.analyzeCounts(hugePlan.stages(), 2);
@@ -206,9 +206,7 @@ public final class CycleOptimizationChecks {
         } catch (IllegalArgumentException expected) {
             executionRejected = true;
         }
-        check(
-                executionRejected,
-                "diagnostic analysis does not bypass the original execution safety cap");
+        check(!executionRejected, "large executable plans retain exact aggregate counts");
         var largeConsumer =
                 GrowthDemand.analyzeConsumer(2_000_000, 1, 1, 0, 1, 0, 1, 0, 1, 2, 1, 2);
         check(
@@ -226,7 +224,16 @@ public final class CycleOptimizationChecks {
         } catch (IllegalArgumentException expected) {
             consumerRejected = true;
         }
-        check(consumerRejected, "normal consumer entry preserves the existing execution limit");
+        check(!consumerRejected, "large downstream demand is executable without an operation cap");
+        check(
+                GrowthBatchSizing.affordable(
+                                6_500_000L, java.util.Map.of("ore", 2L), key -> 10_000_000L)
+                        == 5_000_000L,
+                "bulk dispatch above one million is bounded by actual ingredient stock");
+        var largeLedger = new GrowthLedger<String>(hugePlan.stages());
+        check(
+                largeLedger.remainingOperations(0) == hugeCounts[0],
+                "large executable ledger preserves full recipe demand without per-operation expansion");
         return checks;
     }
 }

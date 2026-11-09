@@ -93,8 +93,7 @@ public final class GrowthBatchBridge {
     }
 
     public static Batch prepare(IPatternDetails original, long requested) {
-        if (requested < 1 || requested > CycleLimits.MAX_OPERATIONS)
-            throw new IllegalArgumentException("Invalid phase batch size");
+        if (requested < 1) throw new IllegalArgumentException("Invalid phase batch size");
         if (requested == 1 || !(original instanceof AEProcessingPattern))
             return new Batch(original, 1);
         if (Eap.FACTORY != null) {

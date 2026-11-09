@@ -114,9 +114,9 @@ public final class CycleAlphaChecks {
         refused(
                 () -> TwoRecipeGrowth.plan(1, 2, 1, 2, 0, 0, 10, 0),
                 "no seed does not fabricate a first batch");
-        refused(
-                () -> TwoRecipeGrowth.plan(1, 2, 1, 2, 1, 0, 10_000_000, 0),
-                "large plans have an explicit operation limit");
+        check(
+                TwoRecipeGrowth.plan(1, 2, 1, 2, 1, 0, 10_000_000, 0).operations() > 1_000_000,
+                "large plans use bounded stages without a recipe-count cap");
         refused(
                 () -> TwoRecipeGrowth.plan(1, Long.MAX_VALUE, 1, 2, 2, 0, Long.MAX_VALUE, 0),
                 "stock arithmetic overflow rejects rather than fabricating stock");
@@ -259,9 +259,7 @@ public final class CycleAlphaChecks {
                 originalBatch.pattern() == plain && originalBatch.times() == 1,
                 "unknown or vanilla provider path never receives artificially oversized pattern"
                         + " inputs");
-        refused(
-                () -> GrowthBatchBridge.prepare(plain, TwoRecipeGrowth.MAX_OPERATIONS + 1),
-                "batch bridge remains bounded");
+        refused(() -> GrowthBatchBridge.prepare(plain, 0), "batch bridge remains bounded");
         var stages = List.of(new TwoRecipeGrowth.Stage(0, 65), new TwoRecipeGrowth.Stage(1, 3));
         var ledger = new GrowthLedger<String>(stages);
         check(ledger.batch() == 65, "phase batch obeys bounded scaling");
@@ -511,8 +509,8 @@ public final class CycleAlphaChecks {
                 () -> GrowthDemand.counts(List.of(new TwoRecipeGrowth.Stage(2, 1)), 2),
                 "legacy two-recipe jobs cannot reference a third recipe");
         refused(
-                () -> GrowthDemand.appendConsumer(loop, TwoRecipeGrowth.MAX_OPERATIONS),
-                "root operations count toward the same execution budget");
+                () -> GrowthDemand.appendConsumer(loop, TwoRecipeGrowth.MAX_QUANTITY),
+                "combined quantities reject numeric overflow");
         var ledger = new GrowthLedger<String>(phases);
         int phaseIndex = 0;
         boolean enteredRoot = false;

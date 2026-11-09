@@ -9,8 +9,7 @@ public final class GrowthBatchSizing {
 
     public static <K> long affordable(
             long requested, Map<K, Long> inputs, ToLongFunction<K> stock) {
-        if (requested < 0 || requested > TwoRecipeGrowth.MAX_OPERATIONS)
-            throw new IllegalArgumentException("Invalid cycle batch");
+        if (requested < 0) throw new IllegalArgumentException("Invalid cycle batch");
         long result = requested;
         for (var entry : inputs.entrySet()) {
             if (entry.getValue() <= 0) throw new IllegalArgumentException("Invalid cycle input");

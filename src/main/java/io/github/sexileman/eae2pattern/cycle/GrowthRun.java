@@ -86,7 +86,7 @@ public final class GrowthRun {
         GrowthDemand.counts(stages, recipes.size());
         ledger = new GrowthLedger<>(stages);
         batchLimits = new long[recipes.size()];
-        Arrays.fill(batchLimits, CycleLimits.MAX_OPERATIONS);
+        Arrays.fill(batchLimits, CycleLimits.MAX_QUANTITY);
         providerCursors = new ArrayList<>();
         for (int i = 0; i < recipes.size(); i++) providerCursors.add(new ProviderCursor<>());
     }
@@ -168,7 +168,7 @@ public final class GrowthRun {
                 if (provider.pushPattern(adapter.providerPattern(pattern, dispatch), inputs)) {
                     sent = true;
                     providers.clear();
-                    batchLimits[ledger.recipe()] = TwoRecipeGrowth.MAX_OPERATIONS;
+                    batchLimits[ledger.recipe()] = TwoRecipeGrowth.MAX_QUANTITY;
                     energy.extractAEPower(power, Actionable.MODULATE, PowerMultiplier.CONFIG);
                     var expected = new HashMap<AEKey, Long>();
                     for (var output : outputs) expected.put(output.getKey(), output.getLongValue());
@@ -339,8 +339,6 @@ public final class GrowthRun {
             var row = phases.getCompound(i);
             var phase = new TwoRecipeGrowth.Stage(row.getInt("recipe"), row.getLong("times"));
             count = Math.addExact(count, phase.times());
-            if (count > TwoRecipeGrowth.MAX_OPERATIONS)
-                throw new IllegalArgumentException("Too many cycle operations");
             stages.add(phase);
         }
         var result = new GrowthRun(recipes, stages);
@@ -355,9 +353,7 @@ public final class GrowthRun {
         if (waiting.size() > CycleLimits.MAX_SLOTS
                 || stage < 0
                 || stage > stages.size()
-                || inFlight < 0
-                || inFlight > CycleLimits.MAX_OPERATIONS)
-            throw new IllegalArgumentException("Invalid pending phase");
+                || inFlight < 0) throw new IllegalArgumentException("Invalid pending phase");
         var allowed = new KeyCounter();
         if (stage < stages.size())
             for (var output : recipes.get(stages.get(stage).recipe()).getOutputs())

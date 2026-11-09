@@ -12,8 +12,7 @@ public final class GrowthBatchPattern implements IPatternDetails {
     private final GenericStack[] outputs;
 
     public GrowthBatchPattern(IPatternDetails original, long times) {
-        if (times < 2 || times > TwoRecipeGrowth.MAX_OPERATIONS)
-            throw new IllegalArgumentException("Invalid cycle batch");
+        if (times < 2) throw new IllegalArgumentException("Invalid cycle batch");
         this.original = original;
         var source = original.getInputs();
         inputs = new IInput[source.length];

@@ -8,7 +8,8 @@ public final class CycleLimits {
     public static final int MAX_RECIPES = 3;
     public static final int MAX_SLOTS = 64;
     public static final int MAX_STAGES = 512;
-    public static final long MAX_OPERATIONS = 1_000_000;
+    // Numeric representation boundary, not an execution-count or dispatch limit.
+    public static final long MAX_QUANTITY = Long.MAX_VALUE;
     public static final int PROVIDERS_PER_PASS = 256;
     public static final int INFO_BATCHES = 16;
     public static final int DIAGRAM_BYTES = 262144;

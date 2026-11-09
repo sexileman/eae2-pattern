@@ -1,3 +1,8 @@
+# 6.6.0-cycle-alpha.12
+
+- Remove the cumulative recipe-operation cap from cycle planning, dispatch, restore and diagnostics. Large jobs remain compact phase plans.
+- Retain checked quantity arithmetic, stage bounds, provider acceptance limits and per-tick work budgets.
+
 # Changelog
 
 ## 6.6.0-cycle-alpha.11

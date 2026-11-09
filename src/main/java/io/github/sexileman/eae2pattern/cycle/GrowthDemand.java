@@ -103,8 +103,6 @@ public final class GrowthDemand {
                 || bIn <= 0
                 || aOut <= 0) throw new IllegalArgumentException("Invalid consumer demand");
         long times = ceil(requested, perCraft);
-        if (!analysis && times > TwoRecipeGrowth.MAX_OPERATIONS)
-            throw new IllegalArgumentException("Consumer operation limit reached");
         long demandA = Math.multiplyExact(inputA, times),
                 demandB = Math.multiplyExact(inputB, times);
         long goalA = Math.addExact(reserveA, demandA), goalB = Math.addExact(reserveB, demandB);
@@ -136,10 +134,8 @@ public final class GrowthDemand {
 
     private static List<TwoRecipeGrowth.Stage> appendConsumerInternal(
             TwoRecipeGrowth.Result loop, long times, boolean analysis) {
-        if (times <= 0
-                || Math.addExact(loop.operations(), times)
-                        > (analysis ? Long.MAX_VALUE : TwoRecipeGrowth.MAX_OPERATIONS)
-                || loop.stages().size() >= TwoRecipeGrowth.MAX_STAGES)
+        Math.addExact(loop.operations(), times);
+        if (times <= 0 || loop.stages().size() >= TwoRecipeGrowth.MAX_STAGES)
             throw new IllegalArgumentException("Combined cycle plan exceeds limits");
         var phases = new ArrayList<>(loop.stages());
         phases.add(new TwoRecipeGrowth.Stage(2, times));
@@ -164,8 +160,6 @@ public final class GrowthDemand {
             result[phase.recipe()] = Math.addExact(result[phase.recipe()], phase.times());
             total = Math.addExact(total, phase.times());
         }
-        if (!analysis && total > TwoRecipeGrowth.MAX_OPERATIONS)
-            throw new IllegalArgumentException("Combined operation limit reached");
         return result;
     }
 
