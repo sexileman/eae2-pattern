@@ -17,9 +17,13 @@
     "GrowthTrackerInvoker",
     "GrowthCpuMixin",
     "GrowthPlanMixin",
-    "GrowthProviderBatchMixin"
+    "GrowthProviderBatchMixin",
+    "CycleConfirmMenuAccessor"
   ],
   "injectors": {
     "defaultRequire": 1
-  }
+  },
+  "client": [
+    "CycleConfirmScreenMixin"
+  ]
 }

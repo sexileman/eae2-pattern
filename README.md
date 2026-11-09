@@ -4,11 +4,11 @@
 
 为 Minecraft 大型整合包批量生成 AE2 样板。对 JEI 中的工作方块按 **U**，打开对应类别后，点击工作方块竖栏中的**紫晶与青色线路卡片图标**，采集该类别全部可见配方，筛选并编码到 ME 网络。
 
-当前实验版本 **6.6.0-cycle-alpha.7**，Minecraft **1.20.1**，网络协议 **7**。客户端和服务端须同步更新。
+当前实验版本 **6.6.0-cycle-alpha.8**，Minecraft **1.20.1**，网络协议 **8**。客户端和服务端须同步更新。
 
 ## 单一通用 jar 与自动适配
 
-只安装 **`eae2-pattern-1.20.1-6.6.0-cycle-alpha.7.jar`**。客户端和服务端同步替换旧 EAE2 包，不分 GTL 专用包、独立包或其他整合包变体，也不需要替换 GTLCore。
+只安装 **`eae2-pattern-1.20.1-6.6.0-cycle-alpha.8.jar`**。客户端和服务端同步替换旧 EAE2 包，不分 GTL 专用包、独立包或其他整合包变体，也不需要替换 GTLCore。
 
 - **AE2 + JEI**：提供普通批量样板、独立通配物品与编辑器。
 - **存在 GTCEu**：读取真实 GT 配方、概率、配置电路、模具和流体；不存在时基础功能仍可用。
@@ -228,7 +228,7 @@ GTL 与旧通配符适配在类加载前检查目标接口签名。缺少对应�
 .\gradlew.bat universalCompatibilityTest -PcompatModsDir="D:/codex workspace/others/mods"
 ```
 
-Java 17；产物为 `build/libs/eae2-pattern-1.20.1-6.6.0-cycle-alpha.7.jar`。`build` 包含领域回归检查以及 Forge 重混淆；测试不启动游戏，不能替代整合包实测。详见 [测试清单](docs/testing.md) 和 [变更记录](CHANGELOG.md)。
+Java 17；产物为 `build/libs/eae2-pattern-1.20.1-6.6.0-cycle-alpha.8.jar`。`build` 包含领域回归检查以及 Forge 重混淆；测试不启动游戏，不能替代整合包实测。详见 [测试清单](docs/testing.md) 和 [变更记录](CHANGELOG.md)。
 
 代码及原创卡片图标遵循 MIT；图标源文件位于 `artwork/`。AE2 原生 UI 纹理仍由已安装的 AE2 或资源包提供。
 
@@ -284,6 +284,6 @@ JEI 中的物品或流体可拖入主编码页的输入/输出搜索框、通配
 
 ### 固定构建命名
 
-正式构件统一命名为 `eae2-pattern-<minecraft_version>-<mod_version>.jar`，当前为 `eae2-pattern-1.20.1-6.6.0-cycle-alpha.7.jar`。Minecraft 版本取自 gradle.properties 的 minecraft_version；模组版本保持独立的 MAJOR.MINOR.PATCH，仍用于 mods.toml 和清单，不附加分支名。后续所有非 main 开发分支遵循同一规则。
+正式构件统一命名为 `eae2-pattern-<minecraft_version>-<mod_version>.jar`，当前为 `eae2-pattern-1.20.1-6.6.0-cycle-alpha.8.jar`。Minecraft 版本取自 gradle.properties 的 minecraft_version；模组版本保持独立的 MAJOR.MINOR.PATCH，仍用于 mods.toml 和清单，不附加分支名。后续所有非 main 开发分支遵循同一规则。
 
 运行 `./gradlew.bat stageRelease` 会先执行 build，再将同名 jar 及 `.sha256` 校验文件放入 dist；不生成不带版本的别名。历史发布文件保留，安装时只使用当前对应版本。

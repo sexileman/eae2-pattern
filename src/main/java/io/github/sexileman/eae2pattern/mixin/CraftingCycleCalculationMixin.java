@@ -20,6 +20,7 @@ public abstract class CraftingCycleCalculationMixin implements CycleCalculation 
             CycleLog.detected(original,eae2$capture);
             var replacement=GrowthFallback.replace(level,simRequester,networkInv,original,eae2$capture);
             if(replacement!=original)cir.setReturnValue(replacement);
+            if((Object)replacement instanceof GrowthPlanView view)view.eae2$diagram(CycleDiagramData.build(replacement,eae2$capture));
             CycleReports.publish(level,simRequester,cir.getReturnValue(),eae2$capture);
         }
         catch(RuntimeException | LinkageError diagnosticFailure){io.github.sexileman.eae2pattern.EAE2Pattern.LOGGER.warn("[EAE2/Cycles] event=planning_or_diagnostics_failed",diagnosticFailure);}

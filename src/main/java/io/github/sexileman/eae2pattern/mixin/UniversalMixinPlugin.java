@@ -89,7 +89,12 @@ public final class UniversalMixinPlugin implements IMixinConfigPlugin {
         return plan!=null&&method(plan,"<init>","(Lappeng/api/stacks/GenericStack;JZZLappeng/api/stacks/KeyCounter;Lappeng/api/stacks/KeyCounter;Lappeng/api/stacks/KeyCounter;Ljava/util/Map;)V")
             &&method(plan,"finalOutput","()Lappeng/api/stacks/GenericStack;")&&method(plan,"patternTimes","()Ljava/util/Map;");
     }
+    public static boolean supportedCycleMenu(ClassNode node){return node!=null&&field(node,"result","Lappeng/api/networking/crafting/ICraftingPlan;");}
+    public static boolean supportedCycleScreen(ClassNode node){return node!=null&&method(node,"<init>","(Lappeng/menu/me/crafting/CraftConfirmMenu;Lnet/minecraft/world/entity/player/Inventory;Lnet/minecraft/network/chat/Component;Lappeng/client/gui/style/ScreenStyle;)V");}
     @Override public boolean shouldApplyMixin(String target, String mixin) {
+        if(mixin.endsWith("CycleConfirmScreenMixin"))try{return supportedCycleScreen(bytecode.get().getClassNode(target));}catch(Exception|LinkageError unsupported){return false;}
+        if(mixin.endsWith("CycleConfirmMenuAccessor"))try{return supportedCycleMenu(bytecode.get().getClassNode(target));}catch(Exception|LinkageError unsupported){return false;}
+
         if(mixin.endsWith("GrowthPlanMixin")||mixin.endsWith("GrowthCpuMixin")||mixin.endsWith("GrowthJobAccessor")||mixin.endsWith("GrowthProgressAccessor")||mixin.endsWith("GrowthTrackerInvoker")){
             try{
                 if(growthSupported==null){var provider=bytecode.get();growthSupported=supportedGrowthPlan(provider.getClassNode("appeng.crafting.CraftingPlan"))&&supportedGrowth(provider.getClassNode("appeng.crafting.execution.CraftingCpuLogic"),provider.getClassNode("appeng.crafting.execution.ExecutingCraftingJob"),provider.getClassNode("appeng.crafting.execution.ExecutingCraftingJob$TaskProgress"),provider.getClassNode("appeng.crafting.execution.ElapsedTimeTracker"));

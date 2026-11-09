@@ -84,6 +84,10 @@ public final class UniversalWildcardContracts {
             }
             check(providerRoute&&nativeInputs&&physicalReserve,"growth transport reuses native provider routing, exact input extraction and CPU inventory");
             var mixins=new String(bytes(app,"eae2_pattern.mixins.json"),java.nio.charset.StandardCharsets.UTF_8);
+            var configJson=com.google.gson.JsonParser.parseString(mixins).getAsJsonObject();
+            check(configJson.getAsJsonArray("client").toString().contains("CycleConfirmScreenMixin")&&!configJson.getAsJsonArray("mixins").toString().contains("CycleConfirmScreenMixin"),"confirmation UI hook loads only on clients");
+            check(mixins.contains("CycleConfirmMenuAccessor"),"server current-plan accessor is packaged");
+
             for(String adapter:List.of("GrowthCpuMixin","GrowthJobAccessor","GrowthProgressAccessor","GrowthTrackerInvoker","GrowthPlanMixin","GrowthProviderBatchMixin"))check(mixins.contains(adapter),"complete experimental CPU adapter is packaged: "+adapter);
             var encoder=node(bytes(app,"io/github/sexileman/eae2pattern/pattern/PatternEncoder.class"));
             boolean nativeFluids=false;
@@ -170,6 +174,9 @@ public final class UniversalWildcardContracts {
             var nativePlan=node(bytes(ae,"appeng/crafting/CraftingPlan.class"));
             check(UniversalMixinPlugin.supportedGrowthPlan(nativePlan),"installed AE2 supports the native phase attachment carrier");
             providerBatchTarget(node(bytes(ae,"appeng/helpers/patternprovider/PatternProviderLogic.class")));
+            check(UniversalMixinPlugin.supportedCycleMenu(node(bytes(ae,"appeng/menu/me/crafting/CraftConfirmMenu.class"))),"installed confirmation menu exposes the exact current native plan");
+            check(UniversalMixinPlugin.supportedCycleScreen(node(bytes(ae,"appeng/client/gui/me/crafting/CraftConfirmScreen.class"))),"installed confirmation screen supports native toolbar injection");
+
             nativePlan.methods.removeIf(m->m.name.equals("<init>"));check(!UniversalMixinPlugin.supportedGrowthPlan(nativePlan),"incompatible native plan disables experimental attachments");
             var cpu=node(bytes(ae,"appeng/crafting/execution/CraftingCpuLogic.class"));var job=node(bytes(ae,"appeng/crafting/execution/ExecutingCraftingJob.class"));var progress=node(bytes(ae,"appeng/crafting/execution/ExecutingCraftingJob$TaskProgress.class"));var tracker=node(bytes(ae,"appeng/crafting/execution/ElapsedTimeTracker.class"));
             check(UniversalMixinPlugin.supportedGrowth(cpu,job,progress,tracker),"installed AE2 supports the complete experimental CPU hook set");

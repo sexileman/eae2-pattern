@@ -14,7 +14,7 @@ import net.minecraftforge.network.simple.SimpleChannel;
  */
 public final class PacketHandler {
 
-    private static final String PROTOCOL = "7";
+    private static final String PROTOCOL = "8";
 
     public static final SimpleChannel CHANNEL = NetworkRegistry.ChannelBuilder
             .named(new ResourceLocation(EAE2Pattern.MOD_ID, "main"))
@@ -29,6 +29,9 @@ public final class PacketHandler {
     }
 
     public static void register() {
+        CHANNEL.messageBuilder(C2SCycleDiagramPacket.class,nextId++,NetworkDirection.PLAY_TO_SERVER).encoder(C2SCycleDiagramPacket::encode).decoder(C2SCycleDiagramPacket::decode).consumerMainThread(C2SCycleDiagramPacket::handle).add();
+        CHANNEL.messageBuilder(S2CCycleDiagramPacket.class,nextId++,NetworkDirection.PLAY_TO_CLIENT).encoder(S2CCycleDiagramPacket::encode).decoder(S2CCycleDiagramPacket::decode).consumerMainThread(S2CCycleDiagramPacket::handle).add();
+
         CHANNEL.messageBuilder(S2CInspectionPacket.class, nextId++, NetworkDirection.PLAY_TO_CLIENT)
                 .encoder(S2CInspectionPacket::encode).decoder(S2CInspectionPacket::decode)
                 .consumerMainThread(S2CInspectionPacket::handle).add();
