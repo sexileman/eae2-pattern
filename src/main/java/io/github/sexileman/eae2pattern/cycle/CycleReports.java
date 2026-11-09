@@ -5,7 +5,6 @@ import io.github.sexileman.eae2pattern.EAE2Pattern;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.level.Level;
-import net.minecraftforge.event.RegisterCommandsEvent;
 import net.minecraftforge.event.entity.player.PlayerEvent;
 import net.minecraftforge.event.server.ServerStoppedEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
@@ -24,10 +23,7 @@ public final class CycleReports {
         if(level.isClientSide||plan==null||level.getServer()==null)return;
         var witnesses=capture==null?List.<CycleCapture.Witness>of():capture.witnesses();
         var actor=requester.getActionSource().player().orElse(null);
-        if(!(actor instanceof ServerPlayer player)){
-            if(!witnesses.isEmpty())EAE2Pattern.LOGGER.debug("Crafting cycle candidates for {}: {}",plan.finalOutput().what().getId(),witnesses.size());
-            return;
-        }
+        if(!(actor instanceof ServerPlayer player))return;
         UUID id=player.getUUID();var server=level.getServer();
         var display=new ArrayList<DisplayWitness>();boolean limited=capture!=null&&capture.truncated();int weight=0;
         for(var witness:witnesses){
@@ -49,7 +45,7 @@ public final class CycleReports {
             LAST.entrySet().removeIf(e->System.currentTimeMillis()-e.getValue().time()>TTL);
             LAST.remove(id);LAST.put(id,report);
             while(LAST.size()>64)LAST.remove(LAST.keySet().iterator().next());
-            var online=server.getPlayerList().getPlayer(id);if(online==null||report.witnesses().isEmpty())return;
+            var online=server.getPlayerList().getPlayer(id);if(online==null||report.witnesses().isEmpty()||!io.github.sexileman.eae2pattern.config.EAE2PatternConfig.CYCLE_CHAT_DIAGNOSTICS.get())return;
             long now=System.currentTimeMillis();long previous=NOTIFIED.getOrDefault(id,0L);
             if(now-previous<COOLDOWN)return;
             NOTIFIED.remove(id);NOTIFIED.put(id,now);while(NOTIFIED.size()>128)NOTIFIED.remove(NOTIFIED.keySet().iterator().next());
@@ -70,8 +66,7 @@ public final class CycleReports {
         for(int i=0;i<limit;i++){if(i>0)text.append(" + ");var stack=slots.get(i);text.append(stack.what().formatAmount(stack.amount(),AmountFormat.FULL)+" × ").append(name(stack.what()));}
         if(slots.size()>limit)text.append(" …");return text;
     }
-    @SubscribeEvent public static void commands(RegisterCommandsEvent event){
-        event.getDispatcher().register(net.minecraft.commands.Commands.literal("eae2cycles").executes(ctx->{
+    public static int report(com.mojang.brigadier.context.CommandContext<net.minecraft.commands.CommandSourceStack> ctx) throws com.mojang.brigadier.exceptions.CommandSyntaxException {
             var player=ctx.getSource().getPlayerOrException();var report=LAST.get(player.getUUID());
             if(report==null||System.currentTimeMillis()-report.time()>TTL){ctx.getSource().sendSuccess(()->Component.translatable("eae2_pattern.cycle.none"),false);return 0;}
             ctx.getSource().sendSuccess(()->Component.translatable("eae2_pattern.cycle.header",report.target(),report.amount(),Component.translatable(report.missing()?"eae2_pattern.cycle.missing":"eae2_pattern.cycle.planned")),false);
@@ -82,7 +77,6 @@ public final class CycleReports {
             if(report.witnesses().isEmpty())ctx.getSource().sendSuccess(()->Component.translatable("eae2_pattern.cycle.none"),false);
             if(report.limited())ctx.getSource().sendSuccess(()->Component.translatable("eae2_pattern.cycle.limited"),false);
             ctx.getSource().sendSuccess(()->Component.translatable("eae2_pattern.cycle.scope"),false);return report.witnesses().size();
-        }));
     }
     @SubscribeEvent public static void logout(PlayerEvent.PlayerLoggedOutEvent event){LAST.remove(event.getEntity().getUUID());NOTIFIED.remove(event.getEntity().getUUID());}
     @SubscribeEvent public static void stop(ServerStoppedEvent event){LAST.clear();NOTIFIED.clear();}

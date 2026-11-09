@@ -1,3 +1,5 @@
+> 当前为 alpha.7。统一命令与标准日志，自动聊天诊断默认关闭。旧命令 /eae2cycles 已替换为 /eae2_pattern cycles report。
+
 > 当前为 alpha.6。接入已提供 GTLCore jar 中的真实总成批量接口，以下旧版说明保留作历史。
 
 > 当前为 alpha.5，修复 alpha.4 与 EAP 叠加注入导致的启动失败，批量规则保持不变。
@@ -127,3 +129,25 @@ alpha.6 仅对继承该已检查基类 pushPattern 实现的 GTL 总成启用原
 离线检查覆盖安装 jar 的槽位查找/批量入口、两种总成继承关系，直接执行其真实能耗方法；库存与数量回放检查覆盖工作资本、外部耗材与大批回流。未启动完整 Forge 整合包，实际机器行为仍需测试。
 
 alpha.6 最终验证：7,023 项回归断言、129 项通用接口与打包检查、43 项整合包模组接口检查通过。回放断言数随阶段减少而变化；未删减已有比例组合。新增 B 库存为 1,000 时首批转换 1,000 次并保留最终 B 储备的回放。
+
+
+## alpha.7：命令与日志
+
+所有命令位于 `/eae2_pattern`：
+
+```text
+/eae2_pattern cycles report
+/eae2_pattern config get cycles.experimental_execution
+/eae2_pattern config set cycles.experimental_execution true
+/eae2_pattern config get cycles.chat_diagnostics
+/eae2_pattern config set cycles.chat_diagnostics true
+/eae2_pattern config set cycles.chat_diagnostics false
+```
+
+自动聊天诊断默认关闭；主动执行报告命令仍会给执行者返回结果。管理员（权限等级 2）修改配置，立即影响后续提示并保存到世界的 `serverconfig/eae2_pattern-server.toml`。此文件 `[cycles]` 下的 `chat_diagnostics = false` 是同一开关。布尔值原生补全 true/false，不接受 yes、1 等；整数有原生范围限制。普通玩家仅查询自己的最近报告，服务端控制台没有玩家报告。
+
+使用宿主 SLF4J 日志，搜索 `[EAE2/Cycles]`。INFO/WARN/ERROR 进入标准日志，通常是游戏实例/服务端 `logs/latest.log`，debug.log 是否启用由整合包日志配置决定，不另建文件。聊天开关不影响日志。`trace` 串联候选配方与规划结果；`run` 串联执行记录，保存后恢复会保留。job_target 给出执行目标。事件包括 detected、candidate、recipe、plan_ready、plan_rejected、started、batch_sent、batch_returned、energy_limited、batch_rejected、completed、cancelled、restored；错误记录堆栈。
+
+前 16 批投料与回流写 INFO，后续写 DEBUG，避免长任务刷屏。阶段等待不逐 tick 打印；首次能源不足或供应器拒绝会记录。每项 NBT 最长 512 字符、材料列表最多 16 项，并标注截断；更复杂原始数据仍需样板与存档复核。规划失败原因区分启动库存、外部材料、配方不支持和 CPU 不支持。
+
+alpha.7 验证：7,056 项回归断言、129 项通用接口/打包检查、43 项整合包模组接口检查通过。命令回归覆盖原生布尔补全、非法值拒绝、整数边界、默认关闭的聊天开关；日志回归覆盖序列化回退与列表截断。未启动完整 Forge 世界。

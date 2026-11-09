@@ -420,7 +420,7 @@
   "eae2_pattern.editor.target_held": "Target: held pattern · Writes one carrier",
   "eae2_pattern.editor.stock_exact": "Target: ME network · Blank wildcard patterns %s / Required %s",
   "eae2_pattern.editor.stock_minimum": "Target: ME network · Blank wildcard patterns %s / At least %s; final split checked before writing",
-  "eae2_pattern.cycle.detected": "Cycle candidate: %s (%s recorded); %s. Use /eae2cycles for quantities.",
+  "eae2_pattern.cycle.detected": "Cycle candidate: %s (%s recorded); %s. Use /eae2_pattern cycles report for quantities.",
   "eae2_pattern.cycle.missing": "AE2 plan is missing materials",
   "eae2_pattern.cycle.planned": "AE2 found an executable plan",
   "eae2_pattern.cycle.none": "No cycle candidate recorded for the latest job, or the record expired.",

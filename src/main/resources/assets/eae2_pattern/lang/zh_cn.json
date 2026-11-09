@@ -420,7 +420,7 @@
   "eae2_pattern.editor.target_held": "目标：手持样板 · 每次写入 1 张",
   "eae2_pattern.editor.stock_exact": "目标：ME 网络 · 空白通配符样板 %s / 需要 %s",
   "eae2_pattern.editor.stock_minimum": "目标：ME 网络 · 空白通配符样板 %s / 至少需要 %s，按实际拆分校验",
-  "eae2_pattern.cycle.detected": "检测到循环候选：%s（共 %s 条）；%s。输入 /eae2cycles 查看本次材料与数量。",
+  "eae2_pattern.cycle.detected": "检测到循环候选：%s（共 %s 条）；%s。输入 /eae2_pattern cycles report 查看本次材料与数量。",
   "eae2_pattern.cycle.missing": "本次 AE2 规划仍缺少材料",
   "eae2_pattern.cycle.planned": "本次 AE2 已得到可执行计划",
   "eae2_pattern.cycle.none": "最近任务未记录循环候选，或记录已过期。",

@@ -50,6 +50,8 @@ public final class CycleAlphaChecks {
             protected net.minecraft.network.chat.Component computeDisplayName(){return net.minecraft.network.chat.Component.literal("batch");}
             public void addDrops(long amount,List<net.minecraft.world.item.ItemStack> drops,net.minecraft.world.level.Level level,net.minecraft.core.BlockPos position){}
         };
+        check(CycleLog.key(testKey).contains("NBT unavailable"),"diagnostic key serialization failure falls back without aborting crafting");
+        check(CycleLog.stacks(java.util.Collections.nCopies(17,new appeng.api.stacks.GenericStack(testKey,1))).contains("[truncated]"),"diagnostic ingredient lists have a bounded output");
         var input=new appeng.api.crafting.IPatternDetails.IInput(){
             public appeng.api.stacks.GenericStack[] getPossibleInputs(){return new appeng.api.stacks.GenericStack[]{new appeng.api.stacks.GenericStack(testKey,2)};}
             public long getMultiplier(){return 3;}

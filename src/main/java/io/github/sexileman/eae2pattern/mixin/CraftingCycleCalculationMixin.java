@@ -17,11 +17,12 @@ public abstract class CraftingCycleCalculationMixin implements CycleCalculation 
     private void eae2$reportCycles(CallbackInfoReturnable<ICraftingPlan> cir){
         try {
             var original=cir.getReturnValue();
+            CycleLog.detected(original,eae2$capture);
             var replacement=GrowthFallback.replace(level,simRequester,networkInv,original,eae2$capture);
             if(replacement!=original)cir.setReturnValue(replacement);
             CycleReports.publish(level,simRequester,cir.getReturnValue(),eae2$capture);
         }
-        catch(RuntimeException | LinkageError diagnosticFailure){io.github.sexileman.eae2pattern.EAE2Pattern.LOGGER.warn("Cycle experimental planning/diagnostics hook unavailable",diagnosticFailure);}
+        catch(RuntimeException | LinkageError diagnosticFailure){io.github.sexileman.eae2pattern.EAE2Pattern.LOGGER.warn("[EAE2/Cycles] event=planning_or_diagnostics_failed",diagnosticFailure);}
         finally {eae2$capture=null;}
     }
 }

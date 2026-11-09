@@ -19,6 +19,7 @@ public final class GrowthFallback {
         if(!CycleRuntimeGate.supported||!EAE2PatternConfig.EXPERIMENTAL_CYCLES.get()||!original.simulation()||capture==null)return original;
         var node=requester.getGridNode();if(node==null)return original;
         for(var cpu:node.getGrid().getCraftingService().getCpus())if(!(cpu instanceof appeng.me.cluster.implementations.CraftingCPUCluster)){
+            io.github.sexileman.eae2pattern.EAE2Pattern.LOGGER.warn("[EAE2/Cycles] event=plan_rejected trace={} reason=unsupported_cpu type={}",capture.id(),cpu.getClass().getName());
             notify(level,requester,"cpu",Component.empty());return original;
         }
         String reason="unsupported";String detail="";
@@ -75,9 +76,11 @@ public final class GrowthFallback {
             var nativePlan=growth.nativePlan();
             if(!((Object)nativePlan instanceof GrowthPlanView attached))throw new IllegalStateException("Native cycle plan attachment unavailable");
             attached.eae2$growthPlan(growth);
+            io.github.sexileman.eae2pattern.EAE2Pattern.LOGGER.info("[EAE2/Cycles] event=plan_ready trace={} target={} amount={} phases={} operations={} reserved={}",capture.id(),target.what().getId(),target.amount(),phases.size(),operations,CycleLog.stocks(used));
             notify(level,requester,"ready",Component.literal(""+phases.size()));
             return nativePlan;
-        }catch(IllegalArgumentException|ArithmeticException unsupported){reason="unsupported";}
+        }catch(IllegalArgumentException|ArithmeticException unsupported){reason="unsupported";io.github.sexileman.eae2pattern.EAE2Pattern.LOGGER.debug("[EAE2/Cycles] event=candidate_rejected trace="+capture.id(),unsupported);}
+        if(!capture.candidates().isEmpty())io.github.sexileman.eae2pattern.EAE2Pattern.LOGGER.warn("[EAE2/Cycles] event=plan_rejected trace={} target={} amount={} reason={} detail={}",capture.id(),original.finalOutput().what().getId(),original.finalOutput().amount(),reason,detail);
         if(!capture.candidates().isEmpty())notify(level,requester,reason,Component.literal(detail));
         return original;
     }
@@ -94,7 +97,7 @@ public final class GrowthFallback {
         return new Slots(Map.copyOf(in),Map.copyOf(out));
     }
     public static void notify(Level level,ICraftingSimulationRequester requester,String key,Component detail){
-        if(level.getServer()==null)return;var actor=requester.getActionSource().player().orElse(null);
-        if(actor instanceof ServerPlayer player){var id=player.getUUID();level.getServer().execute(()->{var online=level.getServer().getPlayerList().getPlayer(id);if(online!=null)online.displayClientMessage(Component.translatable("eae2_pattern.cycle.alpha."+key,detail),false);});}
+        if(level.getServer()==null||!EAE2PatternConfig.CYCLE_CHAT_DIAGNOSTICS.get())return;var actor=requester.getActionSource().player().orElse(null);
+        if(actor instanceof ServerPlayer player){var id=player.getUUID();level.getServer().execute(()->{var online=level.getServer().getPlayerList().getPlayer(id);if(online!=null&&EAE2PatternConfig.CYCLE_CHAT_DIAGNOSTICS.get())online.displayClientMessage(Component.translatable("eae2_pattern.cycle.alpha."+key,detail),false);});}
     }
 }

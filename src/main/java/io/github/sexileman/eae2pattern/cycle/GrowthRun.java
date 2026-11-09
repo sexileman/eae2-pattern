@@ -16,6 +16,18 @@ public final class GrowthRun {
     private final List<IPatternDetails> recipes;
     private final List<TwoRecipeGrowth.Stage> stages;
     private GrowthLedger<AEKey> ledger;
+    private String logId=UUID.randomUUID().toString();
+    public String logId(){return logId;}
+    public void logState(String event){
+        var logger=io.github.sexileman.eae2pattern.EAE2Pattern.LOGGER;
+        boolean detailed=event.equals("batch_returned")&&eae2$reportedBatches>16;
+        if(detailed&&!logger.isDebugEnabled())return;
+        var state=ledger.snapshot();
+        String message="[EAE2/Cycles] event={} run={} stage={} remaining={} inFlight={} awaiting={} batches={}";
+        if(detailed)logger.debug(message,event,logId,state.stage(),state.remaining(),state.inFlight(),CycleLog.map(state.awaiting()),eae2$reportedBatches);
+        else logger.info(message,event,logId,state.stage(),state.remaining(),state.inFlight(),CycleLog.map(state.awaiting()),eae2$reportedBatches);
+    }
+    private boolean reportedEnergy;
     private int eae2$reportedBatches;
     private boolean eae2$reportedRejection;
     private final long[] batchLimits={TwoRecipeGrowth.MAX_OPERATIONS,TwoRecipeGrowth.MAX_OPERATIONS,TwoRecipeGrowth.MAX_OPERATIONS};
@@ -55,6 +67,7 @@ public final class GrowthRun {
                 if(gtl)power=GrowthGtlBatchBridge.power(power,batch);
                 if(!Double.isFinite(power)||power<0)throw new IllegalStateException("Invalid cycle energy");
                 if(energy.extractAEPower(power,Actionable.SIMULATE,PowerMultiplier.CONFIG)<power-.01){
+                    if(!reportedEnergy){reportedEnergy=true;io.github.sexileman.eae2pattern.EAE2Pattern.LOGGER.warn("[EAE2/Cycles] event=energy_limited run={} requiredAE={} crafts={}; retrying smaller batch",logId,power,batch);}
                     batchLimits[ledger.recipe()]=Math.max(1,batch/2);continue;
                 }
                 // GTL's native CPU passes the registered original plus bulk counters to its buffers.
@@ -63,11 +76,14 @@ public final class GrowthRun {
                     var expected=new HashMap<AEKey,Long>();for(var output:outputs)expected.put(output.getKey(),output.getLongValue());ledger.sent(batch,expected);progress.eae2$value(progress.eae2$value()-batch);
                     if(progress.eae2$value()==0)job.eae2$tasks().remove(pattern);
                     for(var output:outputs)job.eae2$waiting().insert(output.getKey(),output.getLongValue(),Actionable.MODULATE);
-                    if(eae2$reportedBatches++<16)io.github.sexileman.eae2pattern.EAE2Pattern.LOGGER.info("Cycle batch sent: recipe={}, provider={}, route={}, crafts={}, affordable={}, phaseRemaining={}",ledger.recipe(),provider.getClass().getName(),gtl?"gtl-original-bulk":"scaled",batch,affordable,ledger.snapshot().remaining());
+                    var logger=io.github.sexileman.eae2pattern.EAE2Pattern.LOGGER;
+                    String message="[EAE2/Cycles] event=batch_sent run={} recipe={} provider={} route={} crafts={} affordable={} phaseRemaining={} outputs={}";
+                    if(eae2$reportedBatches++<16)logger.info(message,logId,ledger.recipe(),provider.getClass().getName(),gtl?"gtl-original-bulk":"scaled",batch,affordable,ledger.snapshot().remaining(),CycleLog.stocks(outputs));
+                    else if(logger.isDebugEnabled())logger.debug(message,logId,ledger.recipe(),provider.getClass().getName(),gtl?"gtl-original-bulk":"scaled",batch,affordable,ledger.snapshot().remaining(),CycleLog.stocks(outputs));
                     cpu.eae2$cluster().markDirty();return 1;
                 }
                 batchLimits[ledger.recipe()]=Math.max(1,batch/2);
-                if(!eae2$reportedRejection){eae2$reportedRejection=true;io.github.sexileman.eae2pattern.EAE2Pattern.LOGGER.info("Cycle batch rejected: provider={}, route={}, crafts={}; reducing next attempt",provider.getClass().getName(),gtl?"gtl-original-bulk":"scaled",batch);}
+                if(!eae2$reportedRejection){eae2$reportedRejection=true;io.github.sexileman.eae2pattern.EAE2Pattern.LOGGER.warn("[EAE2/Cycles] event=batch_rejected run={} provider={} route={} crafts={}; reducing next attempt",logId,provider.getClass().getName(),gtl?"gtl-original-bulk":"scaled",batch);}
             }finally{if(!sent)CraftingCpuHelper.reinjectPatternInputs(cpu.eae2$inventory(),inputs);}
         }
         return 0;
@@ -80,6 +96,7 @@ public final class GrowthRun {
             ledger.receive(key,accepted);job.eae2$waiting().extract(key,accepted,Actionable.MODULATE);
             cpu.eae2$inventory().insert(key,accepted,Actionable.MODULATE);
             ((GrowthTrackerInvoker)(Object)job.eae2$tracker()).eae2$decrement(accepted,key.getType());cpu.eae2$cluster().markDirty();
+            if(!ledger.waiting())logState("batch_returned");
         }
         return accepted;
     }
@@ -100,7 +117,7 @@ public final class GrowthRun {
         else cpu.eae2$cluster().updateOutput(new GenericStack(key,job.eae2$remaining()));
     }
     public CompoundTag save(){
-        var tag=new CompoundTag();tag.putInt("version",recipes.size()==2?1:2);var definitions=new ListTag();for(var recipe:recipes)definitions.add(recipe.getDefinition().toTag());tag.put("recipes",definitions);
+        var tag=new CompoundTag();tag.putString("log_id",logId);tag.putInt("version",recipes.size()==2?1:2);var definitions=new ListTag();for(var recipe:recipes)definitions.add(recipe.getDefinition().toTag());tag.put("recipes",definitions);
         var phases=new ListTag();for(var phase:stages){var row=new CompoundTag();row.putInt("recipe",phase.recipe());row.putLong("times",phase.times());phases.add(row);}tag.put("stages",phases);
         var state=ledger.snapshot();tag.putInt("stage",state.stage());tag.putLong("remaining",state.remaining());tag.putLong("in_flight",state.inFlight());
         var waiting=new ListTag();for(var entry:state.awaiting().entrySet())waiting.add(GenericStack.writeTag(new GenericStack(entry.getKey(),entry.getValue())));tag.put("awaiting",waiting);
@@ -117,6 +134,7 @@ public final class GrowthRun {
         var stages=new ArrayList<TwoRecipeGrowth.Stage>();long count=0;
         for(int i=0;i<phases.size();i++){var row=phases.getCompound(i);var phase=new TwoRecipeGrowth.Stage(row.getInt("recipe"),row.getLong("times"));count=Math.addExact(count,phase.times());if(count>TwoRecipeGrowth.MAX_OPERATIONS)throw new IllegalArgumentException("Too many cycle operations");stages.add(phase);}
         var result=new GrowthRun(recipes,stages);
+        if(tag.contains("log_id",8))try{result.logId=UUID.fromString(tag.getString("log_id")).toString();}catch(IllegalArgumentException ignored){}
         int stage=tag.getInt("stage");long remaining=tag.getLong("remaining"),inFlight=tag.getLong("in_flight");
         var waiting=tag.getList("awaiting",10);if(waiting.size()>64||stage<0||stage>stages.size()||inFlight<0||inFlight>TwoRecipeGrowth.MAX_OPERATIONS)throw new IllegalArgumentException("Invalid pending phase");
         var allowed=new KeyCounter();if(stage<stages.size())for(var output:recipes.get(stages.get(stage).recipe()).getOutputs())allowed.add(output.what(),Math.multiplyExact(output.amount(),inFlight));

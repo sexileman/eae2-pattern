@@ -12,6 +12,8 @@ public final class CycleCapture {
     private final List<Candidate> candidates=new ArrayList<>();
     public List<Candidate> candidates(){return List.copyOf(candidates);}
     private final List<Witness> witnesses=new ArrayList<>();
+    private final String id=UUID.randomUUID().toString();
+    public String id(){return id;}
     private int rejections;
     private boolean truncated;
     public List<Witness> witnesses(){return List.copyOf(witnesses);}
@@ -43,7 +45,7 @@ public final class CycleCapture {
             patterns.add(snapshot(candidate));witnesses.add(new Witness(path,List.copyOf(patterns)));
             var originals=new ArrayList<IPatternDetails>();for(int i=Math.max(0,first);i<selected.size();i++)originals.add(selected.get(i));originals.add(candidate);
             candidates.add(new Candidate(List.copyOf(path),List.copyOf(originals),List.copyOf(selected.subList(0,Math.max(0,first)))));
-        }catch(RuntimeException | LinkageError invalid){truncated=true;}
+        }catch(RuntimeException | LinkageError invalid){truncated=true;io.github.sexileman.eae2pattern.EAE2Pattern.LOGGER.warn("[EAE2/Cycles] event=capture_failed trace="+id,invalid);}
     }
     private static Pattern snapshot(IPatternDetails details){
         var inputs=new ArrayList<GenericStack>();
