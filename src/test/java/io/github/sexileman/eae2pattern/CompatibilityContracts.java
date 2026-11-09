@@ -51,6 +51,25 @@ public final class CompatibilityContracts {
         check(calls(read(wildcard, "org/leodreamer/wildcard_pattern/mixin/PatternProviderLogicMixin"), logic, "decodePatterns"), "ordinary AE2 provider must call hooked expansion");
         Path gtl = jar(mods, n -> n.contains("gtlcore-1") && n.endsWith(".jar"));
         check(calls(read(gtl, "org/gtlcore/gtlcore/integration/wildcard/WildcardPatternCompatImpl"), logic, "decodePatterns"), "GTL wildcard buffer must call the same expansion");
+        var bufferBase=read(gtl,"org/gtlcore/gtlcore/common/machine/multiblock/part/ae/MEPatternBufferPartMachineBase");
+        var bufferPush=bufferBase.methods.stream().filter(m->m.name.equals("pushPattern")&&m.desc.equals("(Lappeng/api/crafting/IPatternDetails;[Lappeng/api/stacks/KeyCounter;)Z")).findFirst().orElseThrow();
+        boolean originalLookup=false,bulkInput=false;
+        for(var insn:bufferPush.instructions)if(insn instanceof MethodInsnNode call){
+            originalLookup|=call.name.equals("getSlotIndexForPattern");
+            bulkInput|=call.name.equals("pushPattern")&&call.desc.equals("([Lappeng/api/stacks/KeyCounter;)V");
+        }
+        check(originalLookup&&bulkInput,"installed GTL buffer looks up original pattern then accepts complete bulk counters");
+        for(String type:java.util.List.of("org/gtlcore/gtlcore/common/machine/multiblock/part/ae/MEPatternBufferPartMachine","org/gtlcore/gtlcore/integration/wildcard/MEWildcardPatternBufferPartMachine")){
+            var concrete=read(gtl,type);
+            check(concrete.methods.stream().noneMatch(m->m.name.equals("pushPattern")),"GTL normal/wildcard buffers inherit the inspected bulk transport: "+type);
+        }
+        var nativeCpu=read(gtl,"org/gtlcore/gtlcore/mixin/ae2/logic/CraftingCpuLogicMixin");
+        check(calls(nativeCpu,"org/gtlcore/gtlcore/integration/ae2/AEUtils","extractForProcessingPattern")&&calls(nativeCpu,"org/gtlcore/gtlcore/integration/ae2/crafting/CraftingPatternPower","forCpu"),"native GTL CPU uses bulk extraction and its dedicated energy rule");
+        try(var gtlLoader=new java.net.URLClassLoader(new java.net.URL[]{gtl.toUri().toURL()},CompatibilityContracts.class.getClassLoader())){
+            var power=gtlLoader.loadClass("org.gtlcore.gtlcore.integration.ae2.crafting.CraftingPatternPower").getMethod("forCpu",double.class,boolean.class,long.class);
+            check((Double)power.invoke(null,10000d,true,10000L)==1d,"real GTL bulk energy does not collapse 10000 affordable crafts to single craft");
+            check((Double)power.invoke(null,10000d,false,10000L)==10000d,"GTL energy rule leaves ordinary providers unchanged");
+        }
         Path gt = jar(mods, n -> n.startsWith("gtceu-") && n.endsWith(".jar"));
         check(read(gt, "com/gregtechceu/gtceu/api/recipe/GTRecipeSerializer").fields.stream()
                 .anyMatch(f -> f.name.equals("CODEC") && f.desc.equals("Lcom/mojang/serialization/Codec;") && (f.access & 9) == 9),

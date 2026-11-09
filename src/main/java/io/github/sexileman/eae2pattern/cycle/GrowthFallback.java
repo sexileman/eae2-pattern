@@ -52,7 +52,12 @@ public final class GrowthFallback {
                 var loop=TwoRecipeGrowth.plan(aIn,first.out.get(b),bIn,second.out.get(a),initialA,initialB,demand.goalA(),demand.goalB());
                 phases=GrowthDemand.appendConsumer(loop,demand.times());recipes.add(terminal);inputMaps.add(root.in);
             }else{
-                phases=TwoRecipeGrowth.plan(aIn,first.out.get(b),bIn,second.out.get(a),seedA,seedB,Math.addExact(seedA,target.amount()),seedB).stages();
+                // Reserve useful existing circulating stock, not only the minimum startup seed.
+                // Preserve that working capital at completion; requested A is newly produced net gain.
+                long availableA=stock.extract(a,Long.MAX_VALUE,Actionable.SIMULATE),availableB=stock.extract(b,Long.MAX_VALUE,Actionable.SIMULATE);
+                initialA=GrowthWorkingStock.reserve(availableA,seedA,target.amount(),1,1);
+                initialB=GrowthWorkingStock.reserve(availableB,seedB,target.amount(),second.out.get(a),bIn);
+                phases=TwoRecipeGrowth.plan(aIn,first.out.get(b),bIn,second.out.get(a),initialA,initialB,Math.addExact(initialA,target.amount()),initialB).stages();
             }
             var seeds=new HashMap<AEKey,Long>();if(initialA>0)seeds.put(a,initialA);if(initialB>0)seeds.put(b,initialB);
             var times=GrowthDemand.counts(phases,recipes.size());

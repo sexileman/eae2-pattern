@@ -90,6 +90,16 @@ public final class CycleAlphaChecks {
         bigLedger.sent(10000,Map.of("B",20000L));
         var bigRestored=new GrowthLedger<String>(List.of(new TwoRecipeGrowth.Stage(0,10000)),bigLedger.snapshot());
         check(bigRestored.waiting()&&bigRestored.receive("B",20000)==20000,"large in-flight batch persists exact return quotas");
+        check(GrowthWorkingStock.reserve(10000,1,1000,1,1)==1001,"existing circulating stock is reserved above the minimum seed but bounded by demand");
+        check(GrowthWorkingStock.reserve(20,1,1000,1,1)==20,"working capital never exceeds actual network stock");
+        check(GrowthWorkingStock.reserve(1000,0,11,10,3)==6,"B working capital rounds complete crafts with original units");
+        check(!GrowthGtlBatchBridge.supports(new Object()),"absent GTL or unrelated providers never enable its original-pattern bulk contract");
+        var warm=TwoRecipeGrowth.plan(1,2,1,2,1001,0,11001,0);
+        replay(warm,1,2,1,2,1001,0,11001,0);
+        check(warm.stages().get(0).times()>1&&warm.stages().size()<large.stages().size(),"preexisting working stock permits a large first dispatch while preserving requested net output");
+        var warmB=TwoRecipeGrowth.plan(1,2,1,2,0,1000,10000,1000);
+        replay(warmB,1,2,1,2,0,1000,10000,1000);
+        check(warmB.stages().get(0).recipe()==1&&warmB.stages().get(0).times()==1000,"a B-only working reserve is dispatched in bulk instead of a one-craft pivot");
         consumers();
         return checks;
     }

@@ -1,3 +1,5 @@
+> 当前为 alpha.6。接入已提供 GTLCore jar 中的真实总成批量接口，以下旧版说明保留作历史。
+
 > 当前为 alpha.5，修复 alpha.4 与 EAP 叠加注入导致的启动失败，批量规则保持不变。
 
 > 当前为 alpha.4，构件 `eae2-pattern-1.20.1-6.6.0-cycle-alpha.4.jar`。以下版本记录保留作历史；当前批量规则见文末。
@@ -108,3 +110,20 @@ alpha.4 验证：7,103 项回归断言、126 项通用打包/供应器接口检�
 22:36:58 错误报告显示 `GrowthProviderBatchMixin` 的固定 `index=0` 在 EAP 重定向后指向 List 参数，触发 `InvalidInjectionException`。原生调用参数为 Object，重定向后为 List、Object。使用 `index=-1` 按处理方法的 Object 类型定位，在两种调用形式下分别得到序号 0 和 1。
 
 回归直接执行 Mixin 0.8.5 的 `ModifyArgInjector.findArgIndex`，通过离线日志宿主初始化选择器，无需启动 Minecraft。7,103 项回归断言、129 项通用打包与接口检查、37 项已安装模组接口检查通过。此检查覆盖本次报错的参数选择路径，未启动完整整合包，不代表全部 Mixin 组合已实测。
+
+
+## alpha.6：GTL 总成原样板批量协议
+
+对照 `others/mods` 中 GTLCore 的 `CraftingCpuLogicMixin.executeCrafting`、`AEUtils.extractForProcessingPattern`、`CraftingPatternPower.forCpu` 和 `MEPatternBufferPartMachineBase.pushPattern`：原生 CPU 对总成发送原始注册样板与多份 KeyCounter 材料。总成按样板查找槽位，然后把所有计数器交给内部槽位；临时倍增样板不是这个映射中的键，会被拒绝。这是 alpha.5 减量回退后只剩单份投料的具体接口缺口。
+
+alpha.6 仅对继承该已检查基类 pushPattern 实现的 GTL 总成启用原样板批量路径；普通与通配符总成均继承该实现。仍使用倍增描述计算精确输入与回流数量，实际传给总成的是原样板。AE 能耗调用 GTL 自身 forCpu 规则，参数为本批实际次数；普通供应器不套用总成能耗规则。不存在 GTL 或未知的覆写实现不会启用此协议。
+
+循环执行仍按已验证阶段推进，批量取当前阶段剩余次数、CPU 实际 A/B、全部外部输入可支付次数的最小值。网络库存只在规划与提交时预留，不在执行中随意抽取。直接请求 A/B 时预留本次需求范围内有用的已有循环库存，完成后保留此工作库存并交付新增加的请求数量；C 同时消耗 A/B 的情况继续使用双需求规划。仅有少量种子时必须先小批增长，不能把未来产物当成当前库存。
+
+回流先进入 CPU 库存，整批返回后再推进；目标在所有阶段完成后统一交付，最终种子/副产物由原生 CPU 回存。保留整单外部耗材预算和提交复核，不承诺执行期间动态补料。
+
+`latest.log` 中搜索 `Cycle batch sent`：包含 provider、route、crafts、affordable、phaseRemaining。GTL 总成应为 `route=gtl-original-bulk`，成功批次最多打印前 16 条；首次拒绝打印 `Cycle batch rejected`，避免持续刷日志。每次装载任务后日志计数重新开始。
+
+离线检查覆盖安装 jar 的槽位查找/批量入口、两种总成继承关系，直接执行其真实能耗方法；库存与数量回放检查覆盖工作资本、外部耗材与大批回流。未启动完整 Forge 整合包，实际机器行为仍需测试。
+
+alpha.6 最终验证：7,023 项回归断言、129 项通用接口与打包检查、43 项整合包模组接口检查通过。回放断言数随阶段减少而变化；未删减已有比例组合。新增 B 库存为 1,000 时首批转换 1,000 次并保留最终 B 储备的回放。

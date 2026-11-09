@@ -16,6 +16,8 @@ public final class GrowthRun {
     private final List<IPatternDetails> recipes;
     private final List<TwoRecipeGrowth.Stage> stages;
     private GrowthLedger<AEKey> ledger;
+    private int eae2$reportedBatches;
+    private boolean eae2$reportedRejection;
     private final long[] batchLimits={TwoRecipeGrowth.MAX_OPERATIONS,TwoRecipeGrowth.MAX_OPERATIONS,TwoRecipeGrowth.MAX_OPERATIONS};
     public GrowthRun(GrowthCraftingPlan plan){recipes=plan.recipes();stages=plan.stages();GrowthDemand.counts(stages,recipes.size());ledger=new GrowthLedger<>(stages);}
     private GrowthRun(List<IPatternDetails> recipes,List<TwoRecipeGrowth.Stage> stages){this.recipes=List.copyOf(recipes);this.stages=List.copyOf(stages);GrowthDemand.counts(stages,recipes.size());ledger=new GrowthLedger<>(stages);}
@@ -34,32 +36,41 @@ public final class GrowthRun {
         long affordable=GrowthBatchSizing.affordable(Math.min(ledger.batch(),batchLimits[ledger.recipe()]),perCraft,
                 key->cpu.eae2$inventory().extract(key,Long.MAX_VALUE,Actionable.SIMULATE));
         if(affordable==0)return 0;
-        var dispatch=GrowthBatchBridge.prepare(pattern,affordable);
-        long batch=dispatch.times();var progress=(GrowthProgressAccessor)job.eae2$tasks().get(pattern);
-        if(progress==null||progress.eae2$value()<batch)throw new IllegalStateException("Cycle task counts disagree");
-        var outputs=new KeyCounter();var containers=new KeyCounter();
-        var inputs=CraftingCpuHelper.extractPatternInputs(dispatch.pattern(),cpu.eae2$inventory(),level,outputs,containers);
-        if(inputs==null)return 0;
-        boolean sent=false,attempted=false;
-        try{
-            double power=CraftingCpuHelper.calculatePatternPower(inputs);
-            if(!Double.isFinite(power))throw new IllegalStateException("Invalid cycle energy");
-            if(energy.extractAEPower(power,Actionable.SIMULATE,PowerMultiplier.CONFIG)<power-.01){batchLimits[ledger.recipe()]=Math.max(1,batch/2);return 0;}
-            int checked=0;
-            for(var provider:service.getProviders(pattern)){
-                if(++checked>256)break;
-                if(provider.isBusy())continue;
-                attempted=true;
-                if(provider.pushPattern(dispatch.pattern(),inputs)){
+        var progress=(GrowthProgressAccessor)job.eae2$tasks().get(pattern);
+        int checked=0;
+        for(var provider:service.getProviders(pattern)){
+            if(++checked>256)break;
+            if(provider.isBusy())continue;
+            boolean gtl=GrowthGtlBatchBridge.supports(provider)&&pattern instanceof appeng.crafting.pattern.AEProcessingPattern;
+            var dispatch=gtl?new GrowthBatchBridge.Batch(affordable==1?pattern:new GrowthBatchPattern(pattern,affordable),affordable)
+                    :GrowthBatchBridge.prepare(pattern,affordable);
+            long batch=dispatch.times();
+            if(progress==null||progress.eae2$value()<batch)throw new IllegalStateException("Cycle task counts disagree");
+            var outputs=new KeyCounter();var containers=new KeyCounter();
+            var inputs=CraftingCpuHelper.extractPatternInputs(dispatch.pattern(),cpu.eae2$inventory(),level,outputs,containers);
+            if(inputs==null)return 0;
+            boolean sent=false;
+            try{
+                double power=CraftingCpuHelper.calculatePatternPower(inputs);
+                if(gtl)power=GrowthGtlBatchBridge.power(power,batch);
+                if(!Double.isFinite(power)||power<0)throw new IllegalStateException("Invalid cycle energy");
+                if(energy.extractAEPower(power,Actionable.SIMULATE,PowerMultiplier.CONFIG)<power-.01){
+                    batchLimits[ledger.recipe()]=Math.max(1,batch/2);continue;
+                }
+                // GTL's native CPU passes the registered original plus bulk counters to its buffers.
+                if(provider.pushPattern(gtl?pattern:dispatch.pattern(),inputs)){
                     sent=true;batchLimits[ledger.recipe()]=TwoRecipeGrowth.MAX_OPERATIONS;energy.extractAEPower(power,Actionable.MODULATE,PowerMultiplier.CONFIG);
                     var expected=new HashMap<AEKey,Long>();for(var output:outputs)expected.put(output.getKey(),output.getLongValue());ledger.sent(batch,expected);progress.eae2$value(progress.eae2$value()-batch);
                     if(progress.eae2$value()==0)job.eae2$tasks().remove(pattern);
-                    for(var output:outputs){job.eae2$waiting().insert(output.getKey(),output.getLongValue(),Actionable.MODULATE);}
+                    for(var output:outputs)job.eae2$waiting().insert(output.getKey(),output.getLongValue(),Actionable.MODULATE);
+                    if(eae2$reportedBatches++<16)io.github.sexileman.eae2pattern.EAE2Pattern.LOGGER.info("Cycle batch sent: recipe={}, provider={}, route={}, crafts={}, affordable={}, phaseRemaining={}",ledger.recipe(),provider.getClass().getName(),gtl?"gtl-original-bulk":"scaled",batch,affordable,ledger.snapshot().remaining());
                     cpu.eae2$cluster().markDirty();return 1;
                 }
-            }
-            return 0;
-        }finally{if(!sent){CraftingCpuHelper.reinjectPatternInputs(cpu.eae2$inventory(),inputs);if(attempted)batchLimits[ledger.recipe()]=Math.max(1,batch/2);}}
+                batchLimits[ledger.recipe()]=Math.max(1,batch/2);
+                if(!eae2$reportedRejection){eae2$reportedRejection=true;io.github.sexileman.eae2pattern.EAE2Pattern.LOGGER.info("Cycle batch rejected: provider={}, route={}, crafts={}; reducing next attempt",provider.getClass().getName(),gtl?"gtl-original-bulk":"scaled",batch);}
+            }finally{if(!sent)CraftingCpuHelper.reinjectPatternInputs(cpu.eae2$inventory(),inputs);}
+        }
+        return 0;
     }
     public long accept(GrowthCpuView cpu,AEKey key,long amount,Actionable action){
         if(amount<=0)return 0;var job=job(cpu);

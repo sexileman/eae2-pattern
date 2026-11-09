@@ -28,7 +28,11 @@ public final class TwoRecipeGrowth {
                 state.add(0,Math.multiplyExact(rounds,aSteps));state.add(1,Math.multiplyExact(rounds,bSteps));
             }else{
                 long pivot=ceil(aSeed-state.a,aOut),neededB=Math.multiplyExact(pivot,bIn);
-                if(state.b>=neededB)state.add(1,pivot);
+                if(state.b>=neededB){
+                    // A large B working reserve can start a large reverse batch, not just one pivot.
+                    long useful=Math.max(pivot,ceil(Math.max(0,neededA-state.a),aOut));
+                    state.add(1,Math.min(state.b/bIn,useful));
+                }
                 else if(state.b>=bSeed){
                     long rounds=Math.min(state.b/bSeed,ceil(neededB-state.b,bGain));
                     state.add(1,Math.multiplyExact(rounds,reverseB));state.add(0,Math.multiplyExact(rounds,reverseA));
