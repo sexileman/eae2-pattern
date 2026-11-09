@@ -1,3 +1,7 @@
+# 2026.11.1
+
+- Adopt calendar versioning; see VERSIONING.md. No runtime behavior changes.
+
 # 6.6.0-cycle-alpha.12
 
 - Remove the cumulative recipe-operation cap from cycle planning, dispatch, restore and diagnostics. Large jobs remain compact phase plans.
