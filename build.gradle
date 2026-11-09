@@ -5,19 +5,8 @@ plugins {
     id 'net.minecraftforge.gradle' version '6.0.54'
 }
 
-/*
- * Version scheme: plain semantic versioning, MAJOR.MINOR.PATCH.
- *
- *   MAJOR  breaks something players depend on (config keys renamed, network
- *          protocol changed, generated patterns stop working)
- *   MINOR  new features, backwards compatible (1.0.0 -> 1.1.0)
- *   PATCH  bug fixes only (1.1.0 -> 1.1.1)
- *
- * The Minecraft version is deliberately not part of it: it lives in the branch
- * name (`1.20.1`, `1.21`, ...), dependency ranges and archive base name, so the
- * same mod version can be rebuilt for another Minecraft release without
- * inventing a new numbering scheme. Bump mod_version in gradle.properties by
- * hand and tag the release (v1.1.0) in git.
+/* Calendar version: YYYY.M.SEQUENCE, development builds: YYYY.M.SEQUENCE-beta.N.
+ * Set mod_version in gradle.properties. See VERSIONING.md.
  */
 def modVersion = mod_version
 

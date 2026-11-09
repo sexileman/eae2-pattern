@@ -1,3 +1,7 @@
+# 2026.11.2-beta.1
+
+- Adopt calendar versioning; see VERSIONING.md. No runtime behavior changes.
+
 # Changelog
 
 ## 6.5.9 — 2026-11-08
