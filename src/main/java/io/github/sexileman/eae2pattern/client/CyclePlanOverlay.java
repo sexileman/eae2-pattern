@@ -26,7 +26,9 @@ public final class CyclePlanOverlay {
     private CompoundTag data=new CompoundTag();
     private final List<Row> rows=new ArrayList<>();
     private int x,y,w,h,total;
-    private record Row(Component title,List<GenericStack> inputs,List<GenericStack> outputs,long times,boolean grid){}
+    private record Row(Component title,List<GenericStack> inputs,List<GenericStack> outputs,long times,boolean grid,long available,long missing,int materialKind){
+        Row(Component title,List<GenericStack> inputs,List<GenericStack> outputs,long times,boolean grid){this(title,inputs,outputs,times,grid,0,0,0);}
+    }
     private CyclePlanOverlay(CraftConfirmScreen parent){this.parent=parent;menu=parent.getMenu().containerId;query();}
     public static boolean visible(CraftConfirmScreen parent){return active!=null&&active.parent==parent;}
     public static void open(CraftConfirmScreen parent){active=new CyclePlanOverlay(parent);}
@@ -50,15 +52,25 @@ public final class CyclePlanOverlay {
             if(!data.getList("reserved",10).isEmpty())rows.add(new Row(tr("reserved"),stacks(data,"reserved"),List.of(),1,true));
         }else if(tab==1){
             for(int i=0;i<recipeInputs.size();i++)rows.add(new Row(tr("recipe",i+1),recipeInputs.get(i),recipeOutputs.get(i),1,true));
-        }else{
+        }else if(tab==2){
             var phases=data.getList("phases",10);
             for(int i=0;i<Math.min(512,phases.size());i++){var phase=phases.getCompound(i);int index=phase.getInt("recipe");long times=phase.getLong("times");if(index<0||index>=recipeInputs.size()||times<1)continue;
                 rows.add(new Row(tr("phase",i+1,index+1,times),recipeInputs.get(index),recipeOutputs.get(index),times,false));}
+        }else{
+            String reason=data.getString("material_reason");
+            rows.add(new Row(tr("materials."+(reason.isEmpty()?"unknown":reason)),List.of(),List.of(),1,false));
+            var path=stacks(data,"material_path");if(!path.isEmpty())rows.add(new Row(tr("material_path"),path,List.of(),1,false));
+            var needs=data.getList("material_needs",10);
+            for(int i=0;i<Math.min(needs.size(),192);i++){
+                var need=needs.getCompound(i);var stack=GenericStack.readTag(need.getCompound("stack"));
+                if(stack==null||stack.amount()<=0)continue;
+                rows.add(new Row(stack.what().getDisplayName(),List.of(stack),List.of(),1,false,Math.max(0,need.getLong("available")),Math.max(0,need.getLong("missing")),need.getBoolean("circulating")?1:2));
+            }
         }
     }
     private void layout(){w=Math.min(560,parent.width-32);h=Math.min(370,parent.height-20);x=(parent.width-w)/2;y=(parent.height-h)/2;}
     private int columns(){return Math.max(1,(w-36)/24);}
-    private int height(Row row){if(!row.grid())return row.outputs().isEmpty()?58:68;return 20+((row.inputs().size()+columns()-1)/columns())*24+(row.outputs().isEmpty()?0:26+((row.outputs().size()+columns()-1)/columns())*24);}
+    private int height(Row row){if(row.materialKind()>0)return 58;if(row.inputs().isEmpty()&&row.outputs().isEmpty())return 24;if(!row.grid())return row.outputs().isEmpty()?58:68;return 20+((row.inputs().size()+columns()-1)/columns())*24+(row.outputs().isEmpty()?0:26+((row.outputs().size()+columns()-1)/columns())*24);}
     private int bodyTop(){return y+101;}
     private int bodyBottom(){return y+h-28;}
     private int maxScroll(){return Math.max(0,total-Math.max(1,bodyBottom()-bodyTop()));}
@@ -74,14 +86,22 @@ public final class CyclePlanOverlay {
         var target=GenericStack.readTag(data.getCompound("target"));
         if(target!=null)g.drawString(font,font.plainSubstrByWidth(target.what().getDisplayName().getString()+" × "+target.what().formatAmount(target.amount(),AmountFormat.FULL),w-100),x+10,y+48,WorkbenchTheme.TEXT,false);
         control(g,x+w-64,y+38,54,tr("refresh"),false);
-        int tw=(w-28)/3;
-        for(int i=0;i<3;i++)control(g,x+10+i*(tw+4),y+70,tw,tr("tab."+i),tab==i);
-        GenericStack hover=null;long hoverTimes=1;
+        int tw=(w-32)/4;
+        for(int i=0;i<4;i++)control(g,x+10+i*(tw+4),y+70,tw,tr("tab."+i),tab==i);
+        GenericStack hover=null;long hoverTimes=1;Row hoverNeed=null;
         g.enableScissor(x+8,bodyTop(),x+w-12,bodyBottom());
         int ry=bodyTop()-scroll;
         for(var row:rows){int rh=height(row);
             if(ry+rh>bodyTop()&&ry<bodyBottom()){
-                g.drawString(font,row.title(),x+12,ry+2,WorkbenchTheme.TEXT,false);
+                if(row.materialKind()>0){
+                    var stack=row.inputs().get(0);icon(g,stack,x+12,ry+5,1);
+                    String label=row.title().getString()+" · "+tr(row.materialKind()==1?"circulating":"external").getString();
+                    g.drawString(font,font.plainSubstrByWidth(label,w-56),x+38,ry+2,WorkbenchTheme.TEXT,false);
+                    g.drawString(font,font.plainSubstrByWidth(tr("need_have",stack.what().formatAmount(stack.amount(),AmountFormat.FULL),stack.what().formatAmount(row.available(),AmountFormat.FULL)).getString(),w-56),x+38,ry+17,WorkbenchTheme.DIM,false);
+                    g.drawString(font,row.missing()>0?tr("shortage",stack.what().formatAmount(row.missing(),AmountFormat.FULL)):tr("sufficient"),x+38,ry+32,row.missing()>0?WorkbenchTheme.WARNING:WorkbenchTheme.ACCENT,false);
+                    if(mx>=x+12&&mx<x+32&&my>=ry+5&&my<ry+25){hover=stack;hoverTimes=1;hoverNeed=row;}
+                }else{
+                g.drawString(font,font.plainSubstrByWidth(row.title().getString(),w-30),x+12,ry+2,WorkbenchTheme.TEXT,false);
                 if(row.grid()){
                     int inY=ry+17;
                     if(!row.outputs().isEmpty()){g.drawString(font,tr("inputs"),x+12,inY,WorkbenchTheme.ACCENT,false);inY+=12;}
@@ -92,16 +112,18 @@ public final class CyclePlanOverlay {
                     var hit=row.outputs().isEmpty()?drawPath(g,row.inputs(),x+12,ry+18,mx,my):drawStrip(g,row.inputs(),x+12,ry+18,row.times(),mx,my);if(hit!=null){hover=hit;hoverTimes=row.times();}
                     if(!row.outputs().isEmpty()){g.drawString(font,Component.literal("→"),x+w/2-8,ry+23,WorkbenchTheme.ACCENT,false);hit=drawStrip(g,row.outputs(),x+w/2+10,ry+18,row.times(),mx,my);if(hit!=null){hover=hit;hoverTimes=row.times();}}
                 }
+                }
                 g.fill(x+10,ry+rh-4,x+w-18,ry+rh-3,WorkbenchTheme.LINE);
             }ry+=rh;
         }
         if(rows.isEmpty())g.drawString(font,tr(tab==2?"no_phases":"empty"),x+12,bodyTop()+8,WorkbenchTheme.DIM,false);
         g.disableScissor();
         if(maxScroll()>0){int bh=bodyBottom()-bodyTop(),thumb=Math.max(16,bh*bh/Math.max(1,total));int sy=bodyTop()+(bh-thumb)*scroll/maxScroll();g.fill(x+w-10,bodyTop(),x+w-6,bodyBottom(),WorkbenchTheme.LINE);g.fill(x+w-10,sy,x+w-6,sy+thumb,WorkbenchTheme.ACCENT);}
-        g.drawString(font,font.plainSubstrByWidth(tr("snapshot").getString(),w-20),x+10,y+h-17,WorkbenchTheme.DIM,false);
+        g.drawString(font,font.plainSubstrByWidth(tr(tab==3?"stock_snapshot":"snapshot").getString(),w-20),x+10,y+h-17,WorkbenchTheme.DIM,false);
         if(hover!=null&&my>=bodyTop()&&my<bodyBottom()){
             var lines=new ArrayList<Component>(AEKeyRendering.getTooltip(hover.what()));
             lines.add(tr("quantity",hover.what().formatAmount(scaled(hover.amount(),hoverTimes),AmountFormat.FULL)));
+            if(hoverNeed!=null){lines.add(tr("available",hover.what().formatAmount(hoverNeed.available(),AmountFormat.FULL)));lines.add(tr("shortage",hover.what().formatAmount(hoverNeed.missing(),AmountFormat.FULL)));}
             g.renderComponentTooltip(font,lines,mx,my);
         }
         g.pose().popPose();
@@ -136,7 +158,7 @@ public final class CyclePlanOverlay {
     @SubscribeEvent public static void click(ScreenEvent.MouseButtonPressed.Pre event){var a=active;if(a==null||event.getScreen()!=a.parent||!a.inside(event.getMouseX(),event.getMouseY()))return;event.setCanceled(true);if(event.getButton()!=0)return;double mx=event.getMouseX(),my=event.getMouseY();
         if(my>=a.y+7&&my<a.y+25&&mx>=a.x+a.w-54){active=null;return;}
         if(my>=a.y+38&&my<a.y+56&&mx>=a.x+a.w-64){a.attempts=0;a.query();return;}
-        if(my>=a.y+70&&my<a.y+88){int tw=(a.w-28)/3;int tab=(int)(mx-a.x-10)/(tw+4);if(tab>=0&&tab<3){a.tab=tab;a.rebuild();}return;}
+        if(my>=a.y+70&&my<a.y+88){int tw=(a.w-32)/4;int tab=(int)(mx-a.x-10)/(tw+4);if(tab>=0&&tab<4){a.tab=tab;a.rebuild();}return;}
         if(mx>=a.x+a.w-13&&my>=a.bodyTop()&&my<a.bodyBottom()){a.dragging=true;a.drag(my);}
     }
     @SubscribeEvent public static void wheel(ScreenEvent.MouseScrolled.Pre event){var a=active;if(a!=null&&event.getScreen()==a.parent&&a.inside(event.getMouseX(),event.getMouseY())){event.setCanceled(true);a.scroll=(int)Math.max(0,Math.min(a.maxScroll(),a.scroll-event.getScrollDelta()*32));}}

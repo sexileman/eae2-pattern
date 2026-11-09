@@ -16,12 +16,11 @@ public final class GrowthFallback {
     private GrowthFallback(){}
     private record Slots(Map<AEKey,Long> in,Map<AEKey,Long> out){}
     public static ICraftingPlan replace(Level level,ICraftingSimulationRequester requester,ICraftingInventory stock,ICraftingPlan original,CycleCapture capture){
-        if(!CycleRuntimeGate.supported||!EAE2PatternConfig.EXPERIMENTAL_CYCLES.get()||!original.simulation()||capture==null)return original;
+        if(!original.simulation()||capture==null)return original;
+        boolean enabled=EAE2PatternConfig.EXPERIMENTAL_CYCLES.get();
         var node=requester.getGridNode();if(node==null)return original;
-        for(var cpu:node.getGrid().getCraftingService().getCpus())if(!(cpu instanceof appeng.me.cluster.implementations.CraftingCPUCluster)){
-            io.github.sexileman.eae2pattern.EAE2Pattern.LOGGER.warn("[EAE2/Cycles] event=plan_rejected trace={} reason=unsupported_cpu type={}",capture.id(),cpu.getClass().getName());
-            notify(level,requester,"cpu",Component.empty());return original;
-        }
+        boolean cpuSupported=true;
+        for(var cpu:node.getGrid().getCraftingService().getCpus())if(!(cpu instanceof appeng.me.cluster.implementations.CraftingCPUCluster))cpuSupported=false;
         String reason="unsupported";String detail="";
         for(var candidate:capture.candidates())try{
             if(candidate.patterns().size()!=2||candidate.path().size()!=3)continue;
@@ -39,7 +38,11 @@ public final class GrowthFallback {
             long startA=GrowthMaterials.startup(aIn,first.out.get(b),bIn),startB=GrowthMaterials.startup(bIn,second.out.get(a),aIn);
             if(stock.extract(a,startA,Actionable.SIMULATE)>=startA)seedA=startA;
             else if(stock.extract(b,startB,Actionable.SIMULATE)>=startB)seedB=startB;
-            else{reason="seed";continue;}
+            else{
+                reason="seed";
+                if(capture.materials()==null||capture.materials().alternatives())capture.materials(new CycleCapture.Materials(candidate.path(),GrowthMaterialNeeds.evaluate(Map.of(a,startA,b,startB),Set.of(a,b),key->stock.extract(key,Long.MAX_VALUE,Actionable.SIMULATE)),true,"seed"));
+                continue;
+            }
             var inputMaps=new ArrayList<Map<AEKey,Long>>();inputMaps.add(first.in);inputMaps.add(second.in);
             List<TwoRecipeGrowth.Stage> phases;long initialA=seedA,initialB=seedB;
             if(downstream){
@@ -68,8 +71,15 @@ public final class GrowthFallback {
                 if(times[i]>0)tasks.put(recipes.get(i),times[i]);operations=Math.addExact(operations,times[i]);
                 for(var output:recipes.get(i).getOutputs())Math.multiplyExact(Math.multiplyExact(output.amount(),times[i]),output.what().getAmountPerUnit());
             }
-            var missing=GrowthMaterials.missing(budget,key->stock.extract(key,budget.get(key),Actionable.SIMULATE));
-            if(!missing.isEmpty()){var entry=missing.entrySet().iterator().next();reason="external";detail=entry.getKey().getId()+" / "+entry.getValue();continue;}
+            var needs=GrowthMaterialNeeds.evaluate(budget,Set.of(a,b),key->stock.extract(key,Long.MAX_VALUE,Actionable.SIMULATE));
+            boolean lacks=needs.stream().anyMatch(n->n.missing()>0);
+            String materialReason=lacks?"external":!enabled?"disabled":!CycleRuntimeGate.supported?"runtime":!cpuSupported?"cpu":"ready";
+            capture.materials(new CycleCapture.Materials(candidate.path(),needs,false,materialReason));
+            if(lacks){var entry=needs.stream().filter(n->n.missing()>0).findFirst().orElseThrow();reason="external";detail=entry.key().getId()+" / "+entry.missing();
+                io.github.sexileman.eae2pattern.EAE2Pattern.LOGGER.info("[EAE2/Cycles] event=materials_missing trace={} shortages={}",capture.id(),needs.stream().filter(n->n.missing()>0).map(n->n.key().getId()+" required="+n.required()+" available="+n.available()+" missing="+n.missing()).toList());continue;}
+            if(!enabled||!CycleRuntimeGate.supported||!cpuSupported){
+                io.github.sexileman.eae2pattern.EAE2Pattern.LOGGER.info("[EAE2/Cycles] event=materials_checked trace={} execution={} materials=available",capture.id(),materialReason);return original;
+            }
             var used=new KeyCounter();budget.forEach(used::add);
             long bytes=Math.addExact(1024+64L*phases.size()+64L*used.size(),Math.multiplyExact(operations,8));
             var growth=new GrowthCraftingPlan(target,bytes,used,tasks,recipes,phases);

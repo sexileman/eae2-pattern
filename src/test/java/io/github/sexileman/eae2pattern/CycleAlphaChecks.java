@@ -23,6 +23,10 @@ public final class CycleAlphaChecks {
         var budget=GrowthMaterials.budget(List.of(Map.of("A",1L,"X",3L),Map.of("B",1L,"X",2L,"fluid",1000L)),counts,Set.of("A","B"),Map.of("A",1L));
         check(budget.get("X")==counts[0]*3+counts[1]*2&&budget.get("fluid")==counts[1]*1000,"whole-job external cost includes both recipes and fluid units");
         check(budget.get("A")==1&&!budget.containsKey("B"),"circulating inputs are reserved once rather than once per operation");
+        var fullNeeds=GrowthMaterialNeeds.evaluate(budget,Set.of("A","B"),key->key.equals("X")?budget.get(key)-1:budget.get(key));
+        check(fullNeeds.stream().filter(n->n.key().equals("X")).findFirst().orElseThrow().missing()==1,"shared X is checked against both loop recipes combined, not one recipe only");
+        check(fullNeeds.stream().filter(n->n.key().equals("A")).findFirst().orElseThrow().required()==1,"material view does not misreport circulating A as a per-operation external shortage");
+
         var missing=GrowthMaterials.missing(budget,key->key.equals("X")?budget.get(key)-1:budget.get(key));
         check(missing.equals(Map.of("X",1L)),"even one missing external item rejects the full budget");
         check(GrowthMaterials.missing(budget,budget::get).isEmpty(),"exact external stock is sufficient");
@@ -102,6 +106,11 @@ public final class CycleAlphaChecks {
         var warmB=TwoRecipeGrowth.plan(1,2,1,2,0,1000,10000,1000);
         replay(warmB,1,2,1,2,0,1000,10000,1000);
         check(warmB.stages().get(0).recipe()==1&&warmB.stages().get(0).times()==1000,"a B-only working reserve is dispatched in bulk instead of a one-craft pivot");
+        var shortage=GrowthMaterialNeeds.evaluate(Map.of("X",10L,"A",2L,"fluid",1000L),Set.of("A"),key->key.equals("X")?3:key.equals("A")?2:400);
+        check(shortage.stream().filter(n->n.key().equals("X")).findFirst().orElseThrow().missing()==7,"material report shows exact external shortage");
+        check(shortage.stream().filter(n->n.key().equals("fluid")).findFirst().orElseThrow().missing()==600,"fluid shortage uses raw native units without rounding");
+        check(shortage.stream().filter(n->n.key().equals("A")).findFirst().orElseThrow().circulating()&&shortage.stream().filter(n->n.key().equals("A")).findFirst().orElseThrow().missing()==0,"circulating seed demand stays distinct from external input demand");
+        check(GrowthMaterialNeeds.evaluate(Map.of("X",1L),Set.of(),key->Long.MAX_VALUE).get(0).missing()==0,"abundant inventory does not overflow the deficit calculation");
         consumers();
         return checks;
     }

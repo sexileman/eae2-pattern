@@ -18,10 +18,12 @@ public final class CycleDiagramChecks {
         var data=CycleDiagramData.build(metadata,null);
         check(data.getString("status").equals("planned")&&data.getLong("bytes")==1234,"diagram distinguishes executable metadata from a mere candidate");
         check(data.getList("phases",10).getCompound(0).getLong("times")==10000,"diagram preserves complete batch quantities without per-item expansion");
+        var needs=new ListTag();var need=new CompoundTag();need.putLong("required",100);need.putLong("available",25);need.putLong("missing",75);needs.add(need);data.put("material_needs",needs);data.putBoolean("seed_alternatives",true);
         var buf=new FriendlyByteBuf(Unpooled.buffer());
         try{
             new S2CCycleDiagramPacket(7,99,data).encode(buf);var copy=S2CCycleDiagramPacket.decode(buf);
             check(copy.menu()==7&&copy.request()==99&&copy.data().equals(data),"response retains menu binding, request identity and phase snapshot");
+            check(copy.data().getList("material_needs",10).getCompound(0).getLong("missing")==75&&copy.data().getBoolean("seed_alternatives"),"material deficits and alternative startup flag survive snapshot transfer");
             buf.clear();var huge=CycleDiagramData.status("planned");huge.putByteArray("payload",new byte[CycleDiagramData.MAX_BYTES+1]);
             new S2CCycleDiagramPacket(7,100,huge).encode(buf);
             check(S2CCycleDiagramPacket.decode(buf).data().getString("status").equals("too_large"),"oversized plans return a bounded failure state instead of a huge packet");

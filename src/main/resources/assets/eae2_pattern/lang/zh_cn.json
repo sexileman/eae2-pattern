@@ -471,5 +471,21 @@
   "eae2_pattern.diagram.no_phases": "当前没有可执行的循环阶段",
   "eae2_pattern.diagram.snapshot": "当前计划快照 · 按整批回流推进 · 在 AE2 确认界面开始任务",
   "eae2_pattern.diagram.quantity": "数量：%s",
-  "eae2_pattern.diagram.inputs": "输入"
+  "eae2_pattern.diagram.inputs": "输入",
+  "eae2_pattern.diagram.tab.3": "材料缺口",
+  "eae2_pattern.diagram.materials.unknown": "当前没有完整材料核算，缺口未知",
+  "eae2_pattern.diagram.materials.seed": "启动材料不足：满足下列任一方案后重新规划",
+  "eae2_pattern.diagram.materials.external": "外部耗材不足：以下为本次计划总量",
+  "eae2_pattern.diagram.materials.ready": "本次计划材料充足",
+  "eae2_pattern.diagram.materials.disabled": "材料已核算；循环实验执行未开启",
+  "eae2_pattern.diagram.materials.cpu": "材料已核算；当前 CPU 不支持执行",
+  "eae2_pattern.diagram.materials.runtime": "材料已核算；当前执行接口不支持",
+  "eae2_pattern.diagram.material_path": "本次核算对应的循环",
+  "eae2_pattern.diagram.circulating": "循环库存",
+  "eae2_pattern.diagram.external": "外部耗材",
+  "eae2_pattern.diagram.need_have": "需求 %s · 可用 %s",
+  "eae2_pattern.diagram.shortage": "缺少 %s",
+  "eae2_pattern.diagram.sufficient": "已满足",
+  "eae2_pattern.diagram.stock_snapshot": "规划时库存快照 · 补料后请在 AE2 中重新规划",
+  "eae2_pattern.diagram.available": "规划时可用：%s"
 }

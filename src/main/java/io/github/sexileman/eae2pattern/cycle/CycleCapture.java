@@ -9,6 +9,12 @@ public final class CycleCapture {
     public record Pattern(List<GenericStack> inputs,List<GenericStack> outputs,List<String> recipeTypes){}
     public record Witness(List<AEKey> path,List<Pattern> patterns){}
     public record Candidate(List<AEKey> path,List<IPatternDetails> patterns,List<IPatternDetails> upstream){}
+    public record Materials(List<AEKey> path,List<GrowthMaterialNeeds.Need<AEKey>> rows,boolean alternatives,String reason){
+        public Materials{path=List.copyOf(path);rows=List.copyOf(rows);}
+    }
+    private Materials materials;
+    public Materials materials(){return materials;}
+    public void materials(Materials value){materials=value;}
     private final List<Candidate> candidates=new ArrayList<>();
     public List<Candidate> candidates(){return List.copyOf(candidates);}
     private final List<Witness> witnesses=new ArrayList<>();

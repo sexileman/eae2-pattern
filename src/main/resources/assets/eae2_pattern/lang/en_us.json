@@ -471,5 +471,21 @@
   "eae2_pattern.diagram.no_phases": "No executable growth phases",
   "eae2_pattern.diagram.snapshot": "Plan snapshot · wait for batch returns · start in AE2 confirmation",
   "eae2_pattern.diagram.quantity": "Amount: %s",
-  "eae2_pattern.diagram.inputs": "Inputs"
+  "eae2_pattern.diagram.inputs": "Inputs",
+  "eae2_pattern.diagram.tab.3": "Materials",
+  "eae2_pattern.diagram.materials.unknown": "Full material requirements unavailable; shortfalls unknown",
+  "eae2_pattern.diagram.materials.seed": "Startup stock missing: satisfy either option, then replan",
+  "eae2_pattern.diagram.materials.external": "External materials missing: totals for this plan",
+  "eae2_pattern.diagram.materials.ready": "Materials sufficient for this plan",
+  "eae2_pattern.diagram.materials.disabled": "Materials checked; experimental execution disabled",
+  "eae2_pattern.diagram.materials.cpu": "Materials checked; CPU unsupported",
+  "eae2_pattern.diagram.materials.runtime": "Materials checked; execution interface unsupported",
+  "eae2_pattern.diagram.material_path": "Cycle used for this material budget",
+  "eae2_pattern.diagram.circulating": "Circulating stock",
+  "eae2_pattern.diagram.external": "External material",
+  "eae2_pattern.diagram.need_have": "Need %s · Available %s",
+  "eae2_pattern.diagram.shortage": "Missing %s",
+  "eae2_pattern.diagram.sufficient": "Sufficient",
+  "eae2_pattern.diagram.stock_snapshot": "Stock snapshot from planning · replenish, then replan in AE2",
+  "eae2_pattern.diagram.available": "Available at planning: %s"
 }
