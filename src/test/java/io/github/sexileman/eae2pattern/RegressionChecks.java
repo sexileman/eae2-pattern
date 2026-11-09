@@ -31,6 +31,7 @@ public final class RegressionChecks {
         checks+=CycleAlphaChecks.run();
         checks+=CommandChecks.run();
         checks+=CycleDiagramChecks.run();
+        checks+=io.github.sexileman.eae2pattern.cycle.CycleOptimizationChecks.run();
         System.out.println("Passed " + checks + " regression checks");
     }
     private static void circuitConditions() throws Exception {

@@ -206,3 +206,5 @@ tasks.register('stageRelease') {
         logger.lifecycle("Release: ${targetJar}")
     }
 }
+
+apply from: "gradle/cycle-format.gradle"
