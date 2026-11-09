@@ -32,6 +32,35 @@ public final class TwoRecipeGrowth {
             long seedB,
             long targetA,
             long targetB) {
+        return calculate(aIn, bOut, bIn, aOut, seedA, seedB, targetA, targetB, MAX_OPERATIONS);
+    }
+
+    /**
+     * Budget-only analysis remains bounded by stage count and checked arithmetic, not execution
+     * count.
+     */
+    public static Result analyze(
+            long aIn,
+            long bOut,
+            long bIn,
+            long aOut,
+            long seedA,
+            long seedB,
+            long targetA,
+            long targetB) {
+        return calculate(aIn, bOut, bIn, aOut, seedA, seedB, targetA, targetB, Long.MAX_VALUE);
+    }
+
+    private static Result calculate(
+            long aIn,
+            long bOut,
+            long bIn,
+            long aOut,
+            long seedA,
+            long seedB,
+            long targetA,
+            long targetB,
+            long operationLimit) {
         if (aIn <= 0
                 || bOut <= 0
                 || bIn <= 0
@@ -50,7 +79,7 @@ public final class TwoRecipeGrowth {
         long gA = gcd(aOut, aIn), reverseB = aIn / gA, reverseA = aOut / gA;
         long bSeed = Math.multiplyExact(bIn, reverseB),
                 bGain = Math.subtractExact(Math.multiplyExact(bOut, reverseA), bSeed);
-        var state = new State(aIn, bOut, bIn, aOut, seedA, seedB);
+        var state = new State(aIn, bOut, bIn, aOut, seedA, seedB, operationLimit);
         while (state.a < targetA || state.b < targetB) {
             long surplusB = state.b > targetB ? state.b - targetB : 0;
             if (state.a < targetA && surplusB >= bIn) {
@@ -87,11 +116,12 @@ public final class TwoRecipeGrowth {
     }
 
     private static final class State {
-        final long ai, bo, bi, ao;
+        final long ai, bo, bi, ao, operationLimit;
         long a, b, operations;
         final List<Stage> stages = new ArrayList<>();
 
-        State(long ai, long bo, long bi, long ao, long a, long b) {
+        State(long ai, long bo, long bi, long ao, long a, long b, long operationLimit) {
+            this.operationLimit = operationLimit;
             this.ai = ai;
             this.bo = bo;
             this.bi = bi;
@@ -104,7 +134,7 @@ public final class TwoRecipeGrowth {
             if (times <= 0 || stages.size() >= MAX_STAGES)
                 throw new IllegalArgumentException("Cycle stage limit reached");
             operations = Math.addExact(operations, times);
-            if (operations > MAX_OPERATIONS)
+            if (operations > operationLimit)
                 throw new IllegalArgumentException("Cycle operation limit reached");
             if (recipe == 0) {
                 long spent = Math.multiplyExact(ai, times);

@@ -104,7 +104,7 @@ public final class GrowthFallback {
                     long availableA = stock.extract(a, Long.MAX_VALUE, Actionable.SIMULATE),
                             availableB = stock.extract(b, Long.MAX_VALUE, Actionable.SIMULATE);
                     var demand =
-                            GrowthDemand.consumer(
+                            GrowthDemand.analyzeConsumer(
                                     target.amount(),
                                     output,
                                     root.in.getOrDefault(a, 0L),
@@ -120,7 +120,7 @@ public final class GrowthFallback {
                     initialA = demand.initialA();
                     initialB = demand.initialB();
                     var loop =
-                            TwoRecipeGrowth.plan(
+                            TwoRecipeGrowth.analyze(
                                     aIn,
                                     first.out.get(b),
                                     bIn,
@@ -129,7 +129,7 @@ public final class GrowthFallback {
                                     initialB,
                                     demand.goalA(),
                                     demand.goalB());
-                    phases = GrowthDemand.appendConsumer(loop, demand.times());
+                    phases = GrowthDemand.appendAnalyzedConsumer(loop, demand.times());
                     recipes.add(terminal);
                     inputMaps.add(root.in);
                 } else {
@@ -143,7 +143,7 @@ public final class GrowthFallback {
                             GrowthWorkingStock.reserve(
                                     availableB, seedB, target.amount(), second.out.get(a), bIn);
                     phases =
-                            TwoRecipeGrowth.plan(
+                            TwoRecipeGrowth.analyze(
                                             aIn,
                                             first.out.get(b),
                                             bIn,
@@ -157,7 +157,7 @@ public final class GrowthFallback {
                 var seeds = new HashMap<AEKey, Long>();
                 if (initialA > 0) seeds.put(a, initialA);
                 if (initialB > 0) seeds.put(b, initialB);
-                var times = GrowthDemand.counts(phases, recipes.size());
+                var times = GrowthDemand.analyzeCounts(phases, recipes.size());
                 var budget = GrowthMaterials.budget(inputMaps, times, Set.of(a, b), seeds);
                 var tasks = new LinkedHashMap<IPatternDetails, Long>();
                 long operations = 0;
@@ -175,16 +175,28 @@ public final class GrowthFallback {
                                 Set.of(a, b),
                                 key -> stock.extract(key, Long.MAX_VALUE, Actionable.SIMULATE));
                 boolean lacks = needs.stream().anyMatch(n -> n.missing() > 0);
+                boolean overLimit = operations > CycleLimits.MAX_OPERATIONS;
                 String materialReason =
-                        lacks
-                                ? "external"
-                                : !enabled
-                                        ? "disabled"
-                                        : !CycleRuntimeGate.supported
-                                                ? "runtime"
-                                                : !cpuSupported ? "cpu" : "ready";
+                        overLimit
+                                ? "limit"
+                                : lacks
+                                        ? "external"
+                                        : !enabled
+                                                ? "disabled"
+                                                : !CycleRuntimeGate.supported
+                                                        ? "runtime"
+                                                        : !cpuSupported ? "cpu" : "ready";
                 capture.materials(
                         new CycleCapture.Materials(candidate.path(), needs, false, materialReason));
+                if (overLimit) {
+                    io.github.sexileman.eae2pattern.EAE2Pattern.LOGGER.warn(
+                            "[EAE2/Cycles] event=execution_limit trace={} operations={} limit={}; retaining material budget",
+                            capture.id(),
+                            operations,
+                            CycleLimits.MAX_OPERATIONS);
+                    reason = "limit";
+                    continue;
+                }
                 if (lacks) {
                     var entry =
                             needs.stream().filter(n -> n.missing() > 0).findFirst().orElseThrow();
@@ -239,6 +251,7 @@ public final class GrowthFallback {
                 return nativePlan;
             } catch (IllegalArgumentException | ArithmeticException unsupported) {
                 reason = "unsupported";
+                capture.materialFailure("planning_failed");
                 io.github.sexileman.eae2pattern.EAE2Pattern.LOGGER.debug(
                         "[EAE2/Cycles] event=candidate_rejected trace=" + capture.id(),
                         unsupported);

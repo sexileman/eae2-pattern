@@ -53,13 +53,28 @@ public final class CyclePlanViewModel {
         return Component.translatable("eae2_pattern.diagram." + key, args);
     }
 
+    public static List<Tab> tabs(CycleDiagramSnapshot snapshot) {
+        return snapshot.phases().isEmpty()
+                ? List.of(Tab.MATERIALS, Tab.PATHS, Tab.RECIPES)
+                : List.of(Tab.MATERIALS, Tab.PATHS, Tab.RECIPES, Tab.PHASES);
+    }
+
     public static List<Row> rows(CycleDiagramSnapshot data, Tab tab) {
         var result = new ArrayList<Row>();
         switch (tab) {
             case PATHS -> {
-                for (int i = 0; i < data.paths().size(); i++)
+                if (!data.materialPath().isEmpty())
                     result.add(
-                            new Row(tr("path", i + 1), data.paths().get(i), List.of(), 1, false));
+                            new Row(tr("material_path"), data.materialPath(), List.of(), 1, false));
+                for (int i = 0; i < data.paths().size(); i++)
+                    if (!data.paths().get(i).equals(data.materialPath()))
+                        result.add(
+                                new Row(
+                                        tr("path", i + 1),
+                                        data.paths().get(i),
+                                        List.of(),
+                                        1,
+                                        false));
                 if (!data.reserved().isEmpty())
                     result.add(new Row(tr("reserved"), data.reserved(), List.of(), 1, true));
             }
@@ -96,9 +111,6 @@ public final class CyclePlanViewModel {
                                 List.of(),
                                 1,
                                 false));
-                if (!data.materialPath().isEmpty())
-                    result.add(
-                            new Row(tr("material_path"), data.materialPath(), List.of(), 1, false));
                 for (var material : data.materials())
                     result.add(
                             new Row(

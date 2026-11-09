@@ -48,7 +48,9 @@ public record CycleDiagramSnapshot(
         READY,
         DISABLED,
         CPU,
-        RUNTIME;
+        RUNTIME,
+        LIMIT,
+        PLANNING_FAILED;
 
         public String id() {
             return name().toLowerCase(Locale.ROOT);

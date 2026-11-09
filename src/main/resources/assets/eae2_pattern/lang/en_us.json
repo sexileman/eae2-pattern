@@ -465,10 +465,10 @@
   "eae2_pattern.diagram.outputs": "Outputs",
   "eae2_pattern.diagram.tab.0": "Cycles",
   "eae2_pattern.diagram.tab.1": "Recipes",
-  "eae2_pattern.diagram.tab.2": "Phases",
+  "eae2_pattern.diagram.tab.2": "Execution order",
   "eae2_pattern.diagram.empty": "No cycle data to display",
   "eae2_pattern.diagram.no_phases": "No executable growth phases",
-  "eae2_pattern.diagram.snapshot": "Plan snapshot · wait for batch returns · start in AE2 confirmation",
+  "eae2_pattern.diagram.snapshot": "Plan snapshot · submit through AE2 confirmation",
   "eae2_pattern.diagram.quantity": "Amount: %s",
   "eae2_pattern.diagram.inputs": "Inputs",
   "eae2_pattern.diagram.tab.3": "Materials",
@@ -485,6 +485,9 @@
   "eae2_pattern.diagram.need_have": "Need %s · Available %s",
   "eae2_pattern.diagram.shortage": "Missing %s",
   "eae2_pattern.diagram.sufficient": "Sufficient",
-  "eae2_pattern.diagram.stock_snapshot": "Stock snapshot from planning · replenish, then replan in AE2",
-  "eae2_pattern.diagram.available": "Available at planning: %s"
+  "eae2_pattern.diagram.stock_snapshot": "Planning snapshot · replenish and replan in AE2",
+  "eae2_pattern.diagram.available": "Available at planning: %s",
+  "eae2_pattern.diagram.materials.limit": "Execution limit exceeded; complete material budget below",
+  "eae2_pattern.diagram.materials.planning_failed": "Budget unavailable; see planning diagnostics in log",
+  "eae2_pattern.cycle.alpha.limit": "Cycle plan exceeds the execution limit; inspect its full material budget in the cycle panel."
 }

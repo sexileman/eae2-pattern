@@ -465,10 +465,10 @@
   "eae2_pattern.diagram.outputs": "输出",
   "eae2_pattern.diagram.tab.0": "循环路径",
   "eae2_pattern.diagram.tab.1": "配方详情",
-  "eae2_pattern.diagram.tab.2": "阶段计划",
+  "eae2_pattern.diagram.tab.2": "执行顺序",
   "eae2_pattern.diagram.empty": "没有可展示的循环数据",
   "eae2_pattern.diagram.no_phases": "当前没有可执行的循环阶段",
-  "eae2_pattern.diagram.snapshot": "当前计划快照 · 按整批回流推进 · 在 AE2 确认界面开始任务",
+  "eae2_pattern.diagram.snapshot": "当前计划快照 · 任务由 AE2 确认界面提交",
   "eae2_pattern.diagram.quantity": "数量：%s",
   "eae2_pattern.diagram.inputs": "输入",
   "eae2_pattern.diagram.tab.3": "材料缺口",
@@ -485,6 +485,9 @@
   "eae2_pattern.diagram.need_have": "需求 %s · 可用 %s",
   "eae2_pattern.diagram.shortage": "缺少 %s",
   "eae2_pattern.diagram.sufficient": "已满足",
-  "eae2_pattern.diagram.stock_snapshot": "规划时库存快照 · 补料后请在 AE2 中重新规划",
-  "eae2_pattern.diagram.available": "规划时可用：%s"
+  "eae2_pattern.diagram.stock_snapshot": "规划时库存 · 补料后返回 AE2 重新规划",
+  "eae2_pattern.diagram.available": "规划时可用：%s",
+  "eae2_pattern.diagram.materials.limit": "超过执行上限；下方仍列出完整材料核算",
+  "eae2_pattern.diagram.materials.planning_failed": "无法生成完整预算，请查看日志中的规划原因",
+  "eae2_pattern.cycle.alpha.limit": "循环计划超过当前执行次数上限；请在材料缺口页查看完整核算。"
 }

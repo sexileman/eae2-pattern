@@ -75,6 +75,10 @@ public final class UniversalWildcardContracts {
                 check(opaque==5&&hardEdges,"overlay has exactly five hard pixels and no soft alpha edges");
             }
             check(itemModel.getAsJsonArray("overrides").get(0).getAsJsonObject().getAsJsonObject("predicate").has("eae2_pattern:encoded"),"encoded appearance has its own model predicate");
+            check(node(bytes(app,"io/github/sexileman/eae2pattern/client/CycleToolbarButton.class")).superName.equals("appeng/client/gui/widgets/IconButton"),"cycle entry inherits native toolbar icon geometry instead of tab geometry");
+            var cyclePanel=node(bytes(app,"io/github/sexileman/eae2pattern/client/CyclePlanOverlay.class"));boolean scaledText=false;
+            for(var method:cyclePanel.methods)for(var instruction:method.instructions)if(instruction instanceof MethodInsnNode call&&call.owner.equals("com/mojang/blaze3d/vertex/PoseStack")&&(call.name.equals("scale")||call.name.equals("m_85841_")))scaledText=true;
+            check(!scaledText,"cycle panel never fractionally scales its text pose");
             var growth=node(bytes(app,"io/github/sexileman/eae2pattern/cycle/GrowthRun.class"));
             boolean providerRoute=false,nativeInputs=false,physicalReserve=false;
             for(var method:growth.methods)for(var insn:method.instructions)if(insn instanceof MethodInsnNode call){

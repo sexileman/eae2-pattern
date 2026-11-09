@@ -32,6 +32,15 @@ public final class CycleCapture {
     }
 
     private Materials materials;
+    private String materialFailure = "unknown";
+
+    public String materialFailure() {
+        return materialFailure;
+    }
+
+    public void materialFailure(String reason) {
+        materialFailure = reason;
+    }
 
     public Materials materials() {
         return materials;

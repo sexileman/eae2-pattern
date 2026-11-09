@@ -53,6 +53,7 @@ public final class CycleDiagramData {
         tag.put("target", GenericStack.writeTag(plan.finalOutput()));
         tag.putLong("bytes", plan.bytes());
         tag.putBoolean("missing", plan.simulation());
+        if (capture != null) tag.putString("material_reason", capture.materialFailure());
         if (capture != null && capture.materials() != null) {
             var report = capture.materials();
             var needs = new ListTag();

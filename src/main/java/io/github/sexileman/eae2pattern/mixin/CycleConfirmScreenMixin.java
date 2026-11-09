@@ -1,13 +1,9 @@
 package io.github.sexileman.eae2pattern.mixin;
 
 import appeng.client.gui.AEBaseScreen;
-import appeng.client.gui.Icon;
 import appeng.client.gui.me.crafting.CraftConfirmScreen;
 import appeng.client.gui.style.ScreenStyle;
-import appeng.client.gui.widgets.TabButton;
 import appeng.menu.me.crafting.CraftConfirmMenu;
-
-import io.github.sexileman.eae2pattern.client.CyclePlanOverlay;
 
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.entity.player.Inventory;
@@ -30,12 +26,8 @@ public abstract class CycleConfirmScreenMixin extends AEBaseScreen<CraftConfirmM
             Component title,
             ScreenStyle style,
             CallbackInfo ci) {
-        var button =
-                new TabButton(
-                        Icon.SUBSTITUTION_ENABLED,
-                        Component.translatable("eae2_pattern.diagram.title"),
-                        b -> CyclePlanOverlay.open((CraftConfirmScreen) (Object) this));
-        button.setStyle(TabButton.Style.BOX);
-        addToLeftToolbar(button);
+        addToLeftToolbar(
+                new io.github.sexileman.eae2pattern.client.CycleToolbarButton(
+                        (CraftConfirmScreen) (Object) this));
     }
 }

@@ -31,10 +31,10 @@ import java.util.List;
 @Mod.EventBusSubscriber(modid = EAE2Pattern.MOD_ID, value = Dist.CLIENT)
 public final class CyclePlanOverlay {
     private static CyclePlanOverlay active;
-    private static final List<Tab> TABS = List.of(Tab.values());
+    private List<Tab> tabs = List.of(Tab.MATERIALS, Tab.PATHS, Tab.RECIPES);
     private final CraftConfirmScreen parent;
     private final CycleDiagramSession session;
-    private Tab tab = Tab.PATHS;
+    private Tab tab = Tab.MATERIALS;
     private int scroll;
     private boolean dragging;
     private List<Row> rows = List.of();
@@ -72,32 +72,35 @@ public final class CyclePlanOverlay {
     }
 
     private void rebuild() {
+        tabs = CyclePlanViewModel.tabs(session.snapshot());
+        if (!tabs.contains(tab)) tab = Tab.MATERIALS;
         rows = CyclePlanViewModel.rows(session.snapshot(), tab);
         scroll = 0;
         measuredWidth = -1;
     }
 
     private void layout() {
-        w = Math.min(560, parent.width - 32);
-        h = Math.min(370, parent.height - 20);
-        x = (parent.width - w) / 2;
-        y = (parent.height - h) / 2;
+        var bounds = CyclePanelLayout.fit(parent.width, parent.height);
+        w = bounds.width();
+        h = bounds.height();
+        x = bounds.x();
+        y = bounds.y();
         if (measuredWidth != w) measureRows();
     }
 
     private int columns() {
-        return Math.max(1, (w - 36) / 24);
+        return Math.max(1, (w - 36) / 36);
     }
 
     private int height(Row row) {
-        if (row.materialKind() != MaterialKind.NONE) return 58;
+        if (row.materialKind() != MaterialKind.NONE) return 50;
         if (row.inputs().isEmpty() && row.outputs().isEmpty()) return 24;
-        if (!row.grid()) return row.outputs().isEmpty() ? 58 : 68;
+        if (!row.grid()) return row.outputs().isEmpty() ? 58 : 58;
         return 20
-                + ((row.inputs().size() + columns() - 1) / columns()) * 24
+                + ((row.inputs().size() + columns() - 1) / columns()) * 36
                 + (row.outputs().isEmpty()
                         ? 0
-                        : 26 + ((row.outputs().size() + columns() - 1) / columns()) * 24);
+                        : 26 + ((row.outputs().size() + columns() - 1) / columns()) * 36);
     }
 
     private void measureRows() {
@@ -113,7 +116,7 @@ public final class CyclePlanOverlay {
     }
 
     private int bodyTop() {
-        return y + 101;
+        return y + 88;
     }
 
     private int bodyBottom() {
@@ -133,8 +136,14 @@ public final class CyclePlanOverlay {
                 18,
                 selected ? WorkbenchTheme.PRIMARY : WorkbenchTheme.SURFACE,
                 WorkbenchTheme.LINE);
-        g.drawCenteredString(
-                Minecraft.getInstance().font, label, bx + bw / 2, by + 5, WorkbenchTheme.TEXT);
+        var font = Minecraft.getInstance().font;
+        g.drawString(
+                font,
+                label,
+                bx + (bw - font.width(label)) / 2,
+                by + (18 - font.lineHeight) / 2,
+                WorkbenchTheme.TEXT,
+                false);
     }
 
     private void render(GuiGraphics g, int mx, int my) {
@@ -151,7 +160,7 @@ public final class CyclePlanOverlay {
                 font,
                 tr("status." + data.state().id()),
                 x + 10,
-                y + 33,
+                y + 31,
                 WorkbenchTheme.ACCENT,
                 false);
         var target = data.target();
@@ -165,12 +174,12 @@ public final class CyclePlanOverlay {
                                             .formatAmount(target.amount(), AmountFormat.FULL),
                             w - 100),
                     x + 10,
-                    y + 48,
+                    y + 44,
                     WorkbenchTheme.TEXT,
                     false);
-        int tw = (w - 16 - 4 * TABS.size()) / TABS.size();
-        for (int i = 0; i < TABS.size(); i++)
-            control(g, x + 10 + i * (tw + 4), y + 70, tw, TABS.get(i).title(), tab == TABS.get(i));
+        int tw = (w - 16 - 4 * tabs.size()) / tabs.size();
+        for (int i = 0; i < tabs.size(); i++)
+            control(g, x + 10 + i * (tw + 4), y + 62, tw, tabs.get(i).title(), tab == tabs.get(i));
         GenericStack hover = null;
         long hoverTimes = 1;
         Row hoverNeed = null;
@@ -183,7 +192,7 @@ public final class CyclePlanOverlay {
             if (ry + rh > bodyTop() && ry < bodyBottom()) {
                 if (row.materialKind() != MaterialKind.NONE) {
                     var stack = row.inputs().get(0);
-                    icon(g, stack, x + 12, ry + 5, 1);
+                    icon(g, stack, x + 12, ry + 5, 1, false);
                     String label =
                             row.title().getString()
                                     + " · "
@@ -255,7 +264,7 @@ public final class CyclePlanOverlay {
                             hoverTimes = row.times();
                         }
                         int outY =
-                                inY + 1 + ((row.inputs().size() + columns() - 1) / columns()) * 24;
+                                inY + 1 + ((row.inputs().size() + columns() - 1) / columns()) * 36;
                         if (!row.outputs().isEmpty()) {
                             g.drawString(
                                     font,
@@ -382,7 +391,7 @@ public final class CyclePlanOverlay {
             GuiGraphics g, List<GenericStack> slots, int sx, int sy, long times, int mx, int my) {
         GenericStack hover = null;
         for (int i = 0; i < slots.size(); i++) {
-            int dx = sx + (i % columns()) * 24, dy = sy + (i / columns()) * 24;
+            int dx = sx + (i % columns()) * 36, dy = sy + (i / columns()) * 36;
             icon(g, slots.get(i), dx, dy, times);
             if (mx >= dx && mx < dx + 20 && my >= dy && my < dy + 20) hover = slots.get(i);
         }
@@ -395,7 +404,7 @@ public final class CyclePlanOverlay {
         GenericStack hover = null;
         for (int i = 0; i < limit; i++) {
             int dx = sx + i * 52;
-            icon(g, nodes.get(i), dx, sy, 1);
+            icon(g, nodes.get(i), dx, sy, 1, false);
             var font = Minecraft.getInstance().font;
             g.drawString(
                     font,
@@ -421,10 +430,10 @@ public final class CyclePlanOverlay {
 
     private GenericStack drawStrip(
             GuiGraphics g, List<GenericStack> slots, int sx, int sy, long times, int mx, int my) {
-        int limit = Math.min(slots.size(), Math.max(1, (w / 2 - 40) / 24));
+        int limit = Math.min(slots.size(), Math.max(1, (w / 2 - 40) / 36));
         GenericStack hover = null;
         for (int i = 0; i < limit; i++) {
-            int dx = sx + i * 24;
+            int dx = sx + i * 36;
             icon(g, slots.get(i), dx, sy, times);
             if (mx >= dx && mx < dx + 20 && my >= sy && my < sy + 20) hover = slots.get(i);
         }
@@ -432,7 +441,7 @@ public final class CyclePlanOverlay {
             g.drawString(
                     Minecraft.getInstance().font,
                     "+" + (slots.size() - limit),
-                    sx + limit * 24,
+                    sx + limit * 36,
                     sy + 6,
                     WorkbenchTheme.DIM,
                     false);
@@ -440,23 +449,21 @@ public final class CyclePlanOverlay {
     }
 
     private void icon(GuiGraphics g, GenericStack stack, int sx, int sy, long times) {
+        icon(g, stack, sx, sy, times, true);
+    }
+
+    private void icon(
+            GuiGraphics g, GenericStack stack, int sx, int sy, long times, boolean showAmount) {
         WorkbenchTheme.slot(g, sx, sy, IngredientPresentation.REGULAR);
         AEKeyRendering.drawInGui(Minecraft.getInstance(), g, sx + 1, sy + 1, stack.what());
-        var label =
-                StackAmountLabel.format(
-                        scaled(stack.amount(), times), stack.what() instanceof AEFluidKey);
-        if (scaled(stack.amount(), times) > 1 || stack.what() instanceof AEFluidKey) {
-            g.pose().pushPose();
-            g.pose().translate(0, 0, 200);
-            g.pose().scale(.7f, .7f, 1);
-            g.drawString(
-                    Minecraft.getInstance().font,
-                    label,
-                    (int) ((sx + 18) / .7f) - Minecraft.getInstance().font.width(label),
-                    (int) ((sy + 12) / .7f),
-                    0xFFFFFFFF,
-                    true);
-            g.pose().popPose();
+        long amount = scaled(stack.amount(), times);
+        if (showAmount && (amount > 1 || stack.what() instanceof AEFluidKey)) {
+            var font = Minecraft.getInstance().font;
+            String label =
+                    font.plainSubstrByWidth(
+                            StackAmountLabel.format(amount, stack.what() instanceof AEFluidKey),
+                            34);
+            g.drawString(font, label, sx, sy + 20, WorkbenchTheme.TEXT, false);
         }
     }
 
@@ -496,11 +503,11 @@ public final class CyclePlanOverlay {
             active = null;
             return;
         }
-        if (my >= a.y + 70 && my < a.y + 88) {
-            int tw = (a.w - 16 - 4 * TABS.size()) / TABS.size();
+        if (my >= a.y + 62 && my < a.y + 80) {
+            int tw = (a.w - 16 - 4 * a.tabs.size()) / a.tabs.size();
             int tab = (int) (mx - a.x - 10) / (tw + 4);
-            if (tab >= 0 && tab < TABS.size()) {
-                a.tab = TABS.get(tab);
+            if (tab >= 0 && tab < a.tabs.size()) {
+                a.tab = a.tabs.get(tab);
                 a.rebuild();
             }
             return;

@@ -142,6 +142,91 @@ public final class CycleOptimizationChecks {
         check(
                 GrowthBatchBridge.readSingletonInt(singleton, field) == 32,
                 "cached reflection preserves replacement-based config reload");
+        var bounds = io.github.sexileman.eae2pattern.client.CyclePanelLayout.fit(600, 400);
+        check(
+                bounds.width() == 350
+                        && bounds.height() == 250
+                        && bounds.x() == 125
+                        && bounds.y() == 75,
+                "cycle panel matches the installed AE2CT native logical size");
+        var smallBounds = io.github.sexileman.eae2pattern.client.CyclePanelLayout.fit(320, 240);
+        check(
+                smallBounds.width() == 280
+                        && smallBounds.height() == 200
+                        && smallBounds.x() == 20
+                        && smallBounds.y() == 20,
+                "small GUI viewports retain margins instead of covering the entire screen");
+        check(
+                !CyclePlanViewModel.tabs(
+                                CycleDiagramSnapshot.state(CycleDiagramSnapshot.State.DETECTED))
+                        .contains(CyclePlanViewModel.Tab.PHASES),
+                "candidate-only plans do not show an empty execution-order tab");
+        check(
+                CyclePlanViewModel.tabs(snapshot).contains(CyclePlanViewModel.Tab.PHASES),
+                "executable plans retain their phase inspection view");
+
+        // Screenshot-sized fluid request: 1,000,000 B = 1,000,000,000 mB.
+        var hugePlan = TwoRecipeGrowth.analyze(10, 1, 64, 10000, 1440, 48, 1_000_001_440L, 48);
+        check(
+                hugePlan.operations() > CycleLimits.MAX_OPERATIONS
+                        && hugePlan.stages().size() < CycleLimits.MAX_STAGES,
+                "large cycle material analysis survives the execution-operation cap without expanding per-item jobs");
+        var hugeCounts = GrowthDemand.analyzeCounts(hugePlan.stages(), 2);
+        var hugeBudget =
+                GrowthMaterials.budget(
+                        java.util.List.of(
+                                java.util.Map.of("A", 10L),
+                                java.util.Map.of(
+                                        "B", 64L, "dirt", 64L, "blue", 1000L, "green", 1000L)),
+                        hugeCounts,
+                        java.util.Set.of("A", "B"),
+                        java.util.Map.of("A", 1440L, "B", 48L));
+        var hugeNeeds =
+                GrowthMaterialNeeds.evaluate(
+                        hugeBudget,
+                        java.util.Set.of("A", "B"),
+                        key ->
+                                switch (key) {
+                                    case "A" -> 1440L;
+                                    case "B" -> 48L;
+                                    case "dirt" -> 6_400_000L;
+                                    default -> 100_000_000L;
+                                });
+        check(
+                hugeNeeds.stream().anyMatch(n -> n.key().equals("dirt") && n.missing() > 0),
+                "large plan reports missing dirt instead of only recursive B");
+        check(
+                hugeNeeds.stream()
+                        .filter(n -> n.key().equals("blue") || n.key().equals("green"))
+                        .allMatch(n -> n.missing() > 0),
+                "large plan reports both external fluid shortages in raw mB");
+        boolean executionRejected = false;
+        try {
+            GrowthDemand.counts(hugePlan.stages(), 2);
+        } catch (IllegalArgumentException expected) {
+            executionRejected = true;
+        }
+        check(
+                executionRejected,
+                "diagnostic analysis does not bypass the original execution safety cap");
+        var largeConsumer =
+                GrowthDemand.analyzeConsumer(2_000_000, 1, 1, 0, 1, 0, 1, 0, 1, 2, 1, 2);
+        check(
+                largeConsumer.times() == 2_000_000,
+                "downstream material analysis has its own large-quantity path");
+        check(
+                GrowthDemand.appendAnalyzedConsumer(hugePlan, largeConsumer.times())
+                                .get(hugePlan.stages().size())
+                                .recipe()
+                        == 2,
+                "large downstream stages can be budgeted without enabling execution");
+        boolean consumerRejected = false;
+        try {
+            GrowthDemand.consumer(2_000_000, 1, 1, 0, 1, 0, 1, 0, 1, 2, 1, 2);
+        } catch (IllegalArgumentException expected) {
+            consumerRejected = true;
+        }
+        check(consumerRejected, "normal consumer entry preserves the existing execution limit");
         return checks;
     }
 }
