@@ -489,5 +489,8 @@
   "eae2_pattern.diagram.available": "Available at planning: %s",
   "eae2_pattern.diagram.materials.limit": "Execution limit exceeded; complete material budget below",
   "eae2_pattern.diagram.materials.planning_failed": "Budget unavailable; see planning diagnostics in log",
-  "eae2_pattern.cycle.alpha.limit": "Cycle plan exceeds the execution limit; inspect its full material budget in the cycle panel."
+  "eae2_pattern.cycle.alpha.limit": "Cycle plan exceeds the execution limit; inspect its full material budget in the cycle panel.",
+  "eae2_pattern.diagram.required_heading": "Need",
+  "eae2_pattern.diagram.available_heading": "Stock",
+  "eae2_pattern.diagram.missing_heading": "Missing"
 }

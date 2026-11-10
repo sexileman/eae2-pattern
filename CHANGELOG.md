@@ -1,3 +1,8 @@
+# 2026.11.2-beta.7
+
+- Add the requested-product icon and reduce cycle status emphasis.
+- Compact material diagnostics into aligned need/stock/missing columns with full-row exact-quantity tooltips.
+
 # 2026.11.2-beta.6
 
 - Remove redundant configuration-number overlays from circuit picker cells and center circuit icons; retain hover details and selection behavior.

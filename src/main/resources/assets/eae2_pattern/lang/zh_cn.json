@@ -489,5 +489,8 @@
   "eae2_pattern.diagram.available": "规划时可用：%s",
   "eae2_pattern.diagram.materials.limit": "超过执行上限；下方仍列出完整材料核算",
   "eae2_pattern.diagram.materials.planning_failed": "无法生成完整预算，请查看日志中的规划原因",
-  "eae2_pattern.cycle.alpha.limit": "循环计划超过当前执行次数上限；请在材料缺口页查看完整核算。"
+  "eae2_pattern.cycle.alpha.limit": "循环计划超过当前执行次数上限；请在材料缺口页查看完整核算。",
+  "eae2_pattern.diagram.required_heading": "需求",
+  "eae2_pattern.diagram.available_heading": "可用",
+  "eae2_pattern.diagram.missing_heading": "缺口"
 }

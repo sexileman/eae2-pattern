@@ -93,7 +93,7 @@ public final class CyclePlanOverlay {
     }
 
     private int height(Row row) {
-        if (row.materialKind() != MaterialKind.NONE) return 50;
+        if (row.materialKind() != MaterialKind.NONE) return 28;
         if (row.inputs().isEmpty() && row.outputs().isEmpty()) return 24;
         if (!row.grid()) return row.outputs().isEmpty() ? 58 : 58;
         return 20
@@ -156,15 +156,9 @@ public final class CyclePlanOverlay {
         WorkbenchTheme.panel(g, x, y, w, h);
         g.drawString(font, tr("title"), x + 10, y + 11, WorkbenchTheme.TEXT, false);
         control(g, x + w - 54, y + 7, 44, tr("back"), false);
-        g.drawString(
-                font,
-                tr("status." + data.state().id()),
-                x + 10,
-                y + 31,
-                WorkbenchTheme.ACCENT,
-                false);
         var target = data.target();
-        if (target != null)
+        if (target != null) {
+            icon(g, target, x + 10, y + 30, 1, false);
             g.drawString(
                     font,
                     font.plainSubstrByWidth(
@@ -172,11 +166,21 @@ public final class CyclePlanOverlay {
                                     + " × "
                                     + target.what()
                                             .formatAmount(target.amount(), AmountFormat.FULL),
-                            w - 100),
-                    x + 10,
-                    y + 44,
+                            w - 52),
+                    x + 36,
+                    y + 32,
                     WorkbenchTheme.TEXT,
                     false);
+        }
+        g.drawString(
+                font,
+                net.minecraft.locale.Language.getInstance()
+                        .getVisualOrder(
+                                font.substrByWidth(tr("status." + data.state().id()), w - 52)),
+                x + 36,
+                y + 46,
+                WorkbenchTheme.DIM,
+                false);
         int tw = (w - 16 - 4 * tabs.size()) / tabs.size();
         for (int i = 0; i < tabs.size(); i++)
             control(g, x + 10 + i * (tw + 4), y + 62, tw, tabs.get(i).title(), tab == tabs.get(i));
@@ -192,53 +196,50 @@ public final class CyclePlanOverlay {
             if (ry + rh > bodyTop() && ry < bodyBottom()) {
                 if (row.materialKind() != MaterialKind.NONE) {
                     var stack = row.inputs().get(0);
-                    icon(g, stack, x + 12, ry + 5, 1, false);
-                    String label =
-                            row.title().getString()
-                                    + " · "
-                                    + tr(row.materialKind() == MaterialKind.CIRCULATING
-                                                    ? "circulating"
-                                                    : "external")
-                                            .getString();
+                    icon(g, stack, x + 12, ry + 3, 1, false);
+                    int numericStart = x + 38 + Math.max(42, (w - 58) * 34 / 100);
+                    int cell = Math.max(1, (x + w - 18 - numericStart) / 3);
                     g.drawString(
                             font,
-                            font.plainSubstrByWidth(label, w - 56),
-                            x + 38,
+                            font.plainSubstrByWidth(
+                                    row.title().getString(), Math.max(1, numericStart - x - 42)),
+                            x + 36,
                             ry + 2,
                             WorkbenchTheme.TEXT,
                             false);
                     g.drawString(
                             font,
-                            font.plainSubstrByWidth(
-                                    tr(
-                                                    "need_have",
-                                                    stack.what()
-                                                            .formatAmount(
-                                                                    stack.amount(),
-                                                                    AmountFormat.FULL),
-                                                    stack.what()
-                                                            .formatAmount(
-                                                                    row.available(),
-                                                                    AmountFormat.FULL))
-                                            .getString(),
-                                    w - 56),
-                            x + 38,
-                            ry + 17,
+                            tr(
+                                    row.materialKind() == MaterialKind.CIRCULATING
+                                            ? "circulating"
+                                            : "external"),
+                            x + 36,
+                            ry + 13,
                             WorkbenchTheme.DIM,
                             false);
-                    g.drawString(
-                            font,
-                            row.missing() > 0
-                                    ? tr(
-                                            "shortage",
-                                            stack.what()
-                                                    .formatAmount(row.missing(), AmountFormat.FULL))
-                                    : tr("sufficient"),
-                            x + 38,
-                            ry + 32,
-                            row.missing() > 0 ? WorkbenchTheme.WARNING : WorkbenchTheme.ACCENT,
-                            false);
-                    if (mx >= x + 12 && mx < x + 32 && my >= ry + 5 && my < ry + 25) {
+                    long[] amounts = {stack.amount(), row.available(), row.missing()};
+                    for (int column = 0; column < amounts.length; column++) {
+                        String amount =
+                                stack.what().formatAmount(amounts[column], AmountFormat.FULL);
+                        if (font.width(amount) > cell - 4)
+                            amount =
+                                    (amounts[column] == 1 && !(stack.what() instanceof AEFluidKey)
+                                            ? "1"
+                                            : StackAmountLabel.format(
+                                                    amounts[column],
+                                                    stack.what() instanceof AEFluidKey));
+                        amount = font.plainSubstrByWidth(amount, Math.max(1, cell - 4));
+                        g.drawString(
+                                font,
+                                amount,
+                                numericStart + (column + 1) * cell - 4 - font.width(amount),
+                                ry + 8,
+                                column == 2 && row.missing() > 0
+                                        ? WorkbenchTheme.WARNING
+                                        : WorkbenchTheme.DIM,
+                                false);
+                    }
+                    if (mx >= x + 10 && mx < x + w - 18 && my >= ry && my < ry + rh) {
                         hover = stack;
                         hoverTimes = 1;
                         hoverNeed = row;
@@ -251,6 +252,23 @@ public final class CyclePlanOverlay {
                             ry + 2,
                             WorkbenchTheme.TEXT,
                             false);
+                    if (tab == Tab.MATERIALS && row.inputs().isEmpty()) {
+                        int numericStart = x + 38 + Math.max(42, (w - 58) * 34 / 100);
+                        int cell = Math.max(1, (x + w - 18 - numericStart) / 3);
+                        String[] headings = {
+                            "required_heading", "available_heading", "missing_heading"
+                        };
+                        for (int column = 0; column < headings.length; column++) {
+                            var heading = tr(headings[column]);
+                            g.drawString(
+                                    font,
+                                    heading,
+                                    numericStart + (column + 1) * cell - 4 - font.width(heading),
+                                    ry + 13,
+                                    WorkbenchTheme.DIM,
+                                    false);
+                        }
+                    }
                     if (row.grid()) {
                         int inY = ry + 17;
                         if (!row.outputs().isEmpty()) {
@@ -354,7 +372,12 @@ public final class CyclePlanOverlay {
                 y + h - 17,
                 WorkbenchTheme.DIM,
                 false);
-        if (hover != null && my >= bodyTop() && my < bodyBottom()) {
+        if (target != null && mx >= x + 10 && mx < x + w - 12 && my >= y + 30 && my < y + 46) {
+            hover = target;
+            hoverTimes = 1;
+        }
+        if (hover != null
+                && ((my >= bodyTop() && my < bodyBottom()) || (my >= y + 30 && my < y + 46))) {
             var lines = new ArrayList<Component>(AEKeyRendering.getTooltip(hover.what()));
             lines.add(
                     tr(
