@@ -1,3 +1,8 @@
+# 2026.11.2-beta.2
+
+- Refine shared AE2-style control colors and bevel contrast.
+- Center shared button labels at native font size without shadows.
+
 # 2026.11.2-beta.1
 
 - Adopt calendar versioning; see VERSIONING.md. No runtime behavior changes.
