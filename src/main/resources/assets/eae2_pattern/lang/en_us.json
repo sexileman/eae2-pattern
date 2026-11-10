@@ -454,7 +454,7 @@
   "eae2_pattern.diagram.status.loading": "Reading current crafting plan…",
   "eae2_pattern.diagram.status.none": "No cycle recorded in this plan",
   "eae2_pattern.diagram.status.planned": "Growth execution planned",
-  "eae2_pattern.diagram.status.detected": "Cycle candidate · execution not confirmed",
+  "eae2_pattern.diagram.status.detected": "Cycle found · no execution plan yet",
   "eae2_pattern.diagram.status.unsupported": "Current AE2 interface unavailable",
   "eae2_pattern.diagram.status.too_large": "Plan too large to transfer",
   "eae2_pattern.diagram.status.timeout": "Timed out; close and reopen the panel",
@@ -492,5 +492,6 @@
   "eae2_pattern.cycle.alpha.limit": "Cycle plan exceeds the execution limit; inspect its full material budget in the cycle panel.",
   "eae2_pattern.diagram.required_heading": "Need",
   "eae2_pattern.diagram.available_heading": "Stock",
-  "eae2_pattern.diagram.missing_heading": "Missing"
+  "eae2_pattern.diagram.missing_heading": "Missing",
+  "eae2_pattern.diagram.item_amount": "%s items"
 }

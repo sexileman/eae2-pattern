@@ -191,23 +191,14 @@ public final class CyclePlanOverlay {
                     font.plainSubstrByWidth(
                             target.what().getDisplayName().getString()
                                     + " × "
-                                    + target.what()
-                                            .formatAmount(target.amount(), AmountFormat.FULL),
+                                    + targetAmount(target),
                             w - 52),
                     x + 36,
                     y + 29,
                     WorkbenchTheme.TEXT,
                     false);
         }
-        g.drawString(
-                font,
-                net.minecraft.locale.Language.getInstance()
-                        .getVisualOrder(
-                                font.substrByWidth(tr("status." + data.state().id()), w - 52)),
-                x + 36,
-                y + 41,
-                WorkbenchTheme.DIM,
-                false);
+        drawStatus(g, tr("status." + data.state().id()), x + 36, y + 41, w - 52);
         int tw = (w - 16 - 4 * tabs.size()) / tabs.size();
         for (int i = 0; i < tabs.size(); i++)
             control(g, x + 10 + i * (tw + 4), y + 52, tw, tabs.get(i).title(), tab == tabs.get(i));
@@ -406,6 +397,35 @@ public final class CyclePlanOverlay {
             }
             g.renderComponentTooltip(font, lines, mx, my);
         }
+        g.pose().popPose();
+    }
+
+    private static String targetAmount(GenericStack target) {
+        String amount = target.what().formatAmount(target.amount(), AmountFormat.FULL);
+        return target.what() instanceof AEFluidKey ? amount : tr("item_amount", amount).getString();
+    }
+
+    /** Auxiliary text alone uses smaller, whole framebuffer pixels; controls stay native-sized. */
+    private void drawStatus(GuiGraphics g, Component text, int sx, int sy, int room) {
+        var mc = Minecraft.getInstance();
+        double guiScale = mc.getWindow().getGuiScale();
+        float scale = (float) (Math.max(1, Math.floor(guiScale * .75)) / guiScale);
+        g.pose().pushPose();
+        g.pose()
+                .translate(
+                        Math.round(sx * guiScale) / guiScale,
+                        Math.round(sy * guiScale) / guiScale,
+                        0);
+        g.pose().scale(scale, scale, 1);
+        g.drawString(
+                mc.font,
+                net.minecraft.locale.Language.getInstance()
+                        .getVisualOrder(
+                                mc.font.substrByWidth(text, Math.max(1, (int) (room / scale)))),
+                0,
+                0,
+                WorkbenchTheme.DIM,
+                false);
         g.pose().popPose();
     }
 

@@ -1,3 +1,8 @@
+# 2026.11.2-beta.10
+
+- Add explicit item units to the cycle target summary.
+- Shorten candidate status wording and render only this auxiliary line at a smaller whole-pixel scale.
+
 # 2026.11.2-beta.9
 
 - Present cycle materials in multi-column AE2-style cells with shortage backgrounds and exact tooltips.

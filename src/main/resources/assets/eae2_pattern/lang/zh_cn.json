@@ -454,7 +454,7 @@
   "eae2_pattern.diagram.status.loading": "正在读取当前合成计划…",
   "eae2_pattern.diagram.status.none": "当前计划未记录循环配方",
   "eae2_pattern.diagram.status.planned": "已规划循环生产",
-  "eae2_pattern.diagram.status.detected": "检测到循环候选 · 不代表可执行",
+  "eae2_pattern.diagram.status.detected": "发现循环配方 · 尚未生成执行计划",
   "eae2_pattern.diagram.status.unsupported": "当前 AE2 接口不支持读取",
   "eae2_pattern.diagram.status.too_large": "计划数据过大，未传输",
   "eae2_pattern.diagram.status.timeout": "读取超时，请关闭后重新打开",
@@ -492,5 +492,6 @@
   "eae2_pattern.cycle.alpha.limit": "循环计划超过当前执行次数上限；请在材料缺口页查看完整核算。",
   "eae2_pattern.diagram.required_heading": "需求",
   "eae2_pattern.diagram.available_heading": "可用",
-  "eae2_pattern.diagram.missing_heading": "缺口"
+  "eae2_pattern.diagram.missing_heading": "缺口",
+  "eae2_pattern.diagram.item_amount": "%s 个"
 }
