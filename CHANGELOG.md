@@ -1,3 +1,7 @@
+# 2026.11.2-beta.3
+
+- Use the native AE2 pattern encoding terminal item for the JEI encoding entry, without the plus overlay.
+
 # 2026.11.2-beta.2
 
 - Refine shared AE2-style control colors and bevel contrast.

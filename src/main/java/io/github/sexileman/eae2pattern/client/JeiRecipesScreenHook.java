@@ -1,6 +1,6 @@
 package io.github.sexileman.eae2pattern.client;
 
-import io.github.sexileman.eae2pattern.wildcard.WildcardItems;
+import appeng.core.definitions.AEParts;
 import io.github.sexileman.eae2pattern.EAE2Pattern;
 import io.github.sexileman.eae2pattern.compat.jei.JeiRuntimeHolder;
 import mezz.jei.api.constants.VanillaTypes;
@@ -41,14 +41,6 @@ public final class JeiRecipesScreenHook {
     }
 
     @SubscribeEvent
-    public static void afterRender(ScreenEvent.Render.Post event) {
-        if (owner.get() != event.getScreen() || actionSlot == null) return;
-        // The item, slot background, hover overlay and tooltip are rendered by JEI. Only add our small plus.
-        var rect = actionSlot.getRect();
-        RecipeIcons.drawPlus(event.getGuiGraphics(), rect.getX() + 10, rect.getY() + 10);
-    }
-
-    @SubscribeEvent
     public static void clicked(ScreenEvent.MouseButtonPressed.Pre event) {
         if (!(event.getScreen() instanceof RecipesGui gui)) return;
         ensureActionSlot(gui);
@@ -85,7 +77,7 @@ public final class JeiRecipesScreenHook {
             IRecipeGuiLogic logic = (IRecipeGuiLogic) access.logic.get(gui);
             List<ITypedIngredient<?>> ingredients = new ArrayList<>(logic.getRecipeCatalysts().toList());
             var marker = JeiRuntimeHolder.get().getIngredientManager().createTypedIngredient(
-                    VanillaTypes.ITEM_STACK, WildcardItems.MACHINE_PATTERN.get().getDefaultInstance());
+                    VanillaTypes.ITEM_STACK, AEParts.PATTERN_ENCODING_TERMINAL.stack());
             if (marker.isEmpty()) return;
             ingredients.add(marker.get());
             // Reflow ALL slots with the additional entry. Handles one workstation, full columns and no catalysts.
