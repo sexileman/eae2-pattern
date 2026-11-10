@@ -1,3 +1,7 @@
+# 2026.11.2-beta.4
+
+- Replace the native AE2 terminal entry with original 16px terminal artwork featuring stacked patterns and encoding lights.
+
 # 2026.11.2-beta.3
 
 - Use the native AE2 pattern encoding terminal item for the JEI encoding entry, without the plus overlay.
