@@ -1,3 +1,7 @@
+# 2026.11.2-beta.6
+
+- Remove redundant configuration-number overlays from circuit picker cells and center circuit icons; retain hover details and selection behavior.
+
 # 2026.11.2-beta.5
 
 - Merge the latest 1.20.1 functionality, including cycle execution, material diagnostics and protocol 8; retain the UI refinements and independent encoding entry artwork.
