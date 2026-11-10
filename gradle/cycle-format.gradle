@@ -1,0 +1,47 @@
+// Fixed development-only formatter. Never included in the mod jar or its runtime classpath.
+def formatter = layout.projectDirectory.file('.tools/google-java-format-1.22.0-all-deps.jar').asFile
+def expectedFormatterHash = '16b2a1ee938686c8b1d88abf19eb83dfd0d623cee9de6fc6d09980214f816d3f'
+def formatterSources = files(
+    fileTree('src/main/java/io/github/sexileman/eae2pattern') {
+        include 'cycle/**/*.java', 'client/Cycle*.java', 'net/*Cycle*.java', 'net/server/Cycle*.java'
+        include 'mixin/*Cycle*.java', 'mixin/Growth*.java', 'mixin/UniversalMixinPlugin.java'
+    },
+    fileTree('src/test/java/io/github/sexileman/eae2pattern') {
+        include 'cycle/**/*.java', 'CycleAlphaChecks.java', 'CycleDiagramChecks.java'
+    }
+)
+
+tasks.register('prepareCycleFormatter') {
+    inputs.property('sha256', expectedFormatterHash)
+    outputs.file(formatter)
+    doLast {
+        if (!formatter.exists()) {
+            formatter.parentFile.mkdirs()
+            def temporary = new File(formatter.parentFile, formatter.name + '.download')
+            new URL('https://repo.maven.apache.org/maven2/com/google/googlejavaformat/google-java-format/1.22.0/google-java-format-1.22.0-all-deps.jar').withInputStream { input ->
+                temporary.withOutputStream { output -> output << input }
+            }
+            def actual = java.security.MessageDigest.getInstance('SHA-256').digest(temporary.bytes).encodeHex().toString()
+            if (actual != expectedFormatterHash) throw new GradleException('Java formatter checksum mismatch')
+            java.nio.file.Files.move(temporary.toPath(), formatter.toPath(), java.nio.file.StandardCopyOption.REPLACE_EXISTING)
+        }
+        def actual = java.security.MessageDigest.getInstance('SHA-256').digest(formatter.bytes).encodeHex().toString()
+        if (actual != expectedFormatterHash) throw new GradleException('Java formatter checksum mismatch')
+    }
+}
+
+['formatCycles': ['--aosp', '--skip-reflowing-long-strings', '--replace'], 'checkCycleFormat': ['--aosp', '--skip-reflowing-long-strings', '--dry-run', '--set-exit-if-changed']].each { taskName, flags ->
+    tasks.register(taskName, JavaExec) {
+        group = 'verification'
+        description = taskName == 'formatCycles' ? 'Formats the cycle implementation and its regression checks.' : 'Checks formatting of the cycle implementation.'
+        dependsOn 'prepareCycleFormatter'
+        classpath = files(formatter)
+        mainClass = 'com.google.googlejavaformat.java.Main'
+        ['api', 'code', 'file', 'parser', 'tree', 'util'].each { compilerPackage ->
+            jvmArgs "--add-exports=jdk.compiler/com.sun.tools.javac.${compilerPackage}=ALL-UNNAMED"
+        }
+        inputs.files(formatterSources)
+        doFirst { setArgs(flags + formatterSources.files.collect { it.absolutePath }.sort()) }
+    }
+}
+tasks.named('check').configure { dependsOn 'checkCycleFormat' }

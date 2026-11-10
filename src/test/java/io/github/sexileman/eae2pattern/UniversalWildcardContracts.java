@@ -13,6 +13,41 @@ import javax.tools.ToolProvider;
 public final class UniversalWildcardContracts {
     private static int checks;
     private static final String BRIDGE = "io/github/sexileman/eae2pattern/compat/gtl/GtlWildcardBridge";
+    /** Exercise Mixin 0.8.5's actual selector against both pre/post-Redirect argument shapes. */
+    private static void growthBatchArgumentSelection(ZipFile app) throws Exception {
+        var mixin=node(bytes(app,"io/github/sexileman/eae2pattern/mixin/GrowthProviderBatchMixin.class"));
+        var handler=mixin.methods.stream().filter(m->m.name.equals("eae2$registeredGrowthPattern")).findFirst().orElseThrow();
+        var annotation=handler.visibleAnnotations.stream().filter(a->a.desc.endsWith("/ModifyArg;")).findFirst().orElseThrow();
+        int configured=-1;
+        for(int i=0;i<annotation.values.size();i+=2)if(annotation.values.get(i).equals("index"))configured=(Integer)annotation.values.get(i+1);
+        check(configured==-1,"batch registration argument uses type selection instead of a fixed redirect-sensitive index");
+        var unsafeClass=Class.forName("sun.misc.Unsafe");var singleton=unsafeClass.getDeclaredField("theUnsafe");singleton.setAccessible(true);
+        var unsafe=singleton.get(null);
+        // Supply only the logger required by Injector's static initializer; no game host is started.
+        var serviceClass=org.spongepowered.asm.service.MixinService.class;
+        var getInstance=serviceClass.getDeclaredMethod("getInstance");getInstance.setAccessible(true);var serviceInstance=getInstance.invoke(null);
+        var serviceField=serviceClass.getDeclaredField("service");serviceField.setAccessible(true);var previousService=serviceField.get(serviceInstance);
+        var logger=new org.spongepowered.asm.logging.LoggerAdapterDefault("selector-test");
+        var loggingHost=java.lang.reflect.Proxy.newProxyInstance(serviceClass.getClassLoader(),new Class<?>[]{org.spongepowered.asm.service.IMixinService.class},
+                (proxy,method,args)->method.getName().equals("getLogger")?logger:null);
+        Class<?> injectorClass;
+        serviceField.set(serviceInstance,loggingHost);
+        try{injectorClass=Class.forName("org.spongepowered.asm.mixin.injection.invoke.ModifyArgInjector");}
+        finally{serviceField.set(serviceInstance,previousService);}
+        // Only findArgIndex is invoked. Its immutable selector fields are initialized without a full launcher context.
+        var injector=unsafeClass.getMethod("allocateInstance",Class.class).invoke(unsafe,injectorClass);
+        var index=injectorClass.getDeclaredField("index");index.setAccessible(true);index.setInt(injector,configured);
+        var resultType=Class.forName("org.spongepowered.asm.mixin.injection.code.Injector").getDeclaredField("returnType");resultType.setAccessible(true);resultType.set(injector,Type.getType(Object.class));
+        var select=injectorClass.getDeclaredMethod("findArgIndex",org.spongepowered.asm.mixin.injection.struct.Target.class,Type[].class);select.setAccessible(true);
+        check((Integer)select.invoke(injector,null,(Object)Type.getArgumentTypes("(Ljava/lang/Object;)Z"))==0,"actual Mixin selector locates vanilla contains argument");
+        check((Integer)select.invoke(injector,null,(Object)Type.getArgumentTypes("(Ljava/util/List;Ljava/lang/Object;)Z"))==1,"actual Mixin selector locates pattern after EAP inserts List argument");
+    }
+    private static void providerBatchTarget(ClassNode provider){
+        int targets=0;
+        for(var method:provider.methods)if(method.name.equals("pushPattern"))for(var insn:method.instructions)
+            if(insn instanceof MethodInsnNode call&&call.owner.equals("java/util/List")&&call.name.equals("contains")&&call.desc.equals("(Ljava/lang/Object;)Z"))targets++;
+        check(targets==1,"provider has one precise original-pattern registration guard for phase batches");
+    }
     private static void check(boolean value, String message) { if (!value) throw new AssertionError(message); checks++; }
     private static byte[] bytes(ZipFile zip, String path) throws Exception {
         var entry = zip.getEntry(path); if (entry == null) throw new AssertionError("Missing " + path);
@@ -21,8 +56,12 @@ public final class UniversalWildcardContracts {
     private static ClassNode node(byte[] bytes) { var n = new ClassNode(); new ClassReader(bytes).accept(n, 0); return n; }
     public static void main(String[] args) throws Exception {
         Path own = Path.of(args[0]), mods = Path.of(args[1]);
+        try(var stream=appeng.helpers.patternprovider.PatternProviderLogic.class.getResourceAsStream("PatternProviderLogic.class")){
+            providerBatchTarget(node(stream.readAllBytes()));
+        }
         byte[] bridge;
         try (var app = new ZipFile(own.toFile())) {
+            growthBatchArgumentSelection(app);
             check(Collections.list(app.entries()).stream().noneMatch(e -> e.getName().endsWith(".jar") || e.getName().startsWith("org/leodreamer/") || e.getName().startsWith("org/gtlcore/")), "universal jar embeds neither original wildcard nor GTL classes");
             for(String asset:List.of("assets/eae2_pattern/ae2guide/index.md","assets/eae2_pattern/ae2guide/wildcard-patterns.md","assets/eae2_pattern/ae2guide/batch-encoding.md","assets/eae2_pattern/textures/item/machine_wildcard_pattern.png","assets/eae2_pattern/textures/item/machine_wildcard_pattern_encoded.png"))check(app.getEntry(asset)!=null,"native guide and original icon packaged: "+asset);
             var itemModel=com.google.gson.JsonParser.parseString(new String(bytes(app,"assets/eae2_pattern/models/item/machine_wildcard_pattern.json"),java.nio.charset.StandardCharsets.UTF_8)).getAsJsonObject();
@@ -36,6 +75,24 @@ public final class UniversalWildcardContracts {
                 check(opaque==5&&hardEdges,"overlay has exactly five hard pixels and no soft alpha edges");
             }
             check(itemModel.getAsJsonArray("overrides").get(0).getAsJsonObject().getAsJsonObject("predicate").has("eae2_pattern:encoded"),"encoded appearance has its own model predicate");
+            check(node(bytes(app,"io/github/sexileman/eae2pattern/client/CycleToolbarButton.class")).superName.equals("appeng/client/gui/widgets/IconButton"),"cycle entry inherits native toolbar icon geometry instead of tab geometry");
+            var cyclePanel=node(bytes(app,"io/github/sexileman/eae2pattern/client/CyclePlanOverlay.class"));boolean scaledText=false;
+            for(var method:cyclePanel.methods)for(var instruction:method.instructions)if(instruction instanceof MethodInsnNode call&&call.owner.equals("com/mojang/blaze3d/vertex/PoseStack")&&(call.name.equals("scale")||call.name.equals("m_85841_")))scaledText=true;
+            check(!scaledText,"cycle panel never fractionally scales its text pose");
+            var growth=node(bytes(app,"io/github/sexileman/eae2pattern/cycle/GrowthRun.class"));
+            boolean providerRoute=false,nativeInputs=false,physicalReserve=false;
+            for(var method:growth.methods)for(var insn:method.instructions)if(insn instanceof MethodInsnNode call){
+                if(call.owner.equals("appeng/me/service/CraftingService")&&call.name.equals("getProviders"))providerRoute=true;
+                if(call.owner.equals("appeng/crafting/execution/CraftingCpuHelper")&&call.name.equals("extractPatternInputs"))nativeInputs=true;
+                if(call.owner.equals("appeng/crafting/inv/ListCraftingInventory")&&call.name.equals("insert"))physicalReserve=true;
+            }
+            check(providerRoute&&nativeInputs&&physicalReserve,"growth transport reuses native provider routing, exact input extraction and CPU inventory");
+            var mixins=new String(bytes(app,"eae2_pattern.mixins.json"),java.nio.charset.StandardCharsets.UTF_8);
+            var configJson=com.google.gson.JsonParser.parseString(mixins).getAsJsonObject();
+            check(configJson.getAsJsonArray("client").toString().contains("CycleConfirmScreenMixin")&&!configJson.getAsJsonArray("mixins").toString().contains("CycleConfirmScreenMixin"),"confirmation UI hook loads only on clients");
+            check(mixins.contains("CycleConfirmMenuAccessor"),"server current-plan accessor is packaged");
+
+            for(String adapter:List.of("GrowthCpuMixin","GrowthJobAccessor","GrowthProgressAccessor","GrowthTrackerInvoker","GrowthPlanMixin","GrowthProviderBatchMixin"))check(mixins.contains(adapter),"complete experimental CPU adapter is packaged: "+adapter);
             var encoder=node(bytes(app,"io/github/sexileman/eae2pattern/pattern/PatternEncoder.class"));
             boolean nativeFluids=false;
             for(var method:encoder.methods)if(method.name.equals("encodeCrafting"))for(var instruction:method.instructions)
@@ -107,11 +164,28 @@ public final class UniversalWildcardContracts {
         try(var n=loader.getResourceAsStream("appeng/crafting/CraftingTreeNode.class");var p=loader.getResourceAsStream("appeng/crafting/CraftingTreeProcess.class");var c=loader.getResourceAsStream("appeng/crafting/CraftingCalculation.class")){
             check(UniversalMixinPlugin.supportedCycles(node(n.readAllBytes()),node(p.readAllBytes()),node(c.readAllBytes())),"compile-baseline AE2 planner supports the same diagnostic hook set");
         }
+        try(var cpu=loader.getResourceAsStream("appeng/crafting/execution/CraftingCpuLogic.class");var job=loader.getResourceAsStream("appeng/crafting/execution/ExecutingCraftingJob.class");var progress=loader.getResourceAsStream("appeng/crafting/execution/ExecutingCraftingJob$TaskProgress.class");var tracker=loader.getResourceAsStream("appeng/crafting/execution/ElapsedTimeTracker.class")){
+            check(UniversalMixinPlugin.supportedGrowth(node(cpu.readAllBytes()),node(job.readAllBytes()),node(progress.readAllBytes()),node(tracker.readAllBytes())),"compile-baseline AE2 supports the complete experimental CPU hook set");
+        }
+        try(var nativePlan=loader.getResourceAsStream("appeng/crafting/CraftingPlan.class")){
+            check(UniversalMixinPlugin.supportedGrowthPlan(node(nativePlan.readAllBytes())),"compile baseline supports the native phase attachment carrier");
+        }
         Path aeJar;
         try(var files=Files.list(mods)){aeJar=files.filter(p->p.getFileName().toString().startsWith("appliedenergistics2-")&&p.toString().endsWith(".jar")).findFirst().orElseThrow();}
         try(var ae=new ZipFile(aeJar.toFile())){
             var tree=node(bytes(ae,"appeng/crafting/CraftingTreeNode.class"));var process=node(bytes(ae,"appeng/crafting/CraftingTreeProcess.class"));var calc=node(bytes(ae,"appeng/crafting/CraftingCalculation.class"));
             check(UniversalMixinPlugin.supportedCycles(tree,process,calc),"installed AE2 planner supports the diagnostic hook set");
+            var nativePlan=node(bytes(ae,"appeng/crafting/CraftingPlan.class"));
+            check(UniversalMixinPlugin.supportedGrowthPlan(nativePlan),"installed AE2 supports the native phase attachment carrier");
+            providerBatchTarget(node(bytes(ae,"appeng/helpers/patternprovider/PatternProviderLogic.class")));
+            check(UniversalMixinPlugin.supportedCycleMenu(node(bytes(ae,"appeng/menu/me/crafting/CraftConfirmMenu.class"))),"installed confirmation menu exposes the exact current native plan");
+            check(UniversalMixinPlugin.supportedCycleScreen(node(bytes(ae,"appeng/client/gui/me/crafting/CraftConfirmScreen.class"))),"installed confirmation screen supports native toolbar injection");
+
+            nativePlan.methods.removeIf(m->m.name.equals("<init>"));check(!UniversalMixinPlugin.supportedGrowthPlan(nativePlan),"incompatible native plan disables experimental attachments");
+            var cpu=node(bytes(ae,"appeng/crafting/execution/CraftingCpuLogic.class"));var job=node(bytes(ae,"appeng/crafting/execution/ExecutingCraftingJob.class"));var progress=node(bytes(ae,"appeng/crafting/execution/ExecutingCraftingJob$TaskProgress.class"));var tracker=node(bytes(ae,"appeng/crafting/execution/ElapsedTimeTracker.class"));
+            check(UniversalMixinPlugin.supportedGrowth(cpu,job,progress,tracker),"installed AE2 supports the complete experimental CPU hook set");
+            check(!UniversalMixinPlugin.supportedGrowth(cpu,job,null,tracker),"incomplete runtime adapters fail closed");
+            progress.fields.clear();check(!UniversalMixinPlugin.supportedGrowth(cpu,job,progress,tracker),"changed task progress shape disables experimental CPU execution");
             check(!UniversalMixinPlugin.supportedCycles(tree,null,calc),"missing planner accessor disables all diagnostics");
             var changed=node(bytes(ae,"appeng/crafting/CraftingTreeNode.class"));changed.methods.removeIf(m->m.name.equals("buildChildPatterns"));
             check(!UniversalMixinPlugin.supportedCycles(changed,process,calc),"changed planner shape disables diagnostics safely");

@@ -11,9 +11,19 @@
     "GtlWildcardExpansionMixin",
     "CycleProcessAccessor",
     "CraftingCycleNodeMixin",
-    "CraftingCycleCalculationMixin"
+    "CraftingCycleCalculationMixin",
+    "GrowthJobAccessor",
+    "GrowthProgressAccessor",
+    "GrowthTrackerInvoker",
+    "GrowthCpuMixin",
+    "GrowthPlanMixin",
+    "GrowthProviderBatchMixin",
+    "CycleConfirmMenuAccessor"
   ],
   "injectors": {
     "defaultRequire": 1
-  }
+  },
+  "client": [
+    "CycleConfirmScreenMixin"
+  ]
 }

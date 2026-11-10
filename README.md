@@ -1,12 +1,14 @@
+> 当前分支为循环合成实验版。实验执行默认关闭，支持范围及启用方式见 [alpha.1 测试说明](docs/cycle-alpha-1.md)。正式版 6.5.9 不受本次改动影响。
+
 # EAE2 Pattern
 
-为 Minecraft 大型整合包批量生成 AE2 样板。对 JEI 中的工作方块按 **U**，打开对应类别后，点击工作方块竖栏中的**紫晶与青色线路卡片图标**，采集该类别全部可见配方，筛选并编码到 ME 网络。
+为 Minecraft 大型整合包批量生成 AE2 样板。对 JEI 中的工作方块按 **U**，打开对应类别后，点击工作方块竖栏中的**带错叠样板与青色指示灯的终端图标**，采集该类别全部可见配方，筛选并编码到 ME 网络。
 
-当前版本 **2026.11.2-beta.4**，Minecraft **1.20.1**，网络协议 **7**。客户端和服务端须同步更新。
+当前实验版本 **2026.11.2-beta.5**，Minecraft **1.20.1**，网络协议 **8**。客户端和服务端须同步更新。
 
 ## 单一通用 jar 与自动适配
 
-只安装 **`eae2-pattern-1.20.1-2026.11.2-beta.4.jar`**。客户端和服务端同步替换旧 EAE2 包，不分 GTL 专用包、独立包或其他整合包变体，也不需要替换 GTLCore。
+只安装 **`eae2-pattern-1.20.1-2026.11.2-beta.5.jar`**。客户端和服务端同步替换旧 EAE2 包，不分 GTL 专用包、独立包或其他整合包变体，也不需要替换 GTLCore。
 
 - **AE2 + JEI**：提供普通批量样板、独立通配物品与编辑器。
 - **存在 GTCEu**：读取真实 GT 配方、概率、配置电路、模具和流体；不存在时基础功能仍可用。
@@ -226,7 +228,7 @@ GTL 与旧通配符适配在类加载前检查目标接口签名。缺少对应�
 .\gradlew.bat universalCompatibilityTest -PcompatModsDir="D:/codex workspace/others/mods"
 ```
 
-Java 17；产物为 `build/libs/eae2-pattern-1.20.1-2026.11.2-beta.4.jar`。`build` 包含领域回归检查以及 Forge 重混淆；测试不启动游戏，不能替代整合包实测。详见 [测试清单](docs/testing.md) 和 [变更记录](CHANGELOG.md)。
+Java 17；产物为 `build/libs/eae2-pattern-1.20.1-2026.11.2-beta.5.jar`。`build` 包含领域回归检查以及 Forge 重混淆；测试不启动游戏，不能替代整合包实测。详见 [测试清单](docs/testing.md) 和 [变更记录](CHANGELOG.md)。
 
 代码及原创卡片图标遵循 MIT；图标源文件位于 `artwork/`。AE2 原生 UI 纹理仍由已安装的 AE2 或资源包提供。
 
@@ -254,7 +256,7 @@ JEI 中的物品或流体可拖入主编码页的输入/输出搜索框、通配
 
 在 AE2 实际计算任务时记录被规划器排除的输入回环，例如 A → B → A。只观察当前请求探索的网络样板路径，支持网络中展开后的通配符样板，不分析启动种子的获取配方。物品、流体及 NBT 仍按 AE2 精确材料键区分。
 
-玩家发起的任务发现候选时会收到简短提示；`/eae2cycles` 查看最近一次已完成计算的候选路径、所涉样板的材料数量和已有类型元数据。报告注明 AE2 是得到可执行计划，还是处于缺料模拟状态；发现候选并不证明它是本次缺料的原因。无玩家来源的自动化任务仅写 DEBUG 日志。
+所有命令统一在 `/eae2_pattern` 下。自动循环聊天提示默认关闭；用 `/eae2_pattern cycles report` 主动查看最近一次报告。管理员可用 `/eae2_pattern config set cycles.chat_diagnostics true` 开启，改为 `false` 关闭，即时生效并保存。布尔参数仅接受 `true/false`，整数参数限制范围并提供原生错误提示。循环检测、配方数量、规划和执行错误独立写入标准日志，不受聊天开关影响；无玩家来源的自动化请求也记录。
 
 这是检测功能，尚未安排循环的执行顺序、共享库存或种子回收，也不会取消 AE2 的递归保护。没有实际进入的路径不会被穷举检查。输入替代项按 AE2 当前递归检查使用的首个候选识别；诊断预算耗尽会标记结果不完整。
 
@@ -282,6 +284,9 @@ JEI 中的物品或流体可拖入主编码页的输入/输出搜索框、通配
 
 ### 固定构建命名
 
-正式构件统一命名为 `eae2-pattern-<minecraft_version>-<mod_version>.jar`，当前为 `eae2-pattern-1.20.1-2026.11.2-beta.4.jar`。Minecraft 版本取自 gradle.properties 的 minecraft_version；模组版本采用 `年.月.当月发布序号`；开发分支追加 `-beta.N`。规则详见 [VERSIONING.md](VERSIONING.md)。
+正式构件统一命名为 `eae2-pattern-<minecraft_version>-<mod_version>.jar`，当前为 `eae2-pattern-1.20.1-2026.11.2-beta.5.jar`。Minecraft 版本取自 gradle.properties 的 minecraft_version；模组版本采用 `年.月.当月发布序号`；开发分支追加 `-beta.N`。规则详见 [VERSIONING.md](VERSIONING.md)。
 
 运行 `./gradlew.bat stageRelease` 会先执行 build，再将同名 jar 及 `.sha256` 校验文件放入 dist；不生成不带版本的别名。历史发布文件保留，安装时只使用当前对应版本。
+
+
+循环模块开发规范：`gradlew formatCycles` 整理排版，`gradlew checkCycleFormat` 校验；常规 `check/build` 会执行校验。首次开发构建会从 Maven Central 下载固定版本 Google Java Format，并校验 SHA-256；离线环境需预缓存到 `.tools`，该工具不包含在游戏 jar 中。循环面板是快照，已移除手动刷新，补料后应在 AE2 重新规划。

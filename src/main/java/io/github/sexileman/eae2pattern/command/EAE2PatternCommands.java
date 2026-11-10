@@ -39,6 +39,7 @@ import java.util.function.Supplier;
  */
 public final class EAE2PatternCommands {
 
+    private static final Map<String, com.mojang.brigadier.arguments.ArgumentType<?>> TYPES = new LinkedHashMap<>();
     private static final Map<String, Setting> SETTINGS = new LinkedHashMap<>();
 
     private static final SuggestionProvider<CommandSourceStack> SUGGEST_KEYS =
@@ -48,6 +49,8 @@ public final class EAE2PatternCommands {
         Setting.bool("filters.strip_container_items", EAE2PatternConfig.STRIP_CONTAINER_ITEMS);
         Setting.list("filters.ignored_stacks", EAE2PatternConfig.IGNORED_STACKS);
         Setting.bool("encoding.allow_substitutes", EAE2PatternConfig.ALLOW_SUBSTITUTES);
+        Setting.bool("cycles.experimental_execution", EAE2PatternConfig.EXPERIMENTAL_CYCLES);
+        Setting.bool("cycles.chat_diagnostics", EAE2PatternConfig.CYCLE_CHAT_DIAGNOSTICS);
         Setting.bool("encoding.allow_fluid_substitutes", EAE2PatternConfig.ALLOW_FLUID_SUBSTITUTES);
         Setting.bool("encoding.require_network_source", EAE2PatternConfig.REQUIRE_ENCODING_TERMINAL);
         Setting.integer("limits.max_patterns_per_request", EAE2PatternConfig.MAX_PATTERNS_PER_REQUEST, 1, 65536);
@@ -75,22 +78,17 @@ public final class EAE2PatternCommands {
                         .then(Commands.argument("key", StringArgumentType.word())
                                 .suggests(SUGGEST_KEYS)
                                 .executes(EAE2PatternCommands::get)))
-                .then(Commands.literal("set")
-                        .requires(source -> source.hasPermission(2))
-                        .then(Commands.argument("key", StringArgumentType.word())
-                                .suggests(SUGGEST_KEYS)
-                                .then(Commands.argument("value", StringArgumentType.greedyString())
-                                        .executes(EAE2PatternCommands::set))))
+                .then(typedSet())
                 .then(Commands.literal("add")
                         .requires(source -> source.hasPermission(2))
                         .then(Commands.argument("key", StringArgumentType.word())
-                                .suggests(SUGGEST_KEYS)
+                                .suggests((ctx,builder)->SharedSuggestionProvider.suggest(SETTINGS.values().stream().filter(Setting::list).map(Setting::path),builder))
                                 .then(Commands.argument("value", StringArgumentType.greedyString())
                                         .executes(context -> mutateList(context, true)))))
                 .then(Commands.literal("remove")
                         .requires(source -> source.hasPermission(2))
                         .then(Commands.argument("key", StringArgumentType.word())
-                                .suggests(SUGGEST_KEYS)
+                                .suggests((ctx,builder)->SharedSuggestionProvider.suggest(SETTINGS.values().stream().filter(Setting::list).map(Setting::path),builder))
                                 .then(Commands.argument("value", StringArgumentType.greedyString())
                                         .executes(context -> mutateList(context, false)))))
                 .then(Commands.literal("reset")
@@ -98,9 +96,11 @@ public final class EAE2PatternCommands {
                         .then(Commands.argument("key", StringArgumentType.word())
                                 .suggests(SUGGEST_KEYS)
                                 .executes(EAE2PatternCommands::reset)))
-                .then(Commands.literal("reload").executes(EAE2PatternCommands::reload));
+                .then(Commands.literal("reload").requires(source->source.hasPermission(2)).executes(EAE2PatternCommands::reload));
 
-        dispatcher.register(Commands.literal(EAE2Pattern.MOD_ID).then(config));
+        dispatcher.register(Commands.literal(EAE2Pattern.MOD_ID).then(config)
+                .then(Commands.literal("cycles").then(Commands.literal("report")
+                        .executes(io.github.sexileman.eae2pattern.cycle.CycleReports::report))));
     }
 
     private static int list(CommandContext<CommandSourceStack> context) {
@@ -123,13 +123,15 @@ public final class EAE2PatternCommands {
         return 1;
     }
 
-    private static int set(CommandContext<CommandSourceStack> context) {
-        Setting setting = setting(context);
-        if (setting == null) {
-            return 0;
-        }
+    private static LiteralArgumentBuilder<CommandSourceStack> typedSet(){
+        var command=Commands.literal("set").requires(source->source.hasPermission(2));
+        SETTINGS.forEach((path,setting)->command.then(Commands.literal(path)
+                .then(Commands.argument("value",TYPES.get(path))
+                        .executes(context->set(context,setting,context.getArgument("value",Object.class).toString())))));
+        return command;
+    }
+    private static int set(CommandContext<CommandSourceStack> context,Setting setting,String raw) {
         if(setting.path().equals("filters.strip_container_items"))context.getSource().sendSuccess(()->Component.translatable("eae2_pattern.cmd.legacy_containers"),false);
-        String raw = StringArgumentType.getString(context, "value");
         String error = setting.write().apply(raw);
         if (error != null) {
             reportError(context, error, setting);
@@ -235,6 +237,7 @@ public final class EAE2PatternCommands {
                            Runnable invalidate) {
 
         static void bool(String path, ForgeConfigSpec.BooleanValue value) {
+            TYPES.put(path,com.mojang.brigadier.arguments.BoolArgumentType.bool());
             put(new Setting(path, () -> String.valueOf(value.get()), List::of,
                     text -> {
                         String lower = text.trim().toLowerCase(Locale.ROOT);
@@ -249,6 +252,7 @@ public final class EAE2PatternCommands {
         }
 
         static void integer(String path, ForgeConfigSpec.IntValue value, int min, int max) {
+            TYPES.put(path,com.mojang.brigadier.arguments.IntegerArgumentType.integer(min,max));
             put(new Setting(path, () -> String.valueOf(value.get()), List::of,
                     text -> {
                         int parsed;
@@ -268,6 +272,7 @@ public final class EAE2PatternCommands {
         }
 
         static void list(String path, ForgeConfigSpec.ConfigValue<List<? extends String>> value) {
+            TYPES.put(path,StringArgumentType.greedyString());
             put(new Setting(path,
                     () -> String.join(", ", value.get()),
                     () -> {
