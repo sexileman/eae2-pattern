@@ -1,3 +1,7 @@
+# 2026.11.2-beta.11
+
+- Keep item target quantities without a unit suffix; retain fluid units and smaller status text.
+
 # 2026.11.2-beta.10
 
 - Add explicit item units to the cycle target summary.

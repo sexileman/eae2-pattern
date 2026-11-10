@@ -401,8 +401,7 @@ public final class CyclePlanOverlay {
     }
 
     private static String targetAmount(GenericStack target) {
-        String amount = target.what().formatAmount(target.amount(), AmountFormat.FULL);
-        return target.what() instanceof AEFluidKey ? amount : tr("item_amount", amount).getString();
+        return target.what().formatAmount(target.amount(), AmountFormat.FULL);
     }
 
     /** Auxiliary text alone uses smaller, whole framebuffer pixels; controls stay native-sized. */

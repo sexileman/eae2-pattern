@@ -492,6 +492,5 @@
   "eae2_pattern.cycle.alpha.limit": "循环计划超过当前执行次数上限；请在材料缺口页查看完整核算。",
   "eae2_pattern.diagram.required_heading": "需求",
   "eae2_pattern.diagram.available_heading": "可用",
-  "eae2_pattern.diagram.missing_heading": "缺口",
-  "eae2_pattern.diagram.item_amount": "%s 个"
+  "eae2_pattern.diagram.missing_heading": "缺口"
 }

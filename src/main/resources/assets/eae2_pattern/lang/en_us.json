@@ -492,6 +492,5 @@
   "eae2_pattern.cycle.alpha.limit": "Cycle plan exceeds the execution limit; inspect its full material budget in the cycle panel.",
   "eae2_pattern.diagram.required_heading": "Need",
   "eae2_pattern.diagram.available_heading": "Stock",
-  "eae2_pattern.diagram.missing_heading": "Missing",
-  "eae2_pattern.diagram.item_amount": "%s items"
+  "eae2_pattern.diagram.missing_heading": "Missing"
 }
