@@ -1,3 +1,7 @@
+# 2026.11.2-beta.8
+
+- Compact cycle recipe details into parallel input/output grids with consistent icon, quantity and tooltip spacing.
+
 # 2026.11.2-beta.7
 
 - Add the requested-product icon and reduce cycle status emphasis.

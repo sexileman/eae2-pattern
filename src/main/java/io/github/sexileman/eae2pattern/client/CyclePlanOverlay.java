@@ -92,15 +92,23 @@ public final class CyclePlanOverlay {
         return Math.max(1, (w - 36) / 36);
     }
 
+    private int recipeColumns() {
+        return Math.max(1, (w / 2 - 28) / 36);
+    }
+
     private int height(Row row) {
         if (row.materialKind() != MaterialKind.NONE) return 28;
         if (row.inputs().isEmpty() && row.outputs().isEmpty()) return 24;
         if (!row.grid()) return row.outputs().isEmpty() ? 58 : 58;
-        return 20
-                + ((row.inputs().size() + columns() - 1) / columns()) * 36
-                + (row.outputs().isEmpty()
-                        ? 0
-                        : 26 + ((row.outputs().size() + columns() - 1) / columns()) * 36);
+        if (!row.outputs().isEmpty()) {
+            int cols = recipeColumns();
+            return 34
+                    + Math.max(
+                                    (row.inputs().size() + cols - 1) / cols,
+                                    (row.outputs().size() + cols - 1) / cols)
+                            * 34;
+        }
+        return 34 + ((row.inputs().size() + columns() - 1) / columns()) * 34;
     }
 
     private void measureRows() {
@@ -270,34 +278,31 @@ public final class CyclePlanOverlay {
                         }
                     }
                     if (row.grid()) {
-                        int inY = ry + 17;
-                        if (!row.outputs().isEmpty()) {
-                            g.drawString(
-                                    font, tr("inputs"), x + 12, inY, WorkbenchTheme.ACCENT, false);
-                            inY += 12;
-                        }
-                        var hit = drawGrid(g, row.inputs(), x + 12, inY, row.times(), mx, my);
+                        int gridY = ry + 30;
+                        int cols = row.outputs().isEmpty() ? columns() : recipeColumns();
+                        g.drawString(
+                                font, tr("inputs"), x + 12, ry + 16, WorkbenchTheme.DIM, false);
+                        var hit =
+                                drawRecipeGrid(
+                                        g, row.inputs(), x + 12, gridY, row.times(), cols, mx, my);
                         if (hit != null) {
                             hover = hit;
                             hoverTimes = row.times();
                         }
-                        int outY =
-                                inY + 1 + ((row.inputs().size() + columns() - 1) / columns()) * 36;
                         if (!row.outputs().isEmpty()) {
+                            int outX = x + w / 2 + 10;
                             g.drawString(
-                                    font,
-                                    tr("outputs"),
-                                    x + 12,
-                                    outY,
-                                    WorkbenchTheme.ACCENT,
-                                    false);
+                                    font, tr("outputs"), outX, ry + 16, WorkbenchTheme.DIM, false);
+                            g.drawString(
+                                    font, "→", x + w / 2 - 8, gridY + 5, WorkbenchTheme.DIM, false);
                             hit =
-                                    drawGrid(
+                                    drawRecipeGrid(
                                             g,
                                             row.outputs(),
-                                            x + 12,
-                                            outY + 12,
+                                            outX,
+                                            gridY,
                                             row.times(),
+                                            cols,
                                             mx,
                                             my);
                             if (hit != null) {
@@ -410,13 +415,20 @@ public final class CyclePlanOverlay {
         }
     }
 
-    private GenericStack drawGrid(
-            GuiGraphics g, List<GenericStack> slots, int sx, int sy, long times, int mx, int my) {
+    private GenericStack drawRecipeGrid(
+            GuiGraphics g,
+            List<GenericStack> slots,
+            int sx,
+            int sy,
+            long times,
+            int columnCount,
+            int mx,
+            int my) {
         GenericStack hover = null;
         for (int i = 0; i < slots.size(); i++) {
-            int dx = sx + (i % columns()) * 36, dy = sy + (i / columns()) * 36;
+            int dx = sx + (i % columnCount) * 36, dy = sy + (i / columnCount) * 34;
             icon(g, slots.get(i), dx, dy, times);
-            if (mx >= dx && mx < dx + 20 && my >= dy && my < dy + 20) hover = slots.get(i);
+            if (mx >= dx && mx < dx + 34 && my >= dy && my < dy + 30) hover = slots.get(i);
         }
         return hover;
     }
