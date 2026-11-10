@@ -15,12 +15,20 @@ import java.util.*;
 public final class ToolJeiHandlers {
     private ToolJeiHandlers(){}
     public static void register(IGuiHandlerRegistration registration){
+        registration.addGuiScreenHandler(appeng.client.gui.me.crafting.CraftConfirmScreen.class, screen -> {
+            var area = CyclePlanOverlay.jeiBounds(screen).orElseGet(() ->
+                    new Rect2i(screen.getGuiLeft(), screen.getGuiTop(), screen.getXSize(), screen.getYSize()));
+            return ToolGuiProperties.capture(screen.getClass(), area, screen.width, screen.height);
+        });
         screen(registration,PatternWorkbenchScreen.class);screen(registration,WildcardEditorScreen.class);
         screen(registration,WildcardChoiceScreen.class);screen(registration,WildcardMachineScreen.class);
         screen(registration,MachinePickerScreen.class);screen(registration,CollectingScreen.class);
         registration.addGlobalGuiHandler(new IGlobalGuiHandler(){
             @Override public Collection<Rect2i> getGuiExtraAreas(){
-                return Minecraft.getInstance().screen instanceof AeToolScreen tool?tool.jeiExtraAreas():List.of();
+                var current = Minecraft.getInstance().screen;
+                var cycle = CyclePlanOverlay.jeiBounds(current);
+                if(cycle.isPresent())return List.of(cycle.get());
+                return current instanceof AeToolScreen tool?tool.jeiExtraAreas():List.of();
             }
             @Override public Optional<IClickableIngredient<?>> getClickableIngredientUnderMouse(double x,double y){
                 if(!(Minecraft.getInstance().screen instanceof AeToolScreen tool))return Optional.empty();
@@ -37,12 +45,8 @@ public final class ToolJeiHandlers {
     }
     private static boolean sameArea(Rect2i a,Rect2i b){return a.getX()==b.getX()&&a.getY()==b.getY()&&a.getWidth()==b.getWidth()&&a.getHeight()==b.getHeight();}
     private static <T extends AeToolScreen> void screen(IGuiHandlerRegistration registration,Class<T> type){
-        registration.addGuiScreenHandler(type,tool->new IGuiProperties(){
-            public Class<? extends Screen> getScreenClass(){return type;}
-            public int getGuiLeft(){return tool.toolBounds().getX();}public int getGuiTop(){return tool.toolBounds().getY();}
-            public int getGuiXSize(){return tool.toolBounds().getWidth();}public int getGuiYSize(){return tool.toolBounds().getHeight();}
-            public int getScreenWidth(){return tool.width;}public int getScreenHeight(){return tool.height;}
-        });
+        registration.addGuiScreenHandler(type,tool->ToolGuiProperties.capture(
+                tool.getClass(),tool.toolBounds(),tool.width,tool.height));
         registration.addGhostIngredientHandler(type,new IGhostIngredientHandler<T>(){
             public <I> List<Target<I>> getTargetsTyped(T tool,ITypedIngredient<I> ingredient,boolean doStart){
                 StackSpec spec;

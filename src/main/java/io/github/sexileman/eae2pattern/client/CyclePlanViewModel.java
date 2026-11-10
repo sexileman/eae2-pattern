@@ -83,7 +83,9 @@ public final class CyclePlanViewModel {
                     var recipe = data.recipes().get(i);
                     result.add(
                             new Row(
-                                    tr("recipe", i + 1),
+                                    recipe.outputs().isEmpty()
+                                            ? tr("recipe", i + 1)
+                                            : recipe.outputs().get(0).what().getDisplayName(),
                                     recipe.inputs(),
                                     recipe.outputs(),
                                     1,

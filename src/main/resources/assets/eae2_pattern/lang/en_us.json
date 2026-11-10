@@ -479,7 +479,7 @@
   "eae2_pattern.diagram.materials.disabled": "Materials checked; experimental execution disabled",
   "eae2_pattern.diagram.materials.cpu": "Materials checked; CPU unsupported",
   "eae2_pattern.diagram.materials.runtime": "Materials checked; execution interface unsupported",
-  "eae2_pattern.diagram.material_path": "Cycle used for this material budget",
+  "eae2_pattern.diagram.material_path": "Cycle path",
   "eae2_pattern.diagram.circulating": "Circulating stock",
   "eae2_pattern.diagram.external": "External material",
   "eae2_pattern.diagram.need_have": "Need %s · Available %s",

@@ -479,7 +479,7 @@
   "eae2_pattern.diagram.materials.disabled": "材料已核算；循环实验执行未开启",
   "eae2_pattern.diagram.materials.cpu": "材料已核算；当前 CPU 不支持执行",
   "eae2_pattern.diagram.materials.runtime": "材料已核算；当前执行接口不支持",
-  "eae2_pattern.diagram.material_path": "本次核算对应的循环",
+  "eae2_pattern.diagram.material_path": "循环路径",
   "eae2_pattern.diagram.circulating": "循环库存",
   "eae2_pattern.diagram.external": "外部耗材",
   "eae2_pattern.diagram.need_have": "需求 %s · 可用 %s",
