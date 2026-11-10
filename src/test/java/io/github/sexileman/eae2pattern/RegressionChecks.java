@@ -230,6 +230,28 @@ public final class RegressionChecks {
             if(size[0]>=400)check(frame.left()>=72&&size[0]-frame.left()-frame.width()>=72,"both JEI side lanes retain four ingredient columns");
             if(size[1]>=220)check(size[1]-frame.top()-frame.height()>=26,"JEI bottom search field has reserved space");
         }
+        for(int[] size:List.of(new int[]{480,270},new int[]{640,360},new int[]{960,540})){
+            var frame=io.github.sexileman.eae2pattern.client.ToolViewport.encoding(size[0],size[1]);
+            check(frame.width()<=420&&frame.height()<=300,"encoding pages avoid oversized full-screen layouts");
+            check(frame.left()>=72&&size[0]-frame.left()-frame.width()>=72,"encoding pages reserve both JEI ingredient lanes");
+            check(size[1]-frame.top()-frame.height()>=26,"encoding pages reserve the JEI search field");
+        }
+        var unready=io.github.sexileman.eae2pattern.compat.jei.ToolGuiProperties.capture(
+                io.github.sexileman.eae2pattern.client.PatternWorkbenchScreen.class,
+                new net.minecraft.client.renderer.Rect2i(0,0,0,0),0,0);
+        check(unready==null,"JEI opening before init does not cache invalid live properties");
+        var ready=io.github.sexileman.eae2pattern.compat.jei.ToolGuiProperties.capture(
+                io.github.sexileman.eae2pattern.client.PatternWorkbenchScreen.class,
+                new net.minecraft.client.renderer.Rect2i(110,19,420,300),640,360);
+        check(!mezz.jei.gui.GuiProperties.areEqual(unready,ready),
+                "JEI detects the transition from opening to initialized screen");
+        var resized=io.github.sexileman.eae2pattern.compat.jei.ToolGuiProperties.capture(
+                io.github.sexileman.eae2pattern.client.PatternWorkbenchScreen.class,
+                new net.minecraft.client.renderer.Rect2i(78,10,324,236),480,270);
+        check(ready.getGuiXSize()==420&&ready.getScreenWidth()==640,
+                "old JEI dimensions remain immutable after screen resize");
+        check(!mezz.jei.gui.GuiProperties.areEqual(ready,resized),
+                "JEI detects a GUI-scale or viewport change");
         var screens=new java.util.LinkedHashMap<Class<?>,mezz.jei.api.gui.handlers.IScreenHandler<?>>();
         var ghosts=new java.util.LinkedHashMap<Class<?>,mezz.jei.api.gui.handlers.IGhostIngredientHandler<?>>();
         var globals=new java.util.ArrayList<mezz.jei.api.gui.handlers.IGlobalGuiHandler>();
@@ -242,6 +264,8 @@ public final class RegressionChecks {
             }return null;
         });
         io.github.sexileman.eae2pattern.compat.jei.ToolJeiHandlers.register(registration);
+        check(screens.remove(appeng.client.gui.me.crafting.CraftConfirmScreen.class)!=null,
+                "cycle inspection overlay registers dynamic JEI screen bounds");
         check(screens.size()==6&&ghosts.size()==6&&globals.size()==1,"all six tool pages register screen, ghost and shared ingredient integration");
         check(screens.keySet().equals(ghosts.keySet()),"every JEI-visible page participates in ghost drag lifecycle");
         for(Class<?> type:screens.keySet())check(io.github.sexileman.eae2pattern.client.AeToolScreen.class.isAssignableFrom(type),"JEI page implements bounded panel/input contract: "+type.getSimpleName());

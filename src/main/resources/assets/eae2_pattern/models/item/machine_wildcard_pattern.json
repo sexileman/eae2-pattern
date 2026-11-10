@@ -10,6 +10,12 @@
         "eae2_pattern:encoded": 1
       },
       "model": "eae2_pattern:item/machine_wildcard_pattern_encoded"
+    },
+    {
+      "predicate": {
+        "custom_model_data": 8675309
+      },
+      "model": "eae2_pattern:item/pattern_encoding_entry"
     }
   ]
 }

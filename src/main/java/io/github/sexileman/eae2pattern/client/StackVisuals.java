@@ -52,7 +52,7 @@ public final class StackVisuals {
             var font = Minecraft.getInstance().font;
             // Item models render above the GUI plane. Match vanilla decorations' foreground depth,
             // and keep long labels within their own slot rather than spilling onto adjacent icons.
-            float scale = Math.min(1f, 16f / Math.max(1, font.width(amount)));
+            float scale = Math.min(spec.isItem() ? 1f : .5f, 16f / Math.max(1, font.width(amount)));
             g.pose().pushPose();
             try {
                 g.pose().translate(x + 17, y + 17, 200);

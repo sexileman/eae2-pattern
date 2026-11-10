@@ -1,3 +1,65 @@
+# 2026.11.2
+
+- Merge the complete UI polish and JEI integration update from ui-polish-1.20.1. See the beta.27 notes below for details.
+
+# 2026.11.2-beta.27
+
+- 编码页及工作方块选择页采用 380×300 自适应尺寸，预留 JEI 两侧物品栏及底部搜索空间。
+- 修复 JEI 在初始化前读取无效尺寸后不显示侧栏的问题：页面尺寸改为不可变快照；循环浮层同步提供实际范围。
+- 统一 AE2 原生背景、等宽控件边框与辅助字号；收紧普通样板及通配符样板的列表和详情布局。
+- 循环材料采用每行最多五项的 AE2 风格单元格，原生大小图标、半号文字和共享网格线；修复浮层遮挡 JEI 提示框。
+- 循环配方改用产物名称与紧凑槽位；路径靠左，简化重复说明并去掉材料页底部提示。
+- 电路筛选统一放在返回按钮左侧；全部状态增加红色标记。通配符材料、模式与提取形态控件调整为同排。
+- 新增 JEI 初始化、尺寸快照和侧栏空间回归检查；未执行游戏运行时视觉验证。
+
+# 2026.11.2-beta.11
+
+- Keep item target quantities without a unit suffix; retain fluid units and smaller status text.
+
+# 2026.11.2-beta.10
+
+- Add explicit item units to the cycle target summary.
+- Shorten candidate status wording and render only this auxiliary line at a smaller whole-pixel scale.
+
+# 2026.11.2-beta.9
+
+- Present cycle materials in multi-column AE2-style cells with shortage backgrounds and exact tooltips.
+- Reduce header and recipe spacing; distribute complete cycle paths across available width with wrapping.
+
+# 2026.11.2-beta.8
+
+- Compact cycle recipe details into parallel input/output grids with consistent icon, quantity and tooltip spacing.
+
+# 2026.11.2-beta.7
+
+- Add the requested-product icon and reduce cycle status emphasis.
+- Compact material diagnostics into aligned need/stock/missing columns with full-row exact-quantity tooltips.
+
+# 2026.11.2-beta.6
+
+- Remove redundant configuration-number overlays from circuit picker cells and center circuit icons; retain hover details and selection behavior.
+
+# 2026.11.2-beta.5
+
+- Merge the latest 1.20.1 functionality, including cycle execution, material diagnostics and protocol 8; retain the UI refinements and independent encoding entry artwork.
+
+# 2026.11.2-beta.4
+
+- Replace the native AE2 terminal entry with original 16px terminal artwork featuring stacked patterns and encoding lights.
+
+# 2026.11.2-beta.3
+
+- Use the native AE2 pattern encoding terminal item for the JEI encoding entry, without the plus overlay.
+
+# 2026.11.2-beta.2
+
+- Refine shared AE2-style control colors and bevel contrast.
+- Center shared button labels at native font size without shadows.
+
+# 2026.11.2-beta.1
+
+- Adopt calendar versioning; see VERSIONING.md. No runtime behavior changes.
+
 # 2026.11.1
 
 - Adopt calendar versioning; see VERSIONING.md. No runtime behavior changes.

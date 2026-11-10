@@ -47,8 +47,7 @@ final class CircuitPickerScreen extends AeToolScreen {
             int n=numbers.get(i),px=x+12+(i%columns)*26,py=y+58+(i/columns-(int)scroll)*26;
             boolean available=catalog.icons.containsKey(n),checked=mode==2&&selected.contains(n);
             WorkbenchTheme.control(g,px,py,24,24,checked?WorkbenchTheme.HOVER:WorkbenchTheme.SURFACE,WorkbenchTheme.LINE);
-            if(available)visuals.drawIcon(g,catalog.icons.get(n),px+4,py+2);
-            String label=""+n;g.drawString(font,label,px+23-font.width(label),py+15,checked?WorkbenchTheme.PRIMARY:available?WorkbenchTheme.TEXT:WorkbenchTheme.DIM,false);
+            if(available)visuals.drawIcon(g,catalog.icons.get(n),px+4,py+4);
         }
         var status=CircuitCatalog.label(new CircuitCondition(mode,mode==2?selected:Set.of()));
         g.drawString(font,net.minecraft.locale.Language.getInstance().getVisualOrder(font.substrByWidth(status,w-20)),x+10,y+h-19,WorkbenchTheme.TEXT,false);

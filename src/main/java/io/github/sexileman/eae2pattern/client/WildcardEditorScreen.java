@@ -112,7 +112,7 @@ public final class WildcardEditorScreen extends AeToolScreen implements Generati
         else mc.setScreen(new WildcardMachineScreen(categories, mc.screen, target));
     }
     @Override protected void init() {
-        controls.clear(); var frame=ToolViewport.measure(width,height,552,420);w=frame.width();h=frame.height();x=frame.left();y=frame.top();
+        controls.clear(); var frame=ToolViewport.encoding(width,height);w=frame.width();h=frame.height();x=frame.left();y=frame.top();
         split = x + w * 11 / 20; listTop = y + 76; listBottom = y + h - 36;
         button(x + w - 58, y + 4, 48, -1, () -> onClose(), "back");
         if(circuitCatalog==null)circuitCatalog=new CircuitCatalog(plan);
@@ -133,9 +133,11 @@ public final class WildcardEditorScreen extends AeToolScreen implements Generati
         int quickY=y+(h<250?57:70);
         button(x+10,quickY,col,0,()->chooseForm(true),"input_form");
         button(x+22+col,quickY,col,0,()->chooseForm(false),"output_form");
-        button(x+10,quickY+25,w-20,0,this::chooseMaterial,"material");
-        button(x+10,quickY+50,w-20,0,this::extractFocused,"extract");
-        button(x+10,quickY+75,w-20,0,()->chooseSetting("mode"),"mode");
+        int quickRoom=w-32, materialWidth=quickRoom*34/100, ruleModeWidth=quickRoom*29/100;
+        int ruleModeX=x+16+materialWidth, extractX=ruleModeX+ruleModeWidth+6;
+        button(x+10,quickY+25,materialWidth,0,this::chooseMaterial,"material");
+        button(ruleModeX,quickY+25,ruleModeWidth,0,()->chooseSetting("mode"),"mode");
+        button(extractX,quickY+25,x+w-10-extractX,0,this::extractFocused,"extract");
         button(x + 10, y + 53, 62, 1, () -> { matches.forEach(e -> selected.add(e.recipeId())); chosenCount=-1; updateControls(); }, "select_all");
         button(x + 78, y + 53, 62, 1, () -> { matches.forEach(e -> selected.remove(e.recipeId())); chosenCount=-1; updateControls(); }, "select_none");
         int modeWidth = Math.max(36, Math.min(82, w - (split - x) - 70));
@@ -308,7 +310,7 @@ public final class WildcardEditorScreen extends AeToolScreen implements Generati
         g.fill(x + 10, y + 26, x + w - 10, y + 27, WorkbenchTheme.LINE);
         if (tab == 0) {
             if(h>=250){label(g,tr("input_rules"),x+12,y+55,w/2-20,TEXT,.85f);label(g,tr("output_rules"),x+w/2+6,y+55,w/2-20,TEXT,.85f);}
-            if(ruleError!=null)wrapped(g,ruleError,x+14,y+(h<250?160:173),w-28,WorkbenchTheme.WARNING,1);
+            if(ruleError!=null)wrapped(g,ruleError,x+14,y+(h<250?110:123),w-28,WorkbenchTheme.WARNING,1);
         } else if (tab == 3) {
             if (h >= 220) {
                 label(g, tr("input_rules"), x + 12, y + 55, w / 2 - 20, TEXT, .85f);
@@ -411,14 +413,14 @@ public final class WildcardEditorScreen extends AeToolScreen implements Generati
     private int ingredientRows(GuiGraphics g,List<Ingredient> ingredients,int dx,int dy,int room,int side,boolean original) {
         for (var ingredient : ingredients) {
             var p = original ? IngredientPresentation.of(ingredient, side) : IngredientPresentation.encoded(focus, ingredient.spec(), side, dropTools);
-            if (dy + 42 >= listTop && dy < listBottom) {
+            if (dy + 32 >= listTop && dy < listBottom) {
                 WorkbenchTheme.slot(g, dx, dy + 2, p); visuals.draw(g, ingredient.spec(), dx + 1, dy + 3); visuals.drawRule(g, p, dx + 1, dy + 3);
                 label(g, ingredientName(ingredient), dx + 24, dy + 3, room - 24, TEXT, 1);
-                label(g, Component.translatable("eae2_pattern.workbench."+(ingredient.spec().isItem()?"item_amount":"fluid_amount"),ingredient.spec().amount()), dx + 24, dy + 16, room - 24, DIM, .8f);
-                if (p.kind() != IngredientPresentation.Kind.REGULAR) label(g, p.description(), dx + 24, dy + 28, room - 24, p.color(), .8f);
+                label(g, Component.translatable("eae2_pattern.workbench."+(ingredient.spec().isItem()?"item_amount":"fluid_amount"),ingredient.spec().amount()), dx + 24, dy + 15, room - 24, DIM, .5f);
+                if (p.kind() != IngredientPresentation.Kind.REGULAR) label(g, p.description(), dx + 24, dy + 23, room - 24, p.color(), .5f);
                 hits.add(new Hit(dx + 1, dy + 3, ingredient.spec(), p, side));
             }
-            dy += p.kind()==IngredientPresentation.Kind.REGULAR?30:42;
+            dy += p.kind()==IngredientPresentation.Kind.REGULAR?24:32;
         }
         return dy;
     }
@@ -433,9 +435,8 @@ public final class WildcardEditorScreen extends AeToolScreen implements Generati
         int thumb = Math.max(12, size * size / content), sy = top + (int) ((size - thumb) * amount / Math.max(1, content - size));
         g.fill(sx, top, sx + 3, bottom, WorkbenchTheme.LINE); g.fill(sx, sy, sx + 3, sy + thumb, DIM);
     }
-    private void label(GuiGraphics g,Component text,int px,int py,int room,int color,float ignoredScale) {
-        if(room<1)return;
-        g.drawString(font,net.minecraft.locale.Language.getInstance().getVisualOrder(font.substrByWidth(text,room)),px,py,color,false);
+    private void label(GuiGraphics g,Component text,int px,int py,int room,int color,float scale) {
+        WorkbenchTheme.text(g,font,text,px,py,room,color,scale);
     }
     private void wrapped(GuiGraphics g,Component text,int px,int py,int room,int color,float ignoredScale) {
         for(var part:font.split(text,Math.max(1,room))){

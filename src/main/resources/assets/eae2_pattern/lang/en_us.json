@@ -454,7 +454,7 @@
   "eae2_pattern.diagram.status.loading": "Reading current crafting plan…",
   "eae2_pattern.diagram.status.none": "No cycle recorded in this plan",
   "eae2_pattern.diagram.status.planned": "Growth execution planned",
-  "eae2_pattern.diagram.status.detected": "Cycle candidate · execution not confirmed",
+  "eae2_pattern.diagram.status.detected": "Cycle found · no execution plan yet",
   "eae2_pattern.diagram.status.unsupported": "Current AE2 interface unavailable",
   "eae2_pattern.diagram.status.too_large": "Plan too large to transfer",
   "eae2_pattern.diagram.status.timeout": "Timed out; close and reopen the panel",
@@ -479,7 +479,7 @@
   "eae2_pattern.diagram.materials.disabled": "Materials checked; experimental execution disabled",
   "eae2_pattern.diagram.materials.cpu": "Materials checked; CPU unsupported",
   "eae2_pattern.diagram.materials.runtime": "Materials checked; execution interface unsupported",
-  "eae2_pattern.diagram.material_path": "Cycle used for this material budget",
+  "eae2_pattern.diagram.material_path": "Cycle path",
   "eae2_pattern.diagram.circulating": "Circulating stock",
   "eae2_pattern.diagram.external": "External material",
   "eae2_pattern.diagram.need_have": "Need %s · Available %s",
@@ -489,5 +489,8 @@
   "eae2_pattern.diagram.available": "Available at planning: %s",
   "eae2_pattern.diagram.materials.limit": "Execution limit exceeded; complete material budget below",
   "eae2_pattern.diagram.materials.planning_failed": "Budget unavailable; see planning diagnostics in log",
-  "eae2_pattern.cycle.alpha.limit": "Cycle plan exceeds the execution limit; inspect its full material budget in the cycle panel."
+  "eae2_pattern.cycle.alpha.limit": "Cycle plan exceeds the execution limit; inspect its full material budget in the cycle panel.",
+  "eae2_pattern.diagram.required_heading": "Need",
+  "eae2_pattern.diagram.available_heading": "Stock",
+  "eae2_pattern.diagram.missing_heading": "Missing"
 }
