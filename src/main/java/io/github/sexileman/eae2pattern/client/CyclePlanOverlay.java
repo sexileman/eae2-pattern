@@ -89,46 +89,65 @@ public final class CyclePlanOverlay {
     }
 
     private int columns() {
-        return Math.max(1, (w - 36) / 36);
+        return Math.max(1, (w - 36) / 32);
+    }
+
+    private int materialColumns() {
+        return Math.max(1, (w - 28) / 104);
+    }
+
+    private int pathColumns() {
+        return Math.max(1, (w - 28) / 64);
     }
 
     private int recipeColumns() {
-        return Math.max(1, (w / 2 - 28) / 36);
+        return Math.max(1, (w / 2 - 28) / 32);
     }
 
     private int height(Row row) {
         if (row.materialKind() != MaterialKind.NONE) return 28;
         if (row.inputs().isEmpty() && row.outputs().isEmpty()) return 24;
-        if (!row.grid()) return row.outputs().isEmpty() ? 58 : 58;
+        if (!row.grid())
+            return row.outputs().isEmpty()
+                    ? 18 + ((row.inputs().size() + pathColumns() - 1) / pathColumns()) * 32
+                    : 52;
         if (!row.outputs().isEmpty()) {
             int cols = recipeColumns();
-            return 34
+            return 26
                     + Math.max(
                                     (row.inputs().size() + cols - 1) / cols,
                                     (row.outputs().size() + cols - 1) / cols)
-                            * 34;
+                            * 30;
         }
-        return 34 + ((row.inputs().size() + columns() - 1) / columns()) * 34;
+        return 26 + ((row.inputs().size() + columns() - 1) / columns()) * 30;
     }
 
     private void measureRows() {
         offsets = new int[rows.size() + 1];
         for (int i = 0; i < rows.size(); i++) offsets[i + 1] = offsets[i] + height(rows.get(i));
+        if (tab == Tab.MATERIALS && rows.size() > 1) {
+            for (int i = 1; i < rows.size(); i++) {
+                offsets[i] = 18 + ((i - 1) / materialColumns()) * 38;
+            }
+            offsets[rows.size()] =
+                    18 + ((rows.size() - 1 + materialColumns() - 1) / materialColumns()) * 38;
+        }
         total = offsets[rows.size()];
         measuredWidth = w;
     }
 
     private int firstVisibleRow() {
+        if (tab == Tab.MATERIALS) return 0;
         int index = Arrays.binarySearch(offsets, scroll);
         return Math.max(0, index >= 0 ? index : -index - 2);
     }
 
     private int bodyTop() {
-        return y + 88;
+        return y + 76;
     }
 
     private int bodyBottom() {
-        return y + h - 28;
+        return y + h - 20;
     }
 
     private int maxScroll() {
@@ -166,7 +185,7 @@ public final class CyclePlanOverlay {
         control(g, x + w - 54, y + 7, 44, tr("back"), false);
         var target = data.target();
         if (target != null) {
-            icon(g, target, x + 10, y + 30, 1, false);
+            icon(g, target, x + 10, y + 27, 1, false);
             g.drawString(
                     font,
                     font.plainSubstrByWidth(
@@ -176,7 +195,7 @@ public final class CyclePlanOverlay {
                                             .formatAmount(target.amount(), AmountFormat.FULL),
                             w - 52),
                     x + 36,
-                    y + 32,
+                    y + 29,
                     WorkbenchTheme.TEXT,
                     false);
         }
@@ -186,12 +205,12 @@ public final class CyclePlanOverlay {
                         .getVisualOrder(
                                 font.substrByWidth(tr("status." + data.state().id()), w - 52)),
                 x + 36,
-                y + 46,
+                y + 41,
                 WorkbenchTheme.DIM,
                 false);
         int tw = (w - 16 - 4 * tabs.size()) / tabs.size();
         for (int i = 0; i < tabs.size(); i++)
-            control(g, x + 10 + i * (tw + 4), y + 62, tw, tabs.get(i).title(), tab == tabs.get(i));
+            control(g, x + 10 + i * (tw + 4), y + 52, tw, tabs.get(i).title(), tab == tabs.get(i));
         GenericStack hover = null;
         long hoverTimes = 1;
         Row hoverNeed = null;
@@ -199,55 +218,49 @@ public final class CyclePlanOverlay {
         for (int rowIndex = firstVisibleRow(); rowIndex < rows.size(); rowIndex++) {
             var row = rows.get(rowIndex);
             int ry = bodyTop() + offsets[rowIndex] - scroll;
-            int rh = offsets[rowIndex + 1] - offsets[rowIndex];
+            int rh =
+                    row.materialKind() != MaterialKind.NONE
+                            ? 38
+                            : (tab == Tab.MATERIALS
+                                    ? 18
+                                    : offsets[rowIndex + 1] - offsets[rowIndex]);
             if (ry >= bodyBottom()) break;
             if (ry + rh > bodyTop() && ry < bodyBottom()) {
                 if (row.materialKind() != MaterialKind.NONE) {
                     var stack = row.inputs().get(0);
-                    icon(g, stack, x + 12, ry + 3, 1, false);
-                    int numericStart = x + 38 + Math.max(42, (w - 58) * 34 / 100);
-                    int cell = Math.max(1, (x + w - 18 - numericStart) / 3);
-                    g.drawString(
-                            font,
-                            font.plainSubstrByWidth(
-                                    row.title().getString(), Math.max(1, numericStart - x - 42)),
-                            x + 36,
-                            ry + 2,
-                            WorkbenchTheme.TEXT,
-                            false);
-                    g.drawString(
-                            font,
-                            tr(
-                                    row.materialKind() == MaterialKind.CIRCULATING
-                                            ? "circulating"
-                                            : "external"),
-                            x + 36,
-                            ry + 13,
-                            WorkbenchTheme.DIM,
-                            false);
+                    int cellWidth = (w - 28) / materialColumns();
+                    int cx = x + 10 + ((rowIndex - 1) % materialColumns()) * cellWidth;
+                    int iconX = cx + cellWidth - 22;
+                    boolean over = mx >= cx && mx < cx + cellWidth && my >= ry && my < ry + rh;
+                    int fill = row.missing() > 0 ? 0xFFC6AAAA : 0xFFB3B3B3;
+                    g.fill(cx, ry, cx + cellWidth, ry + rh, WorkbenchTheme.LINE);
+                    g.fill(
+                            cx + 1,
+                            ry + 1,
+                            cx + cellWidth - 1,
+                            ry + rh - 1,
+                            over ? WorkbenchTheme.HOVER : fill);
+                    AEKeyRendering.drawInGui(
+                            Minecraft.getInstance(), g, iconX, ry + 10, stack.what());
                     long[] amounts = {stack.amount(), row.available(), row.missing()};
-                    for (int column = 0; column < amounts.length; column++) {
-                        String amount =
-                                stack.what().formatAmount(amounts[column], AmountFormat.FULL);
-                        if (font.width(amount) > cell - 4)
-                            amount =
-                                    (amounts[column] == 1 && !(stack.what() instanceof AEFluidKey)
-                                            ? "1"
-                                            : StackAmountLabel.format(
-                                                    amounts[column],
-                                                    stack.what() instanceof AEFluidKey));
-                        amount = font.plainSubstrByWidth(amount, Math.max(1, cell - 4));
+                    String[] keys = {"required_heading", "available_heading", "missing_heading"};
+                    for (int line = 0; line < amounts.length; line++) {
+                        String value =
+                                amounts[line] == 1 && !(stack.what() instanceof AEFluidKey)
+                                        ? "1"
+                                        : StackAmountLabel.format(
+                                                amounts[line], stack.what() instanceof AEFluidKey);
+                        String label = tr(keys[line]).getString() + ": " + value;
+                        label = font.plainSubstrByWidth(label, Math.max(1, cellWidth - 28));
                         g.drawString(
                                 font,
-                                amount,
-                                numericStart + (column + 1) * cell - 4 - font.width(amount),
-                                ry + 8,
-                                column == 2 && row.missing() > 0
-                                        ? WorkbenchTheme.WARNING
-                                        : WorkbenchTheme.DIM,
+                                label,
+                                iconX - 4 - font.width(label),
+                                ry + 4 + line * 10,
+                                line == 2 && row.missing() > 0 ? 0xFF9C2525 : WorkbenchTheme.TEXT,
                                 false);
                     }
-                    if (mx >= x + 10 && mx < x + w - 18 && my >= ry && my < ry + rh) {
+                    if (over) {
                         hover = stack;
                         hoverTimes = 1;
                         hoverNeed = row;
@@ -260,28 +273,11 @@ public final class CyclePlanOverlay {
                             ry + 2,
                             WorkbenchTheme.TEXT,
                             false);
-                    if (tab == Tab.MATERIALS && row.inputs().isEmpty()) {
-                        int numericStart = x + 38 + Math.max(42, (w - 58) * 34 / 100);
-                        int cell = Math.max(1, (x + w - 18 - numericStart) / 3);
-                        String[] headings = {
-                            "required_heading", "available_heading", "missing_heading"
-                        };
-                        for (int column = 0; column < headings.length; column++) {
-                            var heading = tr(headings[column]);
-                            g.drawString(
-                                    font,
-                                    heading,
-                                    numericStart + (column + 1) * cell - 4 - font.width(heading),
-                                    ry + 13,
-                                    WorkbenchTheme.DIM,
-                                    false);
-                        }
-                    }
                     if (row.grid()) {
-                        int gridY = ry + 30;
+                        int gridY = ry + 22;
                         int cols = row.outputs().isEmpty() ? columns() : recipeColumns();
                         g.drawString(
-                                font, tr("inputs"), x + 12, ry + 16, WorkbenchTheme.DIM, false);
+                                font, tr("inputs"), x + 12, ry + 12, WorkbenchTheme.DIM, false);
                         var hit =
                                 drawRecipeGrid(
                                         g, row.inputs(), x + 12, gridY, row.times(), cols, mx, my);
@@ -292,7 +288,7 @@ public final class CyclePlanOverlay {
                         if (!row.outputs().isEmpty()) {
                             int outX = x + w / 2 + 10;
                             g.drawString(
-                                    font, tr("outputs"), outX, ry + 16, WorkbenchTheme.DIM, false);
+                                    font, tr("outputs"), outX, ry + 12, WorkbenchTheme.DIM, false);
                             g.drawString(
                                     font, "→", x + w / 2 - 8, gridY + 5, WorkbenchTheme.DIM, false);
                             hit =
@@ -350,7 +346,8 @@ public final class CyclePlanOverlay {
                         }
                     }
                 }
-                g.fill(x + 10, ry + rh - 4, x + w - 18, ry + rh - 3, WorkbenchTheme.LINE);
+                if (tab != Tab.MATERIALS)
+                    g.fill(x + 10, ry + rh - 2, x + w - 18, ry + rh - 1, WorkbenchTheme.LINE);
             }
         }
         if (rows.isEmpty())
@@ -374,15 +371,15 @@ public final class CyclePlanOverlay {
                         tr(tab == Tab.MATERIALS ? "stock_snapshot" : "snapshot").getString(),
                         w - 20),
                 x + 10,
-                y + h - 17,
+                y + h - 13,
                 WorkbenchTheme.DIM,
                 false);
-        if (target != null && mx >= x + 10 && mx < x + w - 12 && my >= y + 30 && my < y + 46) {
+        if (target != null && mx >= x + 10 && mx < x + w - 12 && my >= y + 27 && my < y + 41) {
             hover = target;
             hoverTimes = 1;
         }
         if (hover != null
-                && ((my >= bodyTop() && my < bodyBottom()) || (my >= y + 30 && my < y + 46))) {
+                && ((my >= bodyTop() && my < bodyBottom()) || (my >= y + 27 && my < y + 41))) {
             var lines = new ArrayList<Component>(AEKeyRendering.getTooltip(hover.what()));
             lines.add(
                     tr(
@@ -392,6 +389,11 @@ public final class CyclePlanOverlay {
                                             scaled(hover.amount(), hoverTimes),
                                             AmountFormat.FULL)));
             if (hoverNeed != null) {
+                lines.add(
+                        tr(
+                                hoverNeed.materialKind() == MaterialKind.CIRCULATING
+                                        ? "circulating"
+                                        : "external"));
                 lines.add(
                         tr(
                                 "available",
@@ -426,40 +428,40 @@ public final class CyclePlanOverlay {
             int my) {
         GenericStack hover = null;
         for (int i = 0; i < slots.size(); i++) {
-            int dx = sx + (i % columnCount) * 36, dy = sy + (i / columnCount) * 34;
+            int dx = sx + (i % columnCount) * 32, dy = sy + (i / columnCount) * 30;
             icon(g, slots.get(i), dx, dy, times);
-            if (mx >= dx && mx < dx + 34 && my >= dy && my < dy + 30) hover = slots.get(i);
+            if (mx >= dx && mx < dx + 32 && my >= dy && my < dy + 30) hover = slots.get(i);
         }
         return hover;
     }
 
     private GenericStack drawPath(
             GuiGraphics g, List<GenericStack> nodes, int sx, int sy, int mx, int my) {
-        int limit = Math.min(nodes.size(), Math.max(1, (w - 40) / 52));
+        int cols = Math.max(1, Math.min(nodes.size(), pathColumns()));
+        int pitch = Math.max(1, (w - 28) / cols);
         GenericStack hover = null;
-        for (int i = 0; i < limit; i++) {
-            int dx = sx + i * 52;
-            icon(g, nodes.get(i), dx, sy, 1, false);
-            var font = Minecraft.getInstance().font;
+        var font = Minecraft.getInstance().font;
+        for (int i = 0; i < nodes.size(); i++) {
+            int dx = sx + (i % cols) * pitch, dy = sy + (i / cols) * 32;
+            icon(g, nodes.get(i), dx, dy, 1, false);
             g.drawString(
                     font,
-                    font.plainSubstrByWidth(nodes.get(i).what().getDisplayName().getString(), 46),
+                    font.plainSubstrByWidth(
+                            nodes.get(i).what().getDisplayName().getString(), pitch - 8),
                     dx,
-                    sy + 23,
+                    dy + 20,
                     WorkbenchTheme.DIM,
                     false);
-            if (i + 1 < limit)
-                g.drawString(font, "→", dx + 29, sy + 5, WorkbenchTheme.ACCENT, false);
-            if (mx >= dx && mx < dx + 20 && my >= sy && my < sy + 20) hover = nodes.get(i);
+            if (i + 1 < nodes.size())
+                g.drawString(
+                        font,
+                        (i + 1) % cols == 0 ? "↓" : "→",
+                        dx + 24,
+                        dy + 5,
+                        WorkbenchTheme.DIM,
+                        false);
+            if (mx >= dx && mx < dx + pitch - 4 && my >= dy && my < dy + 30) hover = nodes.get(i);
         }
-        if (limit < nodes.size())
-            g.drawString(
-                    Minecraft.getInstance().font,
-                    "…",
-                    sx + limit * 52,
-                    sy + 5,
-                    WorkbenchTheme.DIM,
-                    false);
         return hover;
     }
 
@@ -497,7 +499,7 @@ public final class CyclePlanOverlay {
             String label =
                     font.plainSubstrByWidth(
                             StackAmountLabel.format(amount, stack.what() instanceof AEFluidKey),
-                            34);
+                            30);
             g.drawString(font, label, sx, sy + 20, WorkbenchTheme.TEXT, false);
         }
     }
@@ -538,7 +540,7 @@ public final class CyclePlanOverlay {
             active = null;
             return;
         }
-        if (my >= a.y + 62 && my < a.y + 80) {
+        if (my >= a.y + 52 && my < a.y + 70) {
             int tw = (a.w - 16 - 4 * a.tabs.size()) / a.tabs.size();
             int tab = (int) (mx - a.x - 10) / (tw + 4);
             if (tab >= 0 && tab < a.tabs.size()) {

@@ -1,3 +1,8 @@
+# 2026.11.2-beta.9
+
+- Present cycle materials in multi-column AE2-style cells with shortage backgrounds and exact tooltips.
+- Reduce header and recipe spacing; distribute complete cycle paths across available width with wrapping.
+
 # 2026.11.2-beta.8
 
 - Compact cycle recipe details into parallel input/output grids with consistent icon, quantity and tooltip spacing.
