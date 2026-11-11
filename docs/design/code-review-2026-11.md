@@ -33,6 +33,9 @@
 | R-15 | P2 | 窄面板布局与文本截断边界 | 待修 |
 | R-16 | P2 | `StopReason` 按 ordinal 传递且未校验 | 待修 |
 | R-17 | P2 | 通配符运行时缓存非同步 | 待修 |
+| R-18 | P1 | 循环只支持 2 配方互逆，长环被静默拒绝且面板不说明原因 | 待修 |
+| R-19 | P2 | 循环浮层与 AE2CT 抢绘制顺序（图标/网格压在我们面板上） | **已修** |
+| R-20 | P1 | 实机 AE2 15.4.10 vs 编译目标 15.2.16，mixin 风险已成现实 | 待确认 |
 
 ---
 
@@ -166,3 +169,30 @@
 1. `gradle build`（应仍然 `Passed 7104 regression checks`）。
 2. 改动涉及 mixin 时，额外确认 `eae2_pattern.mixins.json` 的 `required` 与门控一致。
 3. 进游戏实测的项目：循环增殖（缺料时是否真的滚雪球、取消后库存是否退回）、通配符样板在供应商里的展开条数、`/eae2_pattern config set` 是否会话内生效。
+---
+
+## 2026-11-11 实机反馈追加
+
+实测环境：整合包 `D:\dsh workspace\others\GregTech Leisure`，AE2 **15.4.10**、`ae2ct-1.20.1-1.1.1`、`mae2 2.0.0-beta.c`、`redirector 5.0.0`、`eae2-pattern-1.20.1-2026.11.2`（**正式版，不是本分支的 beta**）。日志 `logs/latest.log`。
+
+### R-18 循环只支持 2 配方互逆
+
+- 证据：`latest.log:2096`
+  `event=plan_rejected trace=… target=gtmthings:max_4194304a_wireless_laser_source_hatch amount=10 reason=unsupported`
+  同一 trace 里 `event=candidate index=7 path=[…]` 有 **11 个节点**。
+- 根因：`cycle/CycleLimits.java:LOOP_RECIPES = 2`，`GrowthFallback` 里 `if (candidate.patterns().size() != CycleLimits.LOOP_RECIPES) continue;` 直接跳过所有 3 条以上的环。
+- 表现：面板顶部显示“发现循环配方 · 尚未生成执行计划”，材料页固定文案“当前没有完整材料核算，缺口未知”（`eae2_pattern.diagram.materials.unknown`），玩家无法得知是“环太长”而不是“没检测到”。
+- 建议：短期把 `reason` 里的 `unsupported` 细分（环长度超限 / 非严格增长 / 种子不足 / CPU 未适配），并把原因显示在材料页；中期扩展为 N 配方环（需要重写 `TwoRecipeGrowth` 的求解为通用环求解）。
+
+### R-19 循环浮层与 AE2CT 抢绘制顺序（已修）
+
+- 现象：截图里电路图标、配方格子压在我们面板文字上；AE2CT（Crafting Tree）也在 `ScreenEvent.Render.Post` 里画。
+- 修法：`client/CyclePlanOverlay.java` 的渲染改为 `@SubscribeEvent(priority = EventPriority.LOWEST)`（最后画），点击/滚轮/拖拽/按键改为 `HIGHEST`（先吃到输入）。
+
+### R-20 实机 AE2 版本高于编译目标
+
+- 实机 15.4.10，`gradle.properties` 的 `ae2_version` 是 15.2.16。R-03 描述的 mixin 脆弱性在真实环境已经成立（只是这次没崩），建议把 `mods.toml` 的 AE2 上限收紧到实测过的版本，或在 CI 里加一次“对 15.4.x 编译”。
+
+### 顺手修掉的小问题
+
+- 通配符样板原先看不到“固定收录 / 动态规则”：`WildcardTooltipText.lines()` 收到了 `dynamic` 参数却没用。已把模式折进“已匹配样板：325 · 动态规则”这一行（保持三行紧凑 tooltip 的既有契约，回归检查仍 7104 项全过）。

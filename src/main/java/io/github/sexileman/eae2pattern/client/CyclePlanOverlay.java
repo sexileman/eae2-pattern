@@ -20,6 +20,7 @@ import net.minecraft.network.chat.Component;
 import net.minecraftforge.api.distmarker.Dist;
 import net.minecraftforge.client.event.ScreenEvent;
 import net.minecraftforge.event.TickEvent;
+import net.minecraftforge.eventbus.api.EventPriority;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.fml.common.Mod;
 
@@ -484,13 +485,14 @@ public final class CyclePlanOverlay {
                                                 / Math.max(1, bh - thumb)));
     }
 
-    @SubscribeEvent
+    /** Draw after every other overlay: AE2CT and friends also hook Render.Post. */
+    @SubscribeEvent(priority = EventPriority.LOWEST)
     public static void render(ScreenEvent.Render.Post event) {
         if (active != null && event.getScreen() == active.parent)
             active.render(event.getGuiGraphics(), event.getMouseX(), event.getMouseY());
     }
 
-    @SubscribeEvent
+    @SubscribeEvent(priority = EventPriority.HIGHEST)
     public static void click(ScreenEvent.MouseButtonPressed.Pre event) {
         var a = active;
         if (a == null
@@ -518,7 +520,7 @@ public final class CyclePlanOverlay {
         }
     }
 
-    @SubscribeEvent
+    @SubscribeEvent(priority = EventPriority.HIGHEST)
     public static void wheel(ScreenEvent.MouseScrolled.Pre event) {
         var a = active;
         if (a != null
@@ -534,7 +536,7 @@ public final class CyclePlanOverlay {
         }
     }
 
-    @SubscribeEvent
+    @SubscribeEvent(priority = EventPriority.HIGHEST)
     public static void drag(ScreenEvent.MouseDragged.Pre event) {
         var a = active;
         if (a != null && event.getScreen() == a.parent && a.dragging) {
@@ -543,7 +545,7 @@ public final class CyclePlanOverlay {
         }
     }
 
-    @SubscribeEvent
+    @SubscribeEvent(priority = EventPriority.HIGHEST)
     public static void release(ScreenEvent.MouseButtonReleased.Pre event) {
         if (active != null && event.getScreen() == active.parent && active.dragging) {
             active.dragging = false;
@@ -551,7 +553,7 @@ public final class CyclePlanOverlay {
         }
     }
 
-    @SubscribeEvent
+    @SubscribeEvent(priority = EventPriority.HIGHEST)
     public static void key(ScreenEvent.KeyPressed.Pre event) {
         var a = active;
         if (a == null || event.getScreen() != a.parent) return;
