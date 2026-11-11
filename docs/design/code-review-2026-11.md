@@ -184,10 +184,14 @@
 - 表现：面板顶部显示“发现循环配方 · 尚未生成执行计划”，材料页固定文案“当前没有完整材料核算，缺口未知”（`eae2_pattern.diagram.materials.unknown`），玩家无法得知是“环太长”而不是“没检测到”。
 - 建议：短期把 `reason` 里的 `unsupported` 细分（环长度超限 / 非严格增长 / 种子不足 / CPU 未适配），并把原因显示在材料页；中期扩展为 N 配方环（需要重写 `TwoRecipeGrowth` 的求解为通用环求解）。
 
-### R-19 循环浮层与 AE2CT 抢绘制顺序（已修）
+### R-19 循环浮层与原版合成计划界面叠在一起（已修一半，归因已更正）
 
-- 现象：截图里电路图标、配方格子压在我们面板文字上；AE2CT（Crafting Tree）也在 `ScreenEvent.Render.Post` 里画。
-- 修法：`client/CyclePlanOverlay.java` 的渲染改为 `@SubscribeEvent(priority = EventPriority.LOWEST)`（最后画），点击/滚轮/拖拽/按键改为 `HIGHEST`（先吃到输入）。
+- 现象：截图里电路图标、配方格子压在我们面板文字上。
+- **归因更正（2026-11-11 晚）**：截图①“合成计划 - 2.00G 字节已使用 / 残缺的合成计划（材料不足） / 可用数量·合成数量·缺失数量”是 **AE2 原版**合成计划界面——这些键都在 `appliedenergistics2-forge-15.4.10.jar` 的 `assets/ae2/lang/zh_cn.json` 与 `en_us.json`（`gui.ae2.BytesUsed`、`gui.ae2.PartialPlan`、`gui.ae2.Missing`）里；`ae2ct` 只有 `MissingAmount/StoredAmount/ShowMissingOnly`，不画这个表。我先前写成 AE2CT 是错的。
+  只有「合成轮数」「库存使用」两行不是 AE2 的，来自 **GTLCore**（`[GTLCore]gtlcore-1.2.3.0-fix9…jar` → `assets/gtlcore/lang/zh_cn.json` 的 `gtlcore.ae.craft.create_times` / `gtlcore.ae.craft.used_percent`），它在原版界面上追加数字。
+- 已核实、但**不足以定论**的旁证：AE2 15.4.10 全 jar **没有任何类订阅 `ScreenEvent.Render.Post`**（字节码扫描命中 0）→ 原版格子是在自己的 `render()` 里画的，理应在我们 `Render.Post` 之下；GTLCore 全 jar 只有 `WirelessAeScreenHooks` 一个类碰 ScreenEvent，也不是这张界面。所以“格子压在我们面板上”更可能是**几何重叠**（我们浮层的默认位置正好盖在原版格子区上，而原版格子在更早的绘制阶段，看起来像混在一起），或第三方树状界面（AE2CT）后画。
+- 已做的修法：`client/CyclePlanOverlay.java` 渲染改 `@SubscribeEvent(priority = EventPriority.LOWEST)`（最后画），点击/滚轮/拖拽/按键改 `HIGHEST`（先吃输入）。这条只解决“后画者被盖住”，**不解决几何重叠**。
+- 待办：把浮层默认锚点改成贴右/贴底并支持拖动记忆位置，从几何上避开原版格子区（这才是根治）。
 
 ### R-20 实机 AE2 版本高于编译目标
 
