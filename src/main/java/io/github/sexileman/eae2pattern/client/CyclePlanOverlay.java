@@ -20,7 +20,6 @@ import net.minecraft.network.chat.Component;
 import net.minecraftforge.api.distmarker.Dist;
 import net.minecraftforge.client.event.ScreenEvent;
 import net.minecraftforge.event.TickEvent;
-import net.minecraftforge.eventbus.api.EventPriority;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.fml.common.Mod;
 
@@ -41,7 +40,6 @@ public final class CyclePlanOverlay {
     private List<Row> rows = List.of();
     private int x, y, w, h, total;
     private int measuredWidth = -1;
-    private net.minecraft.client.gui.screens.Screen notedScreen;
     private int[] offsets = new int[] {0};
 
     private CyclePlanOverlay(CraftConfirmScreen parent) {
@@ -69,7 +67,7 @@ public final class CyclePlanOverlay {
 
     public static void accept(S2CCycleDiagramPacket packet) {
         var view = active;
-        if (view == null) return;
+        if (view == null || Minecraft.getInstance().screen != view.parent) return;
         if (view.session.accept(packet.menu(), packet.request(), packet.data())) view.rebuild();
     }
 
@@ -148,21 +146,6 @@ public final class CyclePlanOverlay {
                 false);
     }
 
-    private void noteScreen(net.minecraft.client.gui.screens.Screen screen) {
-        if (notedScreen == screen) return;
-        notedScreen = screen;
-        EAE2Pattern.LOGGER.info(
-                "Cycle overlay drawing while top screen is {} (owner {}) at x={} y={} w={} h={} body={}..{}",
-                screen == null ? "null" : screen.getClass().getName(),
-                parent == null ? "null" : parent.getClass().getName(),
-                x,
-                y,
-                w,
-                h,
-                bodyTop(),
-                bodyBottom());
-    }
-
     private void render(GuiGraphics g, int mx, int my) {
         layout();
         var font = Minecraft.getInstance().font;
@@ -172,9 +155,7 @@ public final class CyclePlanOverlay {
         g.pose().translate(0, 0, 500);
         WorkbenchTheme.panel(g, x, y, w, h);
         g.drawString(font, tr("title"), x + 10, y + 11, WorkbenchTheme.TEXT, false);
-        backButton(g, x + w - 26, y + 6);
-        if (mx >= x + w - 26 && mx < x + w - 10 && my >= y + 6 && my < y + 22)
-            g.renderTooltip(font, tr("back"), mx, my);
+        control(g, x + w - 54, y + 7, 44, tr("back"), false);
         g.drawString(
                 font,
                 tr("status." + data.state().id()),
@@ -486,19 +467,6 @@ public final class CyclePlanOverlay {
         }
     }
 
-    private static boolean isTopScreen(net.minecraft.client.gui.screens.Screen screen) {
-        return screen != null && screen == Minecraft.getInstance().screen;
-    }
-
-    private void backButton(GuiGraphics g, int bx, int by) {
-        WorkbenchTheme.control(g, bx, by, 16, 16, WorkbenchTheme.SURFACE, WorkbenchTheme.LINE);
-        for (int i = 0; i < 5; i++) {
-            g.fill(bx + 4 + i, by + 8 - i, bx + 5 + i, by + 9 - i, WorkbenchTheme.TEXT);
-            g.fill(bx + 4 + i, by + 8 + i, bx + 5 + i, by + 9 + i, WorkbenchTheme.TEXT);
-        }
-        g.fill(bx + 4, by + 8, bx + 11, by + 9, WorkbenchTheme.TEXT);
-    }
-
     private boolean inside(double mx, double my) {
         return mx >= x && mx < x + w && my >= y && my < y + h;
     }
@@ -516,25 +484,22 @@ public final class CyclePlanOverlay {
                                                 / Math.max(1, bh - thumb)));
     }
 
-    /** Draw after every other overlay: AE2CT and friends also hook Render.Post. */
-    @SubscribeEvent(priority = EventPriority.LOWEST)
+    @SubscribeEvent
     public static void render(ScreenEvent.Render.Post event) {
-        if (active != null && isTopScreen(event.getScreen())) {
-            active.noteScreen(event.getScreen());
+        if (active != null && event.getScreen() == active.parent)
             active.render(event.getGuiGraphics(), event.getMouseX(), event.getMouseY());
-        }
     }
 
-    @SubscribeEvent(priority = EventPriority.HIGHEST)
+    @SubscribeEvent
     public static void click(ScreenEvent.MouseButtonPressed.Pre event) {
         var a = active;
         if (a == null
-                || !isTopScreen(event.getScreen())
+                || event.getScreen() != a.parent
                 || !a.inside(event.getMouseX(), event.getMouseY())) return;
         event.setCanceled(true);
         if (event.getButton() != 0) return;
         double mx = event.getMouseX(), my = event.getMouseY();
-        if (my >= a.y + 6 && my < a.y + 22 && mx >= a.x + a.w - 26 && mx < a.x + a.w - 10) {
+        if (my >= a.y + 7 && my < a.y + 25 && mx >= a.x + a.w - 54) {
             active = null;
             return;
         }
@@ -553,11 +518,11 @@ public final class CyclePlanOverlay {
         }
     }
 
-    @SubscribeEvent(priority = EventPriority.HIGHEST)
+    @SubscribeEvent
     public static void wheel(ScreenEvent.MouseScrolled.Pre event) {
         var a = active;
         if (a != null
-                && isTopScreen(event.getScreen())
+                && event.getScreen() == a.parent
                 && a.inside(event.getMouseX(), event.getMouseY())) {
             event.setCanceled(true);
             a.scroll =
@@ -569,27 +534,27 @@ public final class CyclePlanOverlay {
         }
     }
 
-    @SubscribeEvent(priority = EventPriority.HIGHEST)
+    @SubscribeEvent
     public static void drag(ScreenEvent.MouseDragged.Pre event) {
         var a = active;
-        if (a != null && isTopScreen(event.getScreen()) && a.dragging) {
+        if (a != null && event.getScreen() == a.parent && a.dragging) {
             event.setCanceled(true);
             a.drag(event.getMouseY());
         }
     }
 
-    @SubscribeEvent(priority = EventPriority.HIGHEST)
+    @SubscribeEvent
     public static void release(ScreenEvent.MouseButtonReleased.Pre event) {
-        if (active != null && isTopScreen(event.getScreen()) && active.dragging) {
+        if (active != null && event.getScreen() == active.parent && active.dragging) {
             active.dragging = false;
             event.setCanceled(true);
         }
     }
 
-    @SubscribeEvent(priority = EventPriority.HIGHEST)
+    @SubscribeEvent
     public static void key(ScreenEvent.KeyPressed.Pre event) {
         var a = active;
-        if (a == null || !isTopScreen(event.getScreen())) return;
+        if (a == null || event.getScreen() != a.parent) return;
         if (event.getKeyCode() == 256) {
             active = null;
             event.setCanceled(true);
