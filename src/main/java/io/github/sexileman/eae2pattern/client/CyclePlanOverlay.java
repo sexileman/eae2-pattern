@@ -607,8 +607,10 @@ public final class CyclePlanOverlay {
                                                 / Math.max(1, bh - thumb)));
     }
 
-    // Match a normal screen's order: panel content first, JEI overlays/tooltips afterwards.
-    @SubscribeEvent(priority = net.minecraftforge.eventbus.api.EventPriority.HIGHEST)
+    // Draw last: other mods (AE2CT, JEI, Jade) also hook Render.Post, and anything they paint after
+    // us
+    // ends up on top of this panel - that is exactly the stray icons reported on the cycle screen.
+    @SubscribeEvent(priority = net.minecraftforge.eventbus.api.EventPriority.LOWEST)
     public static void render(ScreenEvent.Render.Post event) {
         if (active != null && event.getScreen() == active.parent)
             active.render(event.getGuiGraphics(), event.getMouseX(), event.getMouseY());

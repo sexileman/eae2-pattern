@@ -399,6 +399,8 @@
   "eae2_pattern.wildcard.fixed_note": "固定收录 · 已保存的配方数量",
   "eae2_pattern.wildcard.edit_hint": "右键编辑",
   "eae2_pattern.wildcard.matched_patterns_dynamic": "已匹配样板：%s（上次编码）",
+  "eae2_pattern.wildcard.mode_dynamic": " · 动态规则",
+  "eae2_pattern.wildcard.mode_fixed": " · 固定收录",
   "eae2_pattern.editor.material_tag": "标签：%s",
   "eae2_pattern.editor.example_item_id": "示例物品：%s",
   "eae2_pattern.editor.example_fluid_id": "示例流体：%s",

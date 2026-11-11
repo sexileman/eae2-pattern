@@ -305,7 +305,15 @@ public final class RegressionChecks {
         check(type.getStyle().getColor()==null,"tooltip styling does not mutate cached JEI titles");
         var fixed=io.github.sexileman.eae2pattern.wildcard.WildcardTooltipText.lines(Component.literal("test:machine"),20,false,"");
         check(fixed.size()==2&&((net.minecraft.network.chat.contents.TranslatableContents)fixed.get(1).getContents()).getKey().endsWith("matched_patterns"),"fixed tooltip has two useful lines when encoder is absent");
+        check(hasMode(lines.get(2),"mode_dynamic"),"dynamic tooltip names its mode");
+        check(hasMode(fixed.get(1),"mode_fixed"),"fixed tooltip names its mode");
     }
+    private static boolean hasMode(Component line,String key) {
+        return line.getSiblings().stream()
+                .anyMatch(c -> c.getContents() instanceof net.minecraft.network.chat.contents.TranslatableContents tc
+                        && tc.getKey().endsWith(key));
+    }
+
     private static void stackedCarriers() {
         check(io.github.sexileman.eae2pattern.wildcard.WildcardCarrierRules.isResetRecipe("eae2_pattern:machine_wildcard_pattern_reset"),"reset recipe is excluded from generic blank-to-blank batch encoding");
         check(!io.github.sexileman.eae2pattern.wildcard.WildcardCarrierRules.isResetRecipe("other:machine_wildcard_pattern_reset"),"reset exclusion does not hide unrelated recipes");

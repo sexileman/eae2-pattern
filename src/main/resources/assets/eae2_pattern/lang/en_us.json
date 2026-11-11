@@ -399,6 +399,8 @@
   "eae2_pattern.wildcard.fixed_note": "Fixed collection · stored recipe count",
   "eae2_pattern.wildcard.edit_hint": "Right-click to edit",
   "eae2_pattern.wildcard.matched_patterns_dynamic": "Matched patterns: %s (last encoded)",
+  "eae2_pattern.wildcard.mode_dynamic": " · dynamic rules",
+  "eae2_pattern.wildcard.mode_fixed": " · fixed snapshot",
   "eae2_pattern.editor.material_tag": "Tag: %s",
   "eae2_pattern.editor.example_item_id": "Example item: %s",
   "eae2_pattern.editor.example_fluid_id": "Example fluid: %s",
