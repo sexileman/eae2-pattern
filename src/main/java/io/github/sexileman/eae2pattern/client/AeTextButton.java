@@ -11,7 +11,7 @@ public final class AeTextButton extends AbstractButton {
     protected void renderWidget(GuiGraphics g,int mx,int my,float partial){
         WorkbenchTheme.control(g,getX(),getY(),getWidth(),getHeight(),isHoveredOrFocused()&&active?WorkbenchTheme.HOVER:WorkbenchTheme.SURFACE,WorkbenchTheme.LINE);
         var font=Minecraft.getInstance().font;var text=font.substrByWidth(getMessage(),Math.max(1,getWidth()-8));
-        g.drawString(font,net.minecraft.locale.Language.getInstance().getVisualOrder(text),getX()+4,getY()+(getHeight()-font.lineHeight)/2,active?WorkbenchTheme.TEXT:WorkbenchTheme.DIM,false);
+        g.drawString(font,net.minecraft.locale.Language.getInstance().getVisualOrder(text),getX()+(getWidth()-font.width(text))/2,getY()+(getHeight()-font.lineHeight)/2,active?WorkbenchTheme.TEXT:WorkbenchTheme.DIM,false);
     }
     protected void updateWidgetNarration(NarrationElementOutput output){defaultButtonNarrationText(output);}
 }

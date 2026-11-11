@@ -8,7 +8,7 @@ import java.util.List;
 
 /** Shared virtual list row for ordinary and wildcard encoding. */
 public final class RecipeListRow {
-    public static final int HEIGHT=38;
+    public static final int HEIGHT=34;
     public interface HitSink { void add(int x,int y,Ingredient ingredient,int side); }
     private RecipeListRow() {}
     public static void draw(GuiGraphics g,Font font,StackVisuals visuals,RecipePlan.Entry entry,int x,int y,int right,
@@ -22,9 +22,9 @@ public final class RecipeListRow {
         if(badgeWidth>0)g.drawString(font,badge,right-badgeWidth,y+3,WorkbenchTheme.DIM,false);
         var columns=RecipeStripLayout.measure(right-x-23);
         var inputs=new ArrayList<>(entry.inputs());inputs.addAll(entry.catalysts());
-        strip(g,font,visuals,inputs,x+19,y+17,columns.inputMax(),columns.inputWidth(),0,hits);
-        g.drawString(font,"→",x+19+columns.arrowX(),y+22,WorkbenchTheme.DIM,false);
-        strip(g,font,visuals,entry.outputs(),x+19+columns.outputX(),y+17,columns.outputMax(),columns.outputWidth(),1,hits);
+        strip(g,font,visuals,inputs,x+19,y+15,columns.inputMax(),columns.inputWidth(),0,hits);
+        g.drawString(font,"→",x+19+columns.arrowX(),y+20,WorkbenchTheme.DIM,false);
+        strip(g,font,visuals,entry.outputs(),x+19+columns.outputX(),y+15,columns.outputMax(),columns.outputWidth(),1,hits);
     }
     private static void strip(GuiGraphics g,Font font,StackVisuals visuals,List<Ingredient> slots,int x,int y,int max,int room,int side,HitSink hits){
         for(int i=0;i<Math.min(max,slots.size());i++){

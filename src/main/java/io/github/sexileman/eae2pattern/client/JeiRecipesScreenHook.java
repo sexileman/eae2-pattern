@@ -41,14 +41,6 @@ public final class JeiRecipesScreenHook {
     }
 
     @SubscribeEvent
-    public static void afterRender(ScreenEvent.Render.Post event) {
-        if (owner.get() != event.getScreen() || actionSlot == null) return;
-        // The item, slot background, hover overlay and tooltip are rendered by JEI. Only add our small plus.
-        var rect = actionSlot.getRect();
-        RecipeIcons.drawPlus(event.getGuiGraphics(), rect.getX() + 10, rect.getY() + 10);
-    }
-
-    @SubscribeEvent
     public static void clicked(ScreenEvent.MouseButtonPressed.Pre event) {
         if (!(event.getScreen() instanceof RecipesGui gui)) return;
         ensureActionSlot(gui);
@@ -84,8 +76,11 @@ public final class JeiRecipesScreenHook {
             if (area.isEmpty() || area.getHeight() - options.getArea().getHeight() - 20 < 16) return;
             IRecipeGuiLogic logic = (IRecipeGuiLogic) access.logic.get(gui);
             List<ITypedIngredient<?>> ingredients = new ArrayList<>(logic.getRecipeCatalysts().toList());
+            // Client-only display marker; never delivered to inventory or encoded as a pattern.
+            var entryIcon = WildcardItems.MACHINE_PATTERN.get().getDefaultInstance();
+            entryIcon.getOrCreateTag().putInt("CustomModelData", 8675309);
             var marker = JeiRuntimeHolder.get().getIngredientManager().createTypedIngredient(
-                    VanillaTypes.ITEM_STACK, WildcardItems.MACHINE_PATTERN.get().getDefaultInstance());
+                    VanillaTypes.ITEM_STACK, entryIcon);
             if (marker.isEmpty()) return;
             ingredients.add(marker.get());
             // Reflow ALL slots with the additional entry. Handles one workstation, full columns and no catalysts.

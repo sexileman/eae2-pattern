@@ -24,7 +24,7 @@ public final class WildcardMachineScreen extends AeToolScreen {
         super(WildcardEditorScreen.tr("pick_machine")); this.categories = categories; this.parent = parent; visible = categories; this.heldTarget = heldTarget;
     }
     @Override protected void init() {
-        var frame=ToolViewport.measure(width,height,420,360);w=frame.width();h=frame.height();x=frame.left();y=frame.top();
+        var frame=ToolViewport.encoding(width,height);w=frame.width();h=frame.height();x=frame.left();y=frame.top();
         addRenderableWidget(new AeTextButton(x+w-54,y+6,46,18,net.minecraft.network.chat.Component.translatable("gui.back"),this::onClose));
         search = addRenderableWidget(new WorkbenchSearchBox(font, x + 10, y + 30, w - 20, title, WildcardEditorScreen.tr("machine_search")));
         search.setResponder(value -> {

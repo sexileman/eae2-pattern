@@ -92,11 +92,11 @@ public final class PatternWorkbenchScreen extends AeToolScreen implements Genera
         bodyTop = layout.bodyTop(); bodyBottom = layout.bodyBottom();
         int half = (panelWidth - 28) / 2;
         if(circuitCatalog==null)circuitCatalog=new CircuitCatalog(plan);
-        int circuitWidth=circuitCatalog.available()?Math.min(86,half/2):0;
+        int circuitWidth=circuitCatalog.available()?87:0;
         circuitButton=null;
-        if(circuitWidth>0) circuitButton=addRenderableWidget(new CircuitFilterButton(left+10+half-circuitWidth,top+searchY, circuitWidth,19,circuitCatalog,()->circuit,
+        if(circuitWidth>0) circuitButton=addRenderableWidget(new CircuitFilterButton(left+panelWidth-68-circuitWidth,headerButtonY(), circuitWidth,19,circuitCatalog,()->circuit,
             ()->minecraft.setScreen(new CircuitPickerScreen(this,circuitCatalog,circuit,c->{circuit=c;refresh();}))));
-        inputBox = addRenderableWidget(new WorkbenchSearchBox(font, left + 16, top + searchY + 5, half - 12 - (circuitWidth>0?circuitWidth+4:0), tr("input")));
+        inputBox = addRenderableWidget(new WorkbenchSearchBox(font, left + 16, top + searchY + 5, half - 12, tr("input")));
         outputBox = addRenderableWidget(new WorkbenchSearchBox(font, left + 24 + half, top + searchY + 5, half - 12, tr("output")));
         inputBox.setMaxLength(160); outputBox.setMaxLength(160);
         inputBox.setBordered(false); outputBox.setBordered(false);
@@ -405,7 +405,7 @@ public final class PatternWorkbenchScreen extends AeToolScreen implements Genera
         iconHits.clear();
 
         WorkbenchTheme.panel(g, left, top, panelWidth, panelHeight);
-        text(g, tr("title").copy().append(" / ").append(plan.machineName()), left + 10, headerButtonY() + (19 - font.lineHeight) / 2, panelWidth - 86, TEXT);
+        text(g, tr("title").copy().append(" / ").append(plan.machineName()), left + 10, headerButtonY() + (19 - font.lineHeight) / 2, panelWidth - (circuitButton==null?86:175), TEXT);
         if (panelHeight >= 230) g.fill(left + 10, top + 27, left + panelWidth - 10, top + 28, LINE);
         searchSurface(g, inputBox); searchSurface(g, outputBox);
         g.fill(split, bodyTop - 27, split + 1, bodyBottom, LINE);
@@ -517,7 +517,7 @@ public final class PatternWorkbenchScreen extends AeToolScreen implements Genera
         scrollbar(g, left + panelWidth - 15, detailScroll, detailContentHeight());
     }
     private int detailHeight(DetailLine line, int width) {
-        if (line.spec != null) return line.presentation.kind() == IngredientPresentation.Kind.REGULAR ? 30 : 42;
+        if (line.spec != null) return line.presentation.kind() == IngredientPresentation.Kind.REGULAR ? 24 : 32;
         if (line.notice) return 32 + font.split(line.text, Math.max(1, (int) (width - 16))).size() * 9;
         return DetailRowLayout.TEXT_HEIGHT;
     }
@@ -539,9 +539,9 @@ public final class PatternWorkbenchScreen extends AeToolScreen implements Genera
                 Component amount = amountText(line.spec);
                 Component state = line.presentation.description();
                 int room = right - x - 24;
-                smallText(g, amount, x + 24, y + 16, room, DIM, .8f);
+                smallText(g, amount, x + 24, y + 15, room, DIM, .5f);
                 if (line.presentation.kind() != IngredientPresentation.Kind.REGULAR)
-                    smallText(g, state, x + 24, y + 28, room, line.presentation.color(), .8f);
+                    smallText(g, state, x + 24, y + 23, room, line.presentation.color(), .5f);
             } else if (line.notice) {
                 int bottom = bodyTop + positions.top(n + 1) - (int) detailScroll - 4;
                 int color = line.color == WorkbenchTheme.WARNING ? WorkbenchTheme.WARNING : DIM;
@@ -609,8 +609,8 @@ public final class PatternWorkbenchScreen extends AeToolScreen implements Genera
         IngredientPresentation presentation = IngredientPresentation.of(ingredient, side);
         return presentation.kind() == IngredientPresentation.Kind.REGULAR ? text : text.copy().append(" · ").append(presentation.description());
     }
-    private void smallText(GuiGraphics g,Component value,int x,int y,int room,int color,float ignoredScale) {
-        text(g,value,x,y,room,color);
+    private void smallText(GuiGraphics g,Component value,int x,int y,int room,int color,float scale) {
+        WorkbenchTheme.text(g,font,value,x,y,room,color,scale);
     }
     private void text(GuiGraphics g,Component value,int x,int y,int room,int color) {
         if(room<1)return;

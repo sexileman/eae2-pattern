@@ -5,7 +5,7 @@ public record WorkbenchLayout(int width, int height, int left, int top, int spli
                               int searchY, int filterY, int toolbarY, int bodyTop, int bodyBottom,
                               int footerTop, int footerHeight, int footerControlsY, int statsY, boolean footerTitle) {
     public static WorkbenchLayout measure(int canvasWidth, int canvasHeight) {
-        var frame=ToolViewport.measure(canvasWidth,canvasHeight,552,440);
+        var frame=ToolViewport.encoding(canvasWidth,canvasHeight);
         int w=frame.width(),h=frame.height(),l=frame.left(),t=frame.top();
         boolean compact = h < 230;
         boolean spacious = h >= 320;

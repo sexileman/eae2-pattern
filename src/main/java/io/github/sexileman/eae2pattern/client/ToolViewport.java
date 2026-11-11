@@ -10,5 +10,8 @@ public record ToolViewport(int left,int top,int width,int height) {
         int top=Math.max(6,(canvasHeight-(canvasHeight>=220?22:0)-height)/2);
         return new ToolViewport((canvasWidth-width)/2,top,width,height);
     }
+    public static ToolViewport encoding(int canvasWidth,int canvasHeight) {
+        return measure(canvasWidth,canvasHeight,380,300);
+    }
     public boolean contains(double x,double y){return x>=left&&x<left+width&&y>=top&&y<top+height;}
 }
