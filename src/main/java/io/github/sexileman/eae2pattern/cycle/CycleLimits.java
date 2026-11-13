@@ -10,12 +10,13 @@ public final class CycleLimits {
     public static final int MAX_STAGES = 512;
     // Numeric representation boundary, not an execution-count or dispatch limit.
     public static final long MAX_QUANTITY = Long.MAX_VALUE;
-    public static final int PROVIDERS_PER_PASS = 256;
+    public static final int PROVIDERS_PER_PASS = 32;
+    public static final int WAIT_WARNING_TICKS = 20 * 60 * 5;
     public static final int INFO_BATCHES = 16;
     public static final int DIAGRAM_BYTES = 262144;
     public static final int DIAGRAM_PATHS = 8;
     public static final int DIAGRAM_PATH_NODES = 9;
-    public static final int CANDIDATE_RECIPES = 4;
+    public static final int CANDIDATE_RECIPES = DIAGRAM_PATH_NODES;
     public static final int DIAGRAM_RECIPES = DIAGRAM_PATHS * CANDIDATE_RECIPES;
     public static final int MATERIAL_TYPES = MAX_RECIPES * MAX_SLOTS;
     public static final int QUERY_INTERVAL_TICKS = 20;

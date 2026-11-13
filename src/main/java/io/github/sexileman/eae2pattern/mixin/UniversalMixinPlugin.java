@@ -95,6 +95,16 @@ public final class UniversalMixinPlugin implements IMixinConfigPlugin {
         return true;
     }
 
+    public static boolean supportedWildcardProvider(ClassNode node) {
+        return node != null
+                && method(node, "updatePatterns", "()V")
+                && field(node, "patterns", "Ljava/util/List;")
+                && field(node, "patternInputs", "Ljava/util/Set;")
+                && field(node, "patternInventory", "Lappeng/util/inv/AppEngInternalInventory;")
+                && field(node, "host", "Lappeng/helpers/patternprovider/PatternProviderLogicHost;")
+                && field(node, "mainNode", "Lappeng/api/networking/IManagedGridNode;");
+    }
+
     public static boolean supportedCycles(
             ClassNode node, ClassNode process, ClassNode calculation) {
         if (node == null || process == null || calculation == null) return false;
@@ -202,6 +212,21 @@ public final class UniversalMixinPlugin implements IMixinConfigPlugin {
 
     @Override
     public boolean shouldApplyMixin(String target, String mixin) {
+        if (mixin.endsWith("MachineWildcardProviderMixin")) {
+            try {
+                boolean supported = supportedWildcardProvider(bytecode.get().getClassNode(target));
+                if (!supported)
+                    com.mojang.logging.LogUtils.getLogger()
+                            .error(
+                                    "EAE2 wildcard provider integration disabled: unsupported AE2 provider contract; encoded items are retained");
+                return supported;
+            } catch (Exception | LinkageError unsupported) {
+                com.mojang.logging.LogUtils.getLogger()
+                        .error("EAE2 wildcard provider integration unavailable", unsupported);
+                return false;
+            }
+        }
+
         if (mixin.endsWith("CycleConfirmScreenMixin"))
             try {
                 return supportedCycleScreen(bytecode.get().getClassNode(target));

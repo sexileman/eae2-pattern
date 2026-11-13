@@ -69,6 +69,25 @@ public final class GrowthRun {
                     reportedBatches);
     }
 
+    private long lastReturnProgress = -1;
+    private long nextReturnWarning = -1;
+
+    private void observeWaiting(long tick) {
+        if (lastReturnProgress < 0 || tick < lastReturnProgress) {
+            lastReturnProgress = tick;
+            nextReturnWarning = tick + CycleLimits.WAIT_WARNING_TICKS;
+        }
+        if (tick >= nextReturnWarning) {
+            io.github.sexileman.eae2pattern.EAE2Pattern.LOGGER.warn(
+                    "[EAE2/Cycles] event=return_stalled run={} idleTicks={} stage={} awaiting={}; task remains active, check machines or cancel manually",
+                    logId,
+                    tick - lastReturnProgress,
+                    ledger.snapshot().stage(),
+                    CycleLog.map(ledger.snapshot().awaiting()));
+            nextReturnWarning = tick + CycleLimits.WAIT_WARNING_TICKS;
+        }
+    }
+
     private boolean reportedEnergy;
     private int reportedBatches;
     private boolean reportedRejection;
@@ -101,7 +120,12 @@ public final class GrowthRun {
             CraftingService service,
             IEnergyService energy,
             Level level) {
-        if (max < 1 || ledger.waiting()) return 0;
+        if (ledger.waiting()) {
+            observeWaiting(level.getGameTime());
+            return 0;
+        }
+        lastReturnProgress = -1;
+        if (max < 1) return 0;
         ledger.advance();
         if (ledger.done()) {
             deliver(cpu);
@@ -240,6 +264,7 @@ public final class GrowthRun {
         if (accepted <= 0) return 0;
         if (action == Actionable.MODULATE) {
             ledger.receive(key, accepted);
+            lastReturnProgress = -1;
             job.eae2$waiting().extract(key, accepted, Actionable.MODULATE);
             cpu.eae2$inventory().insert(key, accepted, Actionable.MODULATE);
             ((GrowthTrackerInvoker) (Object) job.eae2$tracker())

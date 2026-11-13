@@ -28,15 +28,10 @@ public final class GrowthFallback {
             ICraftingSimulationRequester requester,
             ICraftingInventory stock,
             ICraftingPlan original,
-            CycleCapture capture) {
+            CycleCapture capture,
+            boolean cpuSupported) {
         if (!original.simulation() || capture == null) return original;
         boolean enabled = EAE2PatternConfig.EXPERIMENTAL_CYCLES.get();
-        var node = requester.getGridNode();
-        if (node == null) return original;
-        boolean cpuSupported = true;
-        for (var cpu : node.getGrid().getCraftingService().getCpus())
-            if (!(cpu instanceof appeng.me.cluster.implementations.CraftingCPUCluster))
-                cpuSupported = false;
         String reason = "unsupported";
         String detail = "";
         for (var candidate : capture.candidates())

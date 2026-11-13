@@ -29,6 +29,9 @@ public final class MachineWildcardEvents {
     @SubscribeEvent public static void missing(net.minecraftforge.registries.MissingMappingsEvent event) {
         if (net.minecraftforge.fml.ModList.get().isLoaded("wildcard_pattern")) return;
         for (var mapping : event.getMappings(net.minecraftforge.registries.ForgeRegistries.Keys.ITEMS, "wildcard_pattern"))
-            if (mapping.getKey().getPath().equals("wildcard_pattern")) mapping.remap(WildcardItems.MACHINE_PATTERN.get());
+            if (mapping.getKey().getPath().equals("wildcard_pattern")) {
+                EAE2Pattern.LOGGER.info("Migrating missing item {} to eae2_pattern:machine_wildcard_pattern; existing NBT is preserved", mapping.getKey());
+                mapping.remap(WildcardItems.MACHINE_PATTERN.get());
+            }
     }
 }

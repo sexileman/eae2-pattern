@@ -22,7 +22,12 @@ public final class WildcardEditorState {
             if (value < 0 || value > 2) throw new IllegalArgumentException("Invalid wildcard editor option");
             out.putInt(key, value);
         }
-        for(String key:new String[]{"in_form","out_form"})if(!MaterialForms.FORMS.contains(out.getString(key)))throw new IllegalArgumentException("Invalid material form");
+        for(String key:new String[]{"in_form","out_form"})if(!MaterialForms.validForm(out.getString(key)))throw new IllegalArgumentException("Invalid material form");
+        String auxiliary=input.getString("aux_item");
+        if(!auxiliary.isEmpty()){
+            if(auxiliary.length()>256||ResourceLocation.tryParse(auxiliary)==null)throw new IllegalArgumentException("Invalid auxiliary item");
+            out.putString("aux_item",auxiliary);
+        }
         String material=out.getString("material");if(!material.isEmpty()&&!material.matches("[a-z0-9_./-]+"))throw new IllegalArgumentException("Invalid material family");
         var exceptions=input.getList("exclude_ids",8);if(exceptions.size()>2048)throw new IllegalArgumentException("Too many wildcard exceptions");
         var ids=new net.minecraft.nbt.ListTag();var seen=new java.util.HashSet<String>();for(int i=0;i<exceptions.size();i++){String id=exceptions.getString(i);if(id.length()>256||ResourceLocation.tryParse(id)==null)throw new IllegalArgumentException("Invalid excluded recipe");if(seen.add(id))ids.add(net.minecraft.nbt.StringTag.valueOf(id));}out.put("exclude_ids",ids);

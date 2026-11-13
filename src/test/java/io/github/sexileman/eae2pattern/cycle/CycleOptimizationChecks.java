@@ -25,27 +25,27 @@ public final class CycleOptimizationChecks {
         }
     }
 
+    public static final class LongConfig {
+        public static LongConfig INSTANCE = new LongConfig();
+        public long limit = Long.MAX_VALUE;
+        public Long boxed = 4_294_967_296L;
+    }
+
     public static int run() throws Exception {
         var all = new ArrayList<Integer>();
         for (int i = 0; i < 600; i++) all.add(i);
         var cursor = new ProviderCursor<Integer>();
-        var first = cursor.next(all, CycleLimits.PROVIDERS_PER_PASS);
-        var second = cursor.next(all, CycleLimits.PROVIDERS_PER_PASS);
-        var third = cursor.next(all, CycleLimits.PROVIDERS_PER_PASS);
-        check(
-                first.size() == 256 && second.size() == 256 && third.size() == 88,
-                "provider work remains bounded per pass");
-        check(
-                !first.contains(300) && second.contains(300),
-                "an idle provider beyond the old 256 cap is reachable next pass");
         var visited = new ArrayList<Integer>();
-        visited.addAll(first);
-        visited.addAll(second);
-        visited.addAll(third);
+        while (visited.size() < all.size()) {
+            var pass = cursor.next(all, CycleLimits.PROVIDERS_PER_PASS);
+            check(
+                    !pass.isEmpty() && pass.size() <= CycleLimits.PROVIDERS_PER_PASS,
+                    "provider work remains bounded and progresses each pass");
+            visited.addAll(pass);
+        }
         check(
                 visited.equals(all),
-                "stable provider view is visited completely without starving or duplicating its"
-                        + " tail");
+                "bounded scanning reaches every provider without starvation or duplicates");
         check(cursor.next(all, 256).get(0) == 0, "exhausted scan restarts normally");
         check(
                 cursor.next(List.of(999), 256).equals(List.of(999)),
@@ -136,12 +136,158 @@ public final class CycleOptimizationChecks {
         var singleton = ReloadableConfig.class.getField("INSTANCE");
         var field = ReloadableConfig.class.getField("limit");
         check(
-                GrowthBatchBridge.readSingletonInt(singleton, field) == 4,
+                GrowthBatchBridge.readSingletonLong(singleton, field) == 4,
                 "optional scaling reads the current config instance");
         ReloadableConfig.INSTANCE = new ReloadableConfig(32);
         check(
-                GrowthBatchBridge.readSingletonInt(singleton, field) == 32,
+                GrowthBatchBridge.readSingletonLong(singleton, field) == 32,
                 "cached reflection preserves replacement-based config reload");
+        var longSingleton = LongConfig.class.getField("INSTANCE");
+        check(
+                GrowthBatchBridge.readSingletonLong(
+                                longSingleton, LongConfig.class.getField("limit"))
+                        == Long.MAX_VALUE,
+                "long global scaling limit is not narrowed or rejected by integer field reflection");
+        check(
+                GrowthBatchBridge.readSingletonLong(
+                                longSingleton, LongConfig.class.getField("boxed"))
+                        == 4_294_967_296L,
+                "boxed long config retains values beyond the unsigned-int boundary");
+        for (long value :
+                new long[] {
+                    -1,
+                    0,
+                    1,
+                    Integer.MAX_VALUE,
+                    (long) Integer.MAX_VALUE + 1,
+                    4_294_967_296L,
+                    Long.MAX_VALUE
+                })
+            check(
+                    GrowthBatchBridge.readMultiplierLimit(value) == value,
+                    "per-pattern long limits preserve exact values including unlimited sentinels");
+        check(
+                GrowthBatchBridge.readMultiplierLimit(Integer.MAX_VALUE) == Integer.MAX_VALUE,
+                "legacy int multiplier API stays compatible");
+        boolean invalidLimit = false;
+        try {
+            GrowthBatchBridge.readMultiplierLimit(1.5d);
+        } catch (IllegalArgumentException expected) {
+            invalidLimit = true;
+        }
+        check(
+                invalidLimit,
+                "changed non-integral optional contract triggers fallback instead of truncation");
+        var nodeA =
+                new io.github.sexileman.eae2pattern.client.CyclePathExport.Node(
+                        "<script>alert(1)</script>", "test:a", "item", "{name:\"<unsafe>\"}");
+        var nodeB =
+                new io.github.sexileman.eae2pattern.client.CyclePathExport.Node(
+                        "Fluid B", "test:b", "fluid", "");
+        var route =
+                new io.github.sexileman.eae2pattern.client.CyclePathExport.Route(
+                        "Path 1", List.of(nodeA, nodeB, nodeA));
+        var export =
+                new io.github.sexileman.eae2pattern.client.CyclePathExport.Document(
+                        1,
+                        "current_displayed_paths",
+                        "2026-11-14",
+                        "Cycles",
+                        "Current snapshot",
+                        "A x 10",
+                        "Detected",
+                        List.of(route),
+                        List.of(
+                                new io.github.sexileman.eae2pattern.client.CyclePathExport.Recipe(
+                                        1,
+                                        List.of(
+                                                new io.github.sexileman.eae2pattern.client
+                                                        .CyclePathExport.Amount(
+                                                        nodeB,
+                                                        "9223372036854775807",
+                                                        "mB",
+                                                        "9,223,372,036,854,775.807 B")),
+                                        List.of(
+                                                new io.github.sexileman.eae2pattern.client
+                                                        .CyclePathExport.Amount(
+                                                        nodeA, "64", "item", "64"),
+                                                new io.github.sexileman.eae2pattern.client
+                                                        .CyclePathExport.Amount(
+                                                        nodeB, "144", "mB", "0.144 B")))),
+                        "Recipe not captured");
+        String html = io.github.sexileman.eae2pattern.client.CyclePathExport.html(export);
+        check(
+                !html.contains("<script>")
+                        && html.contains("&lt;script&gt;")
+                        && html.contains("&lt;unsafe&gt;"),
+                "exported names and NBT cannot inject HTML");
+        var json =
+                com.google.gson.JsonParser.parseString(
+                                io.github.sexileman.eae2pattern.client.CyclePathExport.json(export))
+                        .getAsJsonObject();
+        var exportedRecipe = json.getAsJsonArray("recipes").get(0).getAsJsonObject();
+        check(
+                exportedRecipe
+                        .getAsJsonArray("inputs")
+                        .get(0)
+                        .getAsJsonObject()
+                        .get("rawAmount")
+                        .getAsString()
+                        .equals("9223372036854775807"),
+                "exported recipe quantities retain exact long precision as strings");
+        check(
+                exportedRecipe.getAsJsonArray("outputs").size() == 2,
+                "export includes all declared byproducts instead of only the main output");
+        check(
+                html.contains("id=\"recipe-1\"") && html.contains("144 mB"),
+                "HTML includes linked full recipes and exact fluid units");
+        var exportedNodes =
+                json.getAsJsonArray("paths").get(0).getAsJsonObject().getAsJsonArray("nodes");
+        check(
+                exportedNodes.size() == 3
+                        && exportedNodes
+                                .get(2)
+                                .getAsJsonObject()
+                                .get("id")
+                                .getAsString()
+                                .equals("test:a"),
+                "JSON preserves exact path order and the repeated closing node");
+        check(
+                exportedNodes.get(1).getAsJsonObject().get("kind").getAsString().equals("fluid"),
+                "export distinguishes fluid and item nodes");
+        check(
+                io.github.sexileman.eae2pattern.client.CyclePathExport.capture(
+                                CycleDiagramSnapshot.state(CycleDiagramSnapshot.State.NONE))
+                        .paths()
+                        .isEmpty(),
+                "empty display exports no invented network paths");
+        var exportRoot = java.nio.file.Files.createTempDirectory("eae2-cycle-export-test-");
+        var firstExport =
+                io.github.sexileman.eae2pattern.client.CyclePathExport.writeFiles(
+                        export, exportRoot);
+        var secondExport =
+                io.github.sexileman.eae2pattern.client.CyclePathExport.writeFiles(
+                        export, exportRoot);
+        check(
+                !firstExport.equals(secondExport),
+                "repeated exports create independent reports without overwriting");
+        check(
+                java.nio.file.Files.readString(
+                                firstExport.resolve("paths.html"),
+                                java.nio.charset.StandardCharsets.UTF_8)
+                        .equals(html),
+                "HTML report is written completely as UTF-8");
+        check(
+                com.google.gson.JsonParser.parseString(
+                                java.nio.file.Files.readString(firstExport.resolve("paths.json")))
+                        .equals(json),
+                "JSON file matches the same exported snapshot as HTML");
+        for (var directory : List.of(firstExport, secondExport)) {
+            java.nio.file.Files.delete(directory.resolve("paths.html"));
+            java.nio.file.Files.delete(directory.resolve("paths.json"));
+            java.nio.file.Files.delete(directory);
+        }
+        java.nio.file.Files.delete(exportRoot);
         var bounds = io.github.sexileman.eae2pattern.client.CyclePanelLayout.fit(600, 400);
         check(
                 bounds.width() == 350

@@ -492,5 +492,16 @@
   "eae2_pattern.cycle.alpha.limit": "循环计划超过当前执行次数上限；请在材料缺口页查看完整核算。",
   "eae2_pattern.diagram.required_heading": "需求",
   "eae2_pattern.diagram.available_heading": "可用",
-  "eae2_pattern.diagram.missing_heading": "缺口"
+  "eae2_pattern.diagram.missing_heading": "缺口",
+  "eae2_pattern.wildcard.mode_dynamic": "模式：动态规则",
+  "eae2_pattern.wildcard.mode_fixed": "模式：固定收录",
+  "eae2_pattern.editor.auxiliary": "不消耗物品",
+  "eae2_pattern.editor.auxiliary_all": "不限",
+  "eae2_pattern.editor.auxiliary_value": "不消耗物品：%s",
+  "eae2_pattern.diagram.export_paths": "导出路径",
+  "eae2_pattern.diagram.export_busy": "导出中…",
+  "eae2_pattern.diagram.export_done": "已导出（悬停查看路径）",
+  "eae2_pattern.diagram.export_failed": "导出失败，请查看日志",
+  "eae2_pattern.diagram.export_notice": "仅包含当前界面列出的路径，与当前合成计划快照一致。",
+  "eae2_pattern.diagram.export_recipe_unavailable": "当前快照未捕获此节点的配方"
 }

@@ -1,0 +1,15 @@
+{
+  "includes": [
+    "common/common.json"
+  ],
+  "generatedBackground": {
+    "width": 350,
+    "height": 250
+  },
+  "widgets": {
+    "back": {
+      "right": 22,
+      "top": 0
+    }
+  }
+}

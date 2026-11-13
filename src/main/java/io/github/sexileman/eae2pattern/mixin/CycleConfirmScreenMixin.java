@@ -28,6 +28,9 @@ public abstract class CycleConfirmScreenMixin extends AEBaseScreen<CraftConfirmM
             CallbackInfo ci) {
         addToLeftToolbar(
                 new io.github.sexileman.eae2pattern.client.CycleToolbarButton(
-                        (CraftConfirmScreen) (Object) this));
+                        () ->
+                                switchToScreen(
+                                        new io.github.sexileman.eae2pattern.client.CyclePlanScreen(
+                                                (CraftConfirmScreen) (Object) this))));
     }
 }

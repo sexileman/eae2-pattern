@@ -27,6 +27,7 @@ public final class WildcardTooltipText {
         if(!encoder.isEmpty())lines.add(Component.translatable("eae2_pattern.wildcard.encoder",encoder).withStyle(ChatFormatting.GRAY));
         lines.add(Component.translatable("eae2_pattern.wildcard.encoding_type",type.copy().withStyle(ChatFormatting.LIGHT_PURPLE)).withStyle(ChatFormatting.GRAY));
         lines.add(Component.translatable("eae2_pattern.wildcard.matched_patterns",Component.literal(Integer.toString(count)).withStyle(ChatFormatting.WHITE)).withStyle(ChatFormatting.GRAY));
+        lines.add(Component.translatable(dynamic ? "eae2_pattern.wildcard.mode_dynamic" : "eae2_pattern.wildcard.mode_fixed").withStyle(ChatFormatting.GRAY));
         return lines;
     }
 }

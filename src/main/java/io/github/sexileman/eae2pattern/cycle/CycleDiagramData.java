@@ -98,6 +98,21 @@ public final class CycleDiagramData {
                 if (growth == null)
                     for (var recipe :
                             witness.patterns().stream()
+                                    .filter(
+                                            recipe ->
+                                                    recipe.outputs().stream()
+                                                            .anyMatch(
+                                                                    output ->
+                                                                            witness.path().stream()
+                                                                                    .limit(
+                                                                                            CycleLimits
+                                                                                                    .DIAGRAM_PATH_NODES)
+                                                                                    .anyMatch(
+                                                                                            key ->
+                                                                                                    key
+                                                                                                            .equals(
+                                                                                                                    output
+                                                                                                                            .what()))))
                                     .limit(CycleLimits.CANDIDATE_RECIPES)
                                     .toList()) {
                         var entry = new CompoundTag();

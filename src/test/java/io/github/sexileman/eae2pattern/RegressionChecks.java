@@ -264,7 +264,7 @@ public final class RegressionChecks {
             }return null;
         });
         io.github.sexileman.eae2pattern.compat.jei.ToolJeiHandlers.register(registration);
-        check(screens.remove(appeng.client.gui.me.crafting.CraftConfirmScreen.class)!=null,
+        check(screens.remove(io.github.sexileman.eae2pattern.client.CyclePlanScreen.class)!=null,
                 "cycle inspection overlay registers dynamic JEI screen bounds");
         check(screens.size()==6&&ghosts.size()==6&&globals.size()==1,"all six tool pages register screen, ghost and shared ingredient integration");
         check(screens.keySet().equals(ghosts.keySet()),"every JEI-visible page participates in ghost drag lifecycle");
@@ -296,15 +296,17 @@ public final class RegressionChecks {
         check(io.github.sexileman.eae2pattern.wildcard.WildcardTooltipText.isGeneratedName(generated),"old generated item names normalize without rewriting saved NBT");
         check(!io.github.sexileman.eae2pattern.wildcard.WildcardTooltipText.isGeneratedName(Component.literal("My custom pattern")),"player-chosen literal names remain untouched");
         var type=Component.literal("Wiremill");var lines=io.github.sexileman.eae2pattern.wildcard.WildcardTooltipText.lines(type,325,true,"player");
-        check(lines.size()==3&&lines.stream().noneMatch(c->c.getString().isEmpty()),"compact tooltip has no blank spacer or redundant mode lines");
+        check(lines.size()==4&&lines.stream().noneMatch(c->c.getString().isEmpty()),"compact tooltip includes mode without blank spacers");
         var encoding=(net.minecraft.network.chat.contents.TranslatableContents)lines.get(1).getContents();
         check(encoding.getKey().endsWith("encoding_type")&&((Component)encoding.getArgs()[0]).getString().equals("Wiremill"),"encoding type displays the local category title, not a GT-only metadata field");
         var count=(net.minecraft.network.chat.contents.TranslatableContents)lines.get(2).getContents();
         check(count.getKey().endsWith("matched_patterns")&&((Component)count.getArgs()[0]).getString().equals("325"),"matched count is a separate primary field");
         check(((Component)encoding.getArgs()[0]).getStyle().getColor().equals(net.minecraft.network.chat.TextColor.fromLegacyFormat(net.minecraft.ChatFormatting.LIGHT_PURPLE)),"recipe type uses the native processing-pattern purple");
+        check(((net.minecraft.network.chat.contents.TranslatableContents)lines.get(3).getContents()).getKey().endsWith("mode_dynamic"),"dynamic tooltip identifies actual encoding mode");
         check(type.getStyle().getColor()==null,"tooltip styling does not mutate cached JEI titles");
         var fixed=io.github.sexileman.eae2pattern.wildcard.WildcardTooltipText.lines(Component.literal("test:machine"),20,false,"");
-        check(fixed.size()==2&&((net.minecraft.network.chat.contents.TranslatableContents)fixed.get(1).getContents()).getKey().endsWith("matched_patterns"),"fixed tooltip has two useful lines when encoder is absent");
+        check(fixed.size()==3&&((net.minecraft.network.chat.contents.TranslatableContents)fixed.get(1).getContents()).getKey().endsWith("matched_patterns"),"fixed tooltip includes recipe type, count and mode");
+        check(((net.minecraft.network.chat.contents.TranslatableContents)fixed.get(2).getContents()).getKey().endsWith("mode_fixed"),"legacy and fixed tooltip identify fixed collection");
     }
     private static void stackedCarriers() {
         check(io.github.sexileman.eae2pattern.wildcard.WildcardCarrierRules.isResetRecipe("eae2_pattern:machine_wildcard_pattern_reset"),"reset recipe is excluded from generic blank-to-blank batch encoding");
@@ -353,6 +355,24 @@ public final class RegressionChecks {
         var allChance=new io.github.sexileman.eae2pattern.wildcard.RuleRecipe(raw.id(),raw.inputs(),List.of(raw.outputs().get(0)));
         check(allChance.encodeSpec(1,2,true)==null,"main-only dynamic recipe rejects all-chance outputs");
         check(allChance.encodeSpec(1,0,true).outputs().size()==1,"all-output dynamic policy retains chance products");
+        var auxiliaryRules=new CompoundTag();auxiliaryRules.putString("aux_item",tool.id().toString());
+        auxiliaryRules.putBoolean("search_tools",false);
+        check(new io.github.sexileman.eae2pattern.wildcard.DynamicRule(auxiliaryRules).matches(raw),"auxiliary item condition is independent of text-search tools toggle");
+        auxiliaryRules.putString("aux_item","test:other_mold");
+        check(!new io.github.sexileman.eae2pattern.wildcard.DynamicRule(auxiliaryRules).matches(raw),"different molds do not match the auxiliary item condition");
+        var consumedTool=new io.github.sexileman.eae2pattern.wildcard.RuleRecipe(raw.id(),List.of(new io.github.sexileman.eae2pattern.wildcard.RuleRecipe.Slot(tool,1)),raw.outputs());
+        auxiliaryRules.putString("aux_item",tool.id().toString());
+        check(!new io.github.sexileman.eae2pattern.wildcard.DynamicRule(auxiliaryRules).matches(consumedTool),"normally consumed item cannot satisfy a mold condition");
+        check(!io.github.sexileman.eae2pattern.wildcard.WildcardEditorState.clean(new CompoundTag()).contains("aux_item"),"default auxiliary condition preserves old rule fingerprints");
+        for(String form:List.of("gt_prefix:toolHeadDrill","tag_family:forge:lenses","tag_family:c:custom_parts")){
+            var state=new CompoundTag();state.putString("out_form",form);
+            check(io.github.sexileman.eae2pattern.wildcard.WildcardEditorState.clean(state).getString("out_form").equals(form),"new material form survives server rule validation");
+        }
+        check(io.github.sexileman.eae2pattern.wildcard.MaterialForms.prefixForm("rod").equals("rods"),"legacy GT prefix mapping remains stable");
+        check(io.github.sexileman.eae2pattern.wildcard.MaterialForms.prefixForm("toolHeadDrill").equals("gt_prefix:toolHeadDrill"),"unlisted GT tool-head prefix has a stable dynamic form identity");
+        check(io.github.sexileman.eae2pattern.wildcard.MaterialForms.formsFromTags(List.of("forge:lenses/ruby")).contains("tag_family:forge:lenses"),"unknown common material families are discoverable without GT");
+        for(String form:List.of("gt_prefix:","gt_prefix:../bad","tag_family:minecraft:items","tag_family:forge:lenses/ruby"))
+            check(!io.github.sexileman.eae2pattern.wildcard.MaterialForms.validForm(form),"invalid extended form is rejected");
         var noInput=new io.github.sexileman.eae2pattern.wildcard.RuleRecipe(raw.id(),List.of(new io.github.sexileman.eae2pattern.wildcard.RuleRecipe.Slot(tool,0)),raw.outputs());
         check(noInput.encodeSpec(1,0,true)==null,"dynamic recipe with only removed tools is not advertised");
         var huge=new io.github.sexileman.eae2pattern.wildcard.RuleRecipe(raw.id(),List.of(new io.github.sexileman.eae2pattern.wildcard.RuleRecipe.Slot(ingot.withAmount(Long.MAX_VALUE),1)),raw.outputs());
@@ -382,7 +402,7 @@ public final class RegressionChecks {
         for(int bad:new int[]{-1,2049}){rejected=false;try{io.github.sexileman.eae2pattern.wildcard.MachineWildcardData.dynamic(machine,rules,bad);}catch(IllegalArgumentException expected){rejected=true;}check(rejected,"dynamic initial count boundary: "+bad);}
         for(String badKey:List.of("in_form","material")){var bad=rules.copy();bad.putString(badKey,"INVALID");rejected=false;try{io.github.sexileman.eae2pattern.wildcard.WildcardEditorState.clean(bad);}catch(IllegalArgumentException expected){rejected=true;}check(rejected,"invalid structured condition rejected: "+badKey);}
         var forms=io.github.sexileman.eae2pattern.wildcard.MaterialForms.formsFromTags(List.of("forge:ingots/iron","c:plates/iron","other:gears/iron","forge:ingot"));
-        check(forms.equals(java.util.Set.of("ingots","plates")),"forms use registered common tag families, not guessed singular names or arbitrary namespaces");
+        check(forms.equals(java.util.Set.of("ingots","plates","tag_family:forge:ingot")),"common tag families are discovered exactly without alias guessing or arbitrary namespaces");
         check(io.github.sexileman.eae2pattern.wildcard.MaterialForms.materialsFromTags(List.of("forge:ingots/iron","c:plates/iron","forge:ingots/rubber")).equals(java.util.Set.of("iron","rubber")),"material candidates are extracted without user typing tags");
         check(io.github.sexileman.eae2pattern.wildcard.MaterialForms.formsFromTags(List.of("forge:plates","forge:plates/double/iron")).equals(java.util.Set.of("double_plates")),"nested common forms do not match generic plates");
         check(io.github.sexileman.eae2pattern.wildcard.MaterialForms.materialsFromTags(List.of("forge:plates/double/iron","forge:plates/double")).equals(java.util.Set.of("iron")),"nested form paths extract the actual material rather than double/iron");

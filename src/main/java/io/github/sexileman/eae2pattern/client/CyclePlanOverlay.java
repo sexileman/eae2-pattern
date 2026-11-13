@@ -4,9 +4,7 @@ import appeng.api.client.AEKeyRendering;
 import appeng.api.stacks.AEFluidKey;
 import appeng.api.stacks.AmountFormat;
 import appeng.api.stacks.GenericStack;
-import appeng.client.gui.me.crafting.CraftConfirmScreen;
 
-import io.github.sexileman.eae2pattern.EAE2Pattern;
 import io.github.sexileman.eae2pattern.client.CyclePlanViewModel.Row;
 import io.github.sexileman.eae2pattern.client.CyclePlanViewModel.Tab;
 import io.github.sexileman.eae2pattern.cycle.CycleDiagramSnapshot.MaterialKind;
@@ -17,32 +15,92 @@ import io.github.sexileman.eae2pattern.net.S2CCycleDiagramPacket;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.network.chat.Component;
-import net.minecraftforge.api.distmarker.Dist;
-import net.minecraftforge.client.event.ScreenEvent;
-import net.minecraftforge.event.TickEvent;
-import net.minecraftforge.eventbus.api.SubscribeEvent;
-import net.minecraftforge.fml.common.Mod;
 
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 
-/** Read-only panel drawn over the original menu; opening/closing never replaces the container. */
-@Mod.EventBusSubscriber(modid = EAE2Pattern.MOD_ID, value = Dist.CLIENT)
+/** Content renderer for the native AE2 sub-screen; it does not own the server menu. */
 public final class CyclePlanOverlay {
-    private static CyclePlanOverlay active;
     private List<Tab> tabs = List.of(Tab.MATERIALS, Tab.PATHS, Tab.RECIPES);
-    private final CraftConfirmScreen parent;
+    private final CyclePlanScreen parent;
     private final CycleDiagramSession session;
     private Tab tab = Tab.MATERIALS;
     private int scroll;
     private boolean dragging;
+    private boolean exporting;
+    private Component exportStatus;
+    private java.nio.file.Path exportDirectory;
+
+    private boolean canExportPaths() {
+        return rows.stream().anyMatch(row -> !row.grid() && !row.inputs().isEmpty());
+    }
+
+    private void exportPaths() {
+        if (exporting) return;
+        var document = CyclePathExport.capture(session.snapshot());
+        if (document.paths().isEmpty()) return;
+        exporting = true;
+        exportStatus = null;
+        exportDirectory = null;
+        CyclePathExport.write(
+                document,
+                (directory, error) -> {
+                    exporting = false;
+                    exportDirectory = error == null ? directory : null;
+                    exportStatus = tr(error == null ? "export_done" : "export_failed");
+                });
+    }
+
     private List<Row> rows = List.of();
     private int x, y, w, h, total;
+    private final List<AeToolScreen.IngredientArea> jeiIngredients = new ArrayList<>();
+    private boolean clippingIngredients;
+
+    java.util.Optional<AeToolScreen.IngredientArea> jeiIngredientAt(double mx, double my) {
+        return jeiIngredients.stream()
+                .filter(
+                        area -> {
+                            var bounds = area.bounds();
+                            return mx >= bounds.getX()
+                                    && mx < bounds.getX() + bounds.getWidth()
+                                    && my >= bounds.getY()
+                                    && my < bounds.getY() + bounds.getHeight();
+                        })
+                .findFirst();
+    }
+
+    private void registerIngredient(GenericStack stack, int left, int top, int width, int height) {
+        int right = left + width, bottom = top + height;
+        if (clippingIngredients) {
+            left = Math.max(left, x + 8);
+            right = Math.min(right, x + w - 12);
+            top = Math.max(top, bodyTop());
+            bottom = Math.min(bottom, bodyBottom());
+        }
+        if (right <= left || bottom <= top) return;
+        io.github.sexileman.eae2pattern.pattern.StackSpec spec;
+        if (stack.what() instanceof appeng.api.stacks.AEItemKey item)
+            spec = io.github.sexileman.eae2pattern.pattern.StackSpec.item(item.toStack());
+        else if (stack.what() instanceof AEFluidKey fluid)
+            spec =
+                    new io.github.sexileman.eae2pattern.pattern.StackSpec(
+                            io.github.sexileman.eae2pattern.pattern.StackType.FLUID,
+                            fluid.getId(),
+                            fluid.getTag(),
+                            Math.max(1, stack.amount()));
+        else return;
+        jeiIngredients.add(
+                new AeToolScreen.IngredientArea(
+                        spec,
+                        new net.minecraft.client.renderer.Rect2i(
+                                left, top, right - left, bottom - top)));
+    }
+
     private int measuredWidth = -1;
     private int[] offsets = new int[] {0};
 
-    private CyclePlanOverlay(CraftConfirmScreen parent) {
+    CyclePlanOverlay(CyclePlanScreen parent) {
         this.parent = parent;
         session =
                 new CycleDiagramSession(
@@ -53,31 +111,16 @@ public final class CyclePlanOverlay {
         rebuild();
     }
 
-    public static boolean visible(CraftConfirmScreen parent) {
-        return active != null && active.parent == parent;
-    }
-
-    public static java.util.Optional<net.minecraft.client.renderer.Rect2i> jeiBounds(
-            net.minecraft.client.gui.screens.Screen screen) {
-        var view = active;
-        if (view == null || view.parent != screen) return java.util.Optional.empty();
-        view.layout();
-        return java.util.Optional.of(
-                new net.minecraft.client.renderer.Rect2i(view.x, view.y, view.w, view.h));
-    }
-
-    public static void open(CraftConfirmScreen parent) {
-        active = new CyclePlanOverlay(parent);
-    }
-
     private static Component tr(String key, Object... args) {
         return Component.translatable("eae2_pattern.diagram." + key, args);
     }
 
     public static void accept(S2CCycleDiagramPacket packet) {
-        var view = active;
-        if (view == null || Minecraft.getInstance().screen != view.parent) return;
-        if (view.session.accept(packet.menu(), packet.request(), packet.data())) view.rebuild();
+        if (Minecraft.getInstance().screen instanceof CyclePlanScreen screen) screen.accept(packet);
+    }
+
+    void acceptPacket(S2CCycleDiagramPacket packet) {
+        if (session.accept(packet.menu(), packet.request(), packet.data())) rebuild();
     }
 
     private void rebuild() {
@@ -89,11 +132,10 @@ public final class CyclePlanOverlay {
     }
 
     private void layout() {
-        var bounds = CyclePanelLayout.fit(parent.width, parent.height);
-        w = bounds.width();
-        h = bounds.height();
-        x = bounds.x();
-        y = bounds.y();
+        w = parent.getXSize();
+        h = parent.getYSize();
+        x = parent.getGuiLeft();
+        y = parent.getGuiTop();
         if (measuredWidth != w) measureRows();
     }
 
@@ -122,7 +164,7 @@ public final class CyclePlanOverlay {
         if (row.inputs().isEmpty() && row.outputs().isEmpty()) return 24;
         if (!row.grid())
             return row.outputs().isEmpty()
-                    ? 18 + ((row.inputs().size() + pathColumns() - 1) / pathColumns()) * 32
+                    ? 18 + ((row.inputs().size() + pathColumns() - 1) / pathColumns()) * 40
                     : 52;
         if (!row.outputs().isEmpty()) {
             int cols = recipeColumns();
@@ -162,7 +204,7 @@ public final class CyclePlanOverlay {
     }
 
     private int bodyBottom() {
-        return y + h - 20;
+        return y + h - (tab == Tab.PATHS ? 28 : 20);
     }
 
     private int maxScroll() {
@@ -188,17 +230,16 @@ public final class CyclePlanOverlay {
                 false);
     }
 
-    private void render(GuiGraphics g, int mx, int my) {
+    void render(GuiGraphics g, int mx, int my) {
         layout();
+        jeiIngredients.clear();
+        clippingIngredients = false;
         var font = Minecraft.getInstance().font;
         var data = session.snapshot();
         scroll = Math.min(scroll, maxScroll());
         g.pose().pushPose();
-        // Above the hidden confirmation controls, below standard JEI/tooltips (z=400).
-        g.pose().translate(0, 0, 100);
-        WorkbenchTheme.nativePanel(g, x, y, w, h);
+        // Native confirmation rendering is suspended; keep standard GUI/JEI tooltip depths.
         g.drawString(font, tr("title"), x + 10, y + 11, WorkbenchTheme.TEXT, false);
-        control(g, x + w - 54, y + 7, 44, tr("back"), false);
         var target = data.target();
         if (target != null) {
             icon(g, target, x + 10, y + 27, 1, false);
@@ -221,6 +262,7 @@ public final class CyclePlanOverlay {
         GenericStack hover = null;
         long hoverTimes = 1;
         Row hoverNeed = null;
+        clippingIngredients = true;
         g.enableScissor(x + 8, bodyTop(), x + w - 12, bodyBottom());
         if (tab == Tab.MATERIALS && rows.size() > 1) drawMaterialGrid(g);
 
@@ -336,6 +378,7 @@ public final class CyclePlanOverlay {
                     WorkbenchTheme.DIM,
                     false);
         g.disableScissor();
+        clippingIngredients = false;
         if (maxScroll() > 0) {
             int bh = bodyBottom() - bodyTop(), thumb = Math.max(16, bh * bh / Math.max(1, total));
             int sy = bodyTop() + (bh - thumb) * scroll / maxScroll();
@@ -345,11 +388,39 @@ public final class CyclePlanOverlay {
         if (tab != Tab.MATERIALS) {
             g.drawString(
                     font,
-                    font.plainSubstrByWidth(tr("snapshot").getString(), w - 20),
+                    font.plainSubstrByWidth(
+                            (tab == Tab.PATHS && exportStatus != null
+                                            ? exportStatus
+                                            : tr("snapshot"))
+                                    .getString(),
+                            tab == Tab.PATHS ? w - 100 : w - 20),
                     x + 10,
                     y + h - 13,
                     WorkbenchTheme.DIM,
                     false);
+        }
+        if (tab == Tab.PATHS && canExportPaths()) {
+            control(
+                    g,
+                    x + w - 76,
+                    y + h - 23,
+                    64,
+                    tr(exporting ? "export_busy" : "export_paths"),
+                    false);
+            if (exportDirectory != null
+                    && mx >= x + 10
+                    && mx < x + w - 82
+                    && my >= y + h - 23
+                    && my < y + h - 3)
+                Tooltips.show(
+                        g,
+                        font,
+                        parent.width,
+                        List.of(
+                                exportStatus,
+                                Component.literal(exportDirectory.toAbsolutePath().toString())),
+                        mx,
+                        my);
         }
         if (target != null && mx >= x + 10 && mx < x + w - 12 && my >= y + 27 && my < y + 41) {
             hover = target;
@@ -413,6 +484,7 @@ public final class CyclePlanOverlay {
             GuiGraphics g, Row row, int cx, int cy, int width, int height, boolean hovered) {
         var mc = Minecraft.getInstance();
         var stack = row.inputs().get(0);
+        registerIngredient(stack, cx, cy, width, height);
         int iconX = width - 20;
         g.pose().pushPose();
         g.pose().translate(cx, cy, 0);
@@ -530,25 +602,49 @@ public final class CyclePlanOverlay {
             GuiGraphics g, List<GenericStack> nodes, int sx, int sy, int mx, int my) {
         int cols = Math.max(1, Math.min(nodes.size(), pathColumns()));
         int pitch = Math.min(80, Math.max(1, (w - 28) / cols));
-        int start = sx;
         GenericStack hover = null;
-        var font = Minecraft.getInstance().font;
+        int color = WorkbenchTheme.DIM;
+        // Alternate row direction so a wrapped path remains one continuous chain.
         for (int i = 0; i < nodes.size(); i++) {
-            int dx = start + (i % cols) * pitch, dy = sy + (i / cols) * 32;
-            int iconX = dx + (pitch - 32) / 2;
+            int row = i / cols;
+            boolean reverse = (row & 1) != 0;
+            int col = reverse ? cols - 1 - i % cols : i % cols;
+            int dx = sx + col * pitch, dy = sy + row * 40;
+            int iconX = dx + (pitch - 18) / 2;
+            if (i + 1 < nodes.size()) {
+                boolean turn = (i + 1) % cols == 0;
+                int direction = reverse ? -1 : 1;
+                if (turn) {
+                    int edge = reverse ? dx + 2 : dx + pitch - 3;
+                    int from = reverse ? iconX - 2 : iconX + 20;
+                    g.hLine(Math.min(from, edge), Math.max(from, edge), dy + 8, color);
+                    g.vLine(edge, dy + 8, dy + 48, color);
+                    g.hLine(Math.min(from, edge), Math.max(from, edge), dy + 48, color);
+                    pathArrow(g, from, dy + 48, -direction, color);
+                } else {
+                    int from = reverse ? iconX - 2 : iconX + 20;
+                    int to = reverse ? iconX - pitch + 20 : iconX + pitch - 2;
+                    g.hLine(Math.min(from, to), Math.max(from, to), dy + 8, color);
+                    pathArrow(g, to, dy + 8, direction, color);
+                }
+            }
             icon(g, nodes.get(i), iconX, dy, 1, false);
-            drawStatus(g, nodes.get(i).what().getDisplayName(), dx, dy + 20, pitch - 14);
-            if (i + 1 < nodes.size())
-                g.drawString(
-                        font,
-                        (i + 1) % cols == 0 ? "↓" : "→",
-                        dx + pitch - 13,
-                        dy + 5,
-                        WorkbenchTheme.DIM,
-                        false);
-            if (mx >= dx && mx < dx + pitch - 14 && my >= dy && my < dy + 30) hover = nodes.get(i);
+            var label =
+                    Component.literal(Integer.toString(i + 1) + ". ")
+                            .append(nodes.get(i).what().getDisplayName());
+            drawStatus(g, label, dx + 6, dy + 22, pitch - 12);
+            if (mx >= dx + 6 && mx < dx + pitch - 6 && my >= dy && my < dy + 33)
+                hover = nodes.get(i);
         }
         return hover;
+    }
+
+    private void pathArrow(GuiGraphics g, int tip, int y, int direction, int color) {
+        for (int offset = 1; offset <= 3; offset++) {
+            int px = tip - direction * offset;
+            g.fill(px, y - offset, px + 1, y - offset + 1, color);
+            g.fill(px, y + offset, px + 1, y + offset + 1, color);
+        }
     }
 
     private GenericStack drawStrip(
@@ -577,6 +673,7 @@ public final class CyclePlanOverlay {
 
     private void icon(
             GuiGraphics g, GenericStack stack, int sx, int sy, long times, boolean showAmount) {
+        registerIngredient(stack, sx, sy, 18, 18);
         WorkbenchTheme.slot(g, sx, sy, IngredientPresentation.REGULAR);
         AEKeyRendering.drawInGui(Minecraft.getInstance(), g, sx + 1, sy + 1, stack.what());
         long amount = scaled(stack.amount(), times);
@@ -607,101 +704,51 @@ public final class CyclePlanOverlay {
                                                 / Math.max(1, bh - thumb)));
     }
 
-    // Match a normal screen's order: panel content first, JEI overlays/tooltips afterwards.
-    @SubscribeEvent(priority = net.minecraftforge.eventbus.api.EventPriority.HIGHEST)
-    public static void render(ScreenEvent.Render.Post event) {
-        if (active != null && event.getScreen() == active.parent)
-            active.render(event.getGuiGraphics(), event.getMouseX(), event.getMouseY());
-    }
-
-    @SubscribeEvent
-    public static void click(ScreenEvent.MouseButtonPressed.Pre event) {
-        var a = active;
-        if (a == null
-                || event.getScreen() != a.parent
-                || !a.inside(event.getMouseX(), event.getMouseY())) return;
-        event.setCanceled(true);
-        if (event.getButton() != 0) return;
-        double mx = event.getMouseX(), my = event.getMouseY();
-        if (my >= a.y + 7 && my < a.y + 25 && mx >= a.x + a.w - 54) {
-            active = null;
-            return;
+    boolean mouseClicked(double mx, double my, int button) {
+        layout();
+        // The header belongs to AE2's native return tab. Own only our content and page tabs.
+        if (!inside(mx, my) || my < y + 52) return false;
+        if (button != 0) return true;
+        if (tab == Tab.PATHS
+                && mx >= x + w - 76
+                && mx < x + w - 12
+                && my >= y + h - 23
+                && my < y + h - 5) {
+            if (canExportPaths()) exportPaths();
+            return true;
         }
-        if (my >= a.y + 52 && my < a.y + 70) {
-            int tw = (a.w - 16 - 4 * a.tabs.size()) / a.tabs.size();
-            int tab = (int) (mx - a.x - 10) / (tw + 4);
-            if (tab >= 0 && tab < a.tabs.size()) {
-                a.tab = a.tabs.get(tab);
-                a.rebuild();
+
+        if (my >= y + 52 && my < y + 70) {
+            int tw = (w - 16 - 4 * tabs.size()) / tabs.size();
+            int index = (int) (mx - x - 10) / (tw + 4);
+            if (mx >= x + 10 && index >= 0 && index < tabs.size()) {
+                tab = tabs.get(index);
+                rebuild();
             }
-            return;
+        } else if (mx >= x + w - 13 && my >= bodyTop() && my < bodyBottom()) {
+            dragging = true;
+            drag(my);
         }
-        if (mx >= a.x + a.w - 13 && my >= a.bodyTop() && my < a.bodyBottom()) {
-            a.dragging = true;
-            a.drag(my);
-        }
+        return true;
     }
 
-    @SubscribeEvent
-    public static void wheel(ScreenEvent.MouseScrolled.Pre event) {
-        var a = active;
-        if (a != null
-                && event.getScreen() == a.parent
-                && a.inside(event.getMouseX(), event.getMouseY())) {
-            event.setCanceled(true);
-            a.scroll =
-                    (int)
-                            Math.max(
-                                    0,
-                                    Math.min(
-                                            a.maxScroll(), a.scroll - event.getScrollDelta() * 32));
-        }
+    boolean mouseScrolled(double mx, double my, double delta) {
+        if (!inside(mx, my)) return false;
+        scroll = (int) Math.max(0, Math.min(maxScroll(), scroll - delta * 32));
+        return true;
     }
 
-    @SubscribeEvent
-    public static void drag(ScreenEvent.MouseDragged.Pre event) {
-        var a = active;
-        if (a != null && event.getScreen() == a.parent && a.dragging) {
-            event.setCanceled(true);
-            a.drag(event.getMouseY());
-        }
+    boolean mouseDragged(double my) {
+        if (!dragging) return false;
+        drag(my);
+        return true;
     }
 
-    @SubscribeEvent
-    public static void release(ScreenEvent.MouseButtonReleased.Pre event) {
-        if (active != null && event.getScreen() == active.parent && active.dragging) {
-            active.dragging = false;
-            event.setCanceled(true);
-        }
+    void mouseReleased() {
+        dragging = false;
     }
 
-    @SubscribeEvent
-    public static void key(ScreenEvent.KeyPressed.Pre event) {
-        var a = active;
-        if (a == null || event.getScreen() != a.parent) return;
-        if (event.getKeyCode() == 256) {
-            active = null;
-            event.setCanceled(true);
-            return;
-        }
-        var mc = Minecraft.getInstance();
-        double mx = mc.mouseHandler.xpos() * a.parent.width / mc.getWindow().getScreenWidth(),
-                my = mc.mouseHandler.ypos() * a.parent.height / mc.getWindow().getScreenHeight();
-        // Do not let an inspection key activate a hidden native control under the panel.
-        if (a.inside(mx, my)
-                || event.getKeyCode() == 257
-                || event.getKeyCode() == 32
-                || event.getKeyCode() == 258) event.setCanceled(true);
-    }
-
-    @SubscribeEvent
-    public static void tick(TickEvent.ClientTickEvent event) {
-        if (event.phase != TickEvent.Phase.END || active == null) return;
-        var view = active;
-        if (Minecraft.getInstance().screen != view.parent) {
-            active = null;
-            return;
-        }
-        if (view.session.tick()) view.rebuild();
+    void tick() {
+        if (session.tick()) rebuild();
     }
 }

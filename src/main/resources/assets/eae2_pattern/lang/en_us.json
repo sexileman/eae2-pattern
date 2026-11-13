@@ -492,5 +492,16 @@
   "eae2_pattern.cycle.alpha.limit": "Cycle plan exceeds the execution limit; inspect its full material budget in the cycle panel.",
   "eae2_pattern.diagram.required_heading": "Need",
   "eae2_pattern.diagram.available_heading": "Stock",
-  "eae2_pattern.diagram.missing_heading": "Missing"
+  "eae2_pattern.diagram.missing_heading": "Missing",
+  "eae2_pattern.wildcard.mode_dynamic": "Mode: Dynamic rules",
+  "eae2_pattern.wildcard.mode_fixed": "Mode: Fixed collection",
+  "eae2_pattern.editor.auxiliary": "Non-consumable item",
+  "eae2_pattern.editor.auxiliary_all": "Any",
+  "eae2_pattern.editor.auxiliary_value": "Non-consumable: %s",
+  "eae2_pattern.diagram.export_paths": "Export paths",
+  "eae2_pattern.diagram.export_busy": "Exporting...",
+  "eae2_pattern.diagram.export_done": "Exported (hover for location)",
+  "eae2_pattern.diagram.export_failed": "Export failed; check log",
+  "eae2_pattern.diagram.export_notice": "Contains only the paths listed in the current screen, matching the current crafting-plan snapshot.",
+  "eae2_pattern.diagram.export_recipe_unavailable": "Recipe for this node was not captured in the current snapshot"
 }

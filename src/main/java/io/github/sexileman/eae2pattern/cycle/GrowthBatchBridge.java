@@ -62,14 +62,24 @@ public final class GrowthBatchBridge {
     }
 
     /** Cache field access, never the instance: EAP can replace INSTANCE when reloading config. */
-    static int readSingletonInt(java.lang.reflect.Field singleton, java.lang.reflect.Field value)
+    static long readMultiplierLimit(Object value) {
+        // Optional mods may expose either int or long. Never narrow a long limit to int,
+        // or silently interpret a floating-point/unknown contract as an unlimited batch.
+        if (value instanceof Byte
+                || value instanceof Short
+                || value instanceof Integer
+                || value instanceof Long) return ((Number) value).longValue();
+        throw new IllegalArgumentException("Unsupported scaling limit type");
+    }
+
+    static long readSingletonLong(java.lang.reflect.Field singleton, java.lang.reflect.Field value)
             throws ReflectiveOperationException {
-        return value.getInt(singleton.get(null));
+        return readMultiplierLimit(value.get(singleton.get(null)));
     }
 
     private static final class GlobalLimit {
-        static int read() throws ReflectiveOperationException {
-            return readSingletonInt(Holder.INSTANCE_FIELD, Holder.FIELD);
+        static long read() throws ReflectiveOperationException {
+            return readSingletonLong(Holder.INSTANCE_FIELD, Holder.FIELD);
         }
 
         private static final class Holder {
@@ -101,7 +111,7 @@ public final class GrowthBatchBridge {
                 var access = Eap.ACCESS.get(original.getClass());
                 if (access.isPresent()
                         && Boolean.TRUE.equals(access.get().allowed().invoke(original))) {
-                    int limit = ((Number) access.get().limit().invoke(original)).intValue();
+                    long limit = readMultiplierLimit(access.get().limit().invoke(original));
                     if (limit <= 0) limit = GlobalLimit.read();
                     long times = limit > 0 ? Math.min(requested, limit) : requested;
                     if (times <= 1) return new Batch(original, 1);

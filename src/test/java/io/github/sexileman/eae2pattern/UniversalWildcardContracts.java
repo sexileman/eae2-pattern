@@ -57,7 +57,9 @@ public final class UniversalWildcardContracts {
     public static void main(String[] args) throws Exception {
         Path own = Path.of(args[0]), mods = Path.of(args[1]);
         try(var stream=appeng.helpers.patternprovider.PatternProviderLogic.class.getResourceAsStream("PatternProviderLogic.class")){
-            providerBatchTarget(node(stream.readAllBytes()));
+            var provider=node(stream.readAllBytes());
+            providerBatchTarget(provider);
+            check(UniversalMixinPlugin.supportedWildcardProvider(provider),"baseline wildcard provider contract is supported");
         }
         byte[] bridge;
         try (var app = new ZipFile(own.toFile())) {
@@ -79,6 +81,34 @@ public final class UniversalWildcardContracts {
             var cyclePanel=node(bytes(app,"io/github/sexileman/eae2pattern/client/CyclePlanOverlay.class"));boolean scaledText=false;
             for(var method:cyclePanel.methods)for(var instruction:method.instructions)if(!method.name.equals("drawStatus")&&!method.name.equals("drawMaterialCell")&&!method.name.equals("drawRecipeSlot")&&instruction instanceof MethodInsnNode call&&call.owner.equals("com/mojang/blaze3d/vertex/PoseStack")&&(call.name.equals("scale")||call.name.equals("m_85841_")))scaledText=true;
             check(!scaledText,"cycle panel confines scaling to auxiliary text, AE2 cells and compact slot quantities");
+            var nativeCycle=node(bytes(app,"io/github/sexileman/eae2pattern/client/CyclePlanScreen.class"));
+            check(nativeCycle.superName.equals("appeng/client/gui/AESubScreen"),"cycle inspection uses the native AE2 sub-screen lifecycle");
+            check(nativeCycle.methods.stream().anyMatch(m->m.name.equals("jeiIngredientAt")&&m.desc.equals("(DD)Ljava/util/Optional;")),"native cycle screen exposes custom ingredients to JEI");
+            boolean cycleIngredientBridge=false;
+            var globalHandler=node(bytes(app,"io/github/sexileman/eae2pattern/compat/jei/ToolJeiHandlers$1.class"));
+            for(var method:globalHandler.methods)for(var instruction:method.instructions)
+                if(instruction instanceof MethodInsnNode call&&call.owner.endsWith("/CyclePlanScreen")&&call.name.equals("jeiIngredientAt"))cycleIngredientBridge=true;
+            check(cycleIngredientBridge,"JEI global ingredient handler queries cycle screen instead of only standalone tool screens");
+            int contentClick=-1,nativeClick=-1;
+            for(var method:nativeCycle.methods)if(method.desc.equals("(DDI)Z")){
+                int order=0;
+                for(var instruction:method.instructions){
+                    if(instruction instanceof MethodInsnNode call){
+                        if(call.owner.endsWith("/CyclePlanOverlay")&&call.name.equals("mouseClicked"))contentClick=order;
+                        if(call.getOpcode()==Opcodes.INVOKESPECIAL&&call.owner.equals("appeng/client/gui/AESubScreen"))nativeClick=order;
+                    }
+                    order++;
+                }
+            }
+            check(contentClick>=0&&nativeClick>contentClick,"cycle content receives clicks before the native container can consume them");
+
+
+
+            var fallback=node(bytes(app,"io/github/sexileman/eae2pattern/cycle/GrowthFallback.class"));
+            boolean workerGridAccess=false;
+            for(var method:fallback.methods)for(var instruction:method.instructions)
+                if(instruction instanceof MethodInsnNode call && (call.name.equals("getGridNode")||call.name.equals("getCpus")))workerGridAccess=true;
+            check(!workerGridAccess,"cycle worker never queries live grid nodes or CPU collections");
             var growth=node(bytes(app,"io/github/sexileman/eae2pattern/cycle/GrowthRun.class"));
             boolean providerRoute=false,nativeInputs=false,physicalReserve=false;
             for(var method:growth.methods)for(var insn:method.instructions)if(insn instanceof MethodInsnNode call){
@@ -178,6 +208,15 @@ public final class UniversalWildcardContracts {
             var nativePlan=node(bytes(ae,"appeng/crafting/CraftingPlan.class"));
             check(UniversalMixinPlugin.supportedGrowthPlan(nativePlan),"installed AE2 supports the native phase attachment carrier");
             providerBatchTarget(node(bytes(ae,"appeng/helpers/patternprovider/PatternProviderLogic.class")));
+            var wildcardProvider=node(bytes(ae,"appeng/helpers/patternprovider/PatternProviderLogic.class"));
+            check(UniversalMixinPlugin.supportedWildcardProvider(wildcardProvider),"installed wildcard provider contract is supported");
+            for(String field:List.of("patterns","patternInputs","patternInventory","host","mainNode")){
+                var changedProvider=node(bytes(ae,"appeng/helpers/patternprovider/PatternProviderLogic.class"));
+                changedProvider.fields.removeIf(f->f.name.equals(field));
+                check(!UniversalMixinPlugin.supportedWildcardProvider(changedProvider),"missing provider field disables integration: "+field);
+            }
+            wildcardProvider.methods.removeIf(m->m.name.equals("updatePatterns"));
+            check(!UniversalMixinPlugin.supportedWildcardProvider(wildcardProvider),"missing provider update method disables integration");
             check(UniversalMixinPlugin.supportedCycleMenu(node(bytes(ae,"appeng/menu/me/crafting/CraftConfirmMenu.class"))),"installed confirmation menu exposes the exact current native plan");
             check(UniversalMixinPlugin.supportedCycleScreen(node(bytes(ae,"appeng/client/gui/me/crafting/CraftConfirmScreen.class"))),"installed confirmation screen supports native toolbar injection");
 
@@ -256,8 +295,15 @@ public final class UniversalWildcardContracts {
         check(plugin.shouldApplyMixin(expansion, "GtlWildcardExpansionMixin"), "GTL expansion remains enabled as a pair");
         check(calls[0] >= 4, "real provider used the transformer-loader callback rather than failing before class lookup");
         int before = calls[0];
-        check(plugin.shouldApplyMixin("appeng.helpers.patternprovider.PatternProviderLogic", "MachineWildcardProviderMixin") && calls[0] == before,
-                "ordinary AE2 adapter does not request optional bytecode");
+        String nativeProvider="appeng.helpers.patternprovider.PatternProviderLogic";
+        try(var stream=appeng.helpers.patternprovider.PatternProviderLogic.class.getResourceAsStream("PatternProviderLogic.class")){
+            fixtures.put(nativeProvider,stream.readAllBytes());
+        }
+        check(plugin.shouldApplyMixin(nativeProvider,"MachineWildcardProviderMixin") && calls[0] > before,
+                "native AE2 provider is checked through the supported bytecode lookup");
+        fixtures.remove(nativeProvider);
+        check(!plugin.shouldApplyMixin(nativeProvider,"MachineWildcardProviderMixin"),
+                "missing native provider disables integration rather than failing mixin application");
         byte[] saved = fixtures.remove(expansion);
         var missing = new UniversalMixinPlugin(() -> provider);
         check(!missing.shouldApplyMixin(activation, "GtlWildcardActivationMixin"), "missing GTL half is nonfatal in actual launcher provider");

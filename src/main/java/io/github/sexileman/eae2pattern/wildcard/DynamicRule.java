@@ -10,7 +10,11 @@ public final class DynamicRule {
         String[] keys={"in_include","in_exclude","out_include","out_exclude"};for(int i=0;i<4;i++)queries[i]=new PortableRuleQuery(state.getString(keys[i]));
         var ids=state.getList("exclude_ids",8);for(int i=0;i<ids.size();i++)excluded.add(ids.getString(i));
     }
-    public boolean matches(RuleRecipe recipe){return circuit.matches(recipe.inputs())&&!excluded.contains(recipe.id().toString())&&side(recipe.inputs(),true)&&side(recipe.outputs(),false);}
+    public boolean matches(RuleRecipe recipe){return matchesAuxiliary(recipe.inputs())&&circuit.matches(recipe.inputs())&&!excluded.contains(recipe.id().toString())&&side(recipe.inputs(),true)&&side(recipe.outputs(),false);}
+    private boolean matchesAuxiliary(List<RuleRecipe.Slot> slots){
+        String id=state.getString("aux_item");
+        return id.isEmpty()||slots.stream().anyMatch(s->s.auxiliary()&&s.stack().isItem()&&CircuitCondition.configuration(s.stack())<0&&s.stack().id().toString().equals(id));
+    }
     private boolean side(List<RuleRecipe.Slot> source,boolean input){
         String prefix=input?"in_":"out_";int scope=state.getInt(prefix+"scope");
         var slots=source.stream().filter(s->!input||state.getBoolean("search_tools")||!s.auxiliary()).filter(s->scope==0||(scope==1)==s.stack().isItem()).map(RuleRecipe.Slot::stack).toList();

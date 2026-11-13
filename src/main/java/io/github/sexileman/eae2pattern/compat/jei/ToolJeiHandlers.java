@@ -15,25 +15,26 @@ import java.util.*;
 public final class ToolJeiHandlers {
     private ToolJeiHandlers(){}
     public static void register(IGuiHandlerRegistration registration){
-        registration.addGuiScreenHandler(appeng.client.gui.me.crafting.CraftConfirmScreen.class, screen -> {
-            var area = CyclePlanOverlay.jeiBounds(screen).orElseGet(() ->
-                    new Rect2i(screen.getGuiLeft(), screen.getGuiTop(), screen.getXSize(), screen.getYSize()));
-            return ToolGuiProperties.capture(screen.getClass(), area, screen.width, screen.height);
-        });
+        registration.addGuiScreenHandler(CyclePlanScreen.class, screen -> ToolGuiProperties.capture(
+                screen.getClass(),new Rect2i(screen.getGuiLeft(),screen.getGuiTop(),screen.getXSize(),screen.getYSize()),
+                screen.width,screen.height));
         screen(registration,PatternWorkbenchScreen.class);screen(registration,WildcardEditorScreen.class);
         screen(registration,WildcardChoiceScreen.class);screen(registration,WildcardMachineScreen.class);
         screen(registration,MachinePickerScreen.class);screen(registration,CollectingScreen.class);
         registration.addGlobalGuiHandler(new IGlobalGuiHandler(){
             @Override public Collection<Rect2i> getGuiExtraAreas(){
                 var current = Minecraft.getInstance().screen;
-                var cycle = CyclePlanOverlay.jeiBounds(current);
-                if(cycle.isPresent())return List.of(cycle.get());
+                if(current instanceof CyclePlanScreen cycle)return cycle.getExclusionZones();
                 return current instanceof AeToolScreen tool?tool.jeiExtraAreas():List.of();
             }
             @Override public Optional<IClickableIngredient<?>> getClickableIngredientUnderMouse(double x,double y){
-                if(!(Minecraft.getInstance().screen instanceof AeToolScreen tool))return Optional.empty();
+                var current=Minecraft.getInstance().screen;
+                Optional<AeToolScreen.IngredientArea> ingredient;
+                if(current instanceof CyclePlanScreen cycle)ingredient=cycle.jeiIngredientAt(x,y);
+                else if(current instanceof AeToolScreen tool)ingredient=tool.jeiIngredientAt(x,y);
+                else return Optional.empty();
                 var runtime=JeiRuntimeHolder.get();if(runtime==null)return Optional.empty();
-                return tool.jeiIngredientAt(x,y).flatMap(area->{
+                return ingredient.flatMap(area->{
                     var spec=area.ingredient();
                     if(spec.isItem())return runtime.getIngredientManager().createClickableIngredient(mezz.jei.api.constants.VanillaTypes.ITEM_STACK,spec.toItemStack(),area.bounds(),false).map(c->(IClickableIngredient<?>)c);
                     var fluid=net.minecraftforge.registries.ForgeRegistries.FLUIDS.getValue(spec.id());

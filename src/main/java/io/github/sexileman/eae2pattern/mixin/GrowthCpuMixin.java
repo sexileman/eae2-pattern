@@ -86,6 +86,7 @@ public abstract class GrowthCpuMixin implements GrowthCpuView {
                                 + eae2$growth.logId()
                                 + "; cancelling and returning native inventory",
                         failure);
+                eae2$growth.logState("execution_failure_state");
                 cancel();
                 ci.setReturnValue(0);
             }

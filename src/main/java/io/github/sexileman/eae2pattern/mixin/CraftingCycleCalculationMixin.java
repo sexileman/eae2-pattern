@@ -9,6 +9,7 @@ import net.minecraft.world.level.Level;
 
 import org.spongepowered.asm.mixin.*;
 import org.spongepowered.asm.mixin.injection.*;
+import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
 @Mixin(value = CraftingCalculation.class, remap = false)
@@ -17,6 +18,24 @@ public abstract class CraftingCycleCalculationMixin implements CycleCalculation 
     @Shadow @Final private ICraftingSimulationRequester simRequester;
     @Shadow @Final private appeng.crafting.inv.NetworkCraftingSimulationState networkInv;
     @Unique private CycleCapture eae2$capture;
+
+    @Unique private boolean eae2$cpuSupported;
+
+    // AE2 constructs calculations before submitting run() to its worker pool.
+    @Inject(method = "<init>", at = @At("RETURN"))
+    private void eae2$captureCpuCompatibility(CallbackInfo ci) {
+        if (level.getServer() == null || !level.getServer().isSameThread()) return;
+        var node = simRequester.getGridNode();
+        if (node == null) return;
+        eae2$cpuSupported =
+                node.getGrid().getCraftingService().getCpus().stream()
+                        .allMatch(
+                                cpu ->
+                                        cpu
+                                                instanceof
+                                                appeng.me.cluster.implementations
+                                                        .CraftingCPUCluster);
+    }
 
     public CycleCapture eae2$cycles() {
         if (eae2$capture == null) eae2$capture = new CycleCapture();
@@ -29,7 +48,13 @@ public abstract class CraftingCycleCalculationMixin implements CycleCalculation 
             var original = cir.getReturnValue();
             CycleLog.detected(original, eae2$capture);
             var replacement =
-                    GrowthFallback.replace(level, simRequester, networkInv, original, eae2$capture);
+                    GrowthFallback.replace(
+                            level,
+                            simRequester,
+                            networkInv,
+                            original,
+                            eae2$capture,
+                            eae2$cpuSupported);
             if (replacement != original) cir.setReturnValue(replacement);
             if ((Object) replacement instanceof GrowthPlanView view)
                 view.eae2$diagram(CycleDiagramData.build(replacement, eae2$capture));

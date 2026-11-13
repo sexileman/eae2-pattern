@@ -77,7 +77,7 @@ public final class MachineWildcard {
             CompoundTag data = stack.getTag().getCompound(MachineWildcardData.KEY);
             return WildcardRuntime.expand(data, level).stream();
         } catch (RuntimeException e) {
-            EAE2Pattern.LOGGER.warn("Rejected machine wildcard expansion: {}", e.getMessage()); return Stream.empty();
+            EAE2Pattern.LOGGER.warn("Rejected machine wildcard expansion: machine={} dimension={}; item retained", stack.getTag().getCompound(MachineWildcardData.KEY).getString("machine"), level.dimension().location(), e); return Stream.empty();
         }
     }
 }

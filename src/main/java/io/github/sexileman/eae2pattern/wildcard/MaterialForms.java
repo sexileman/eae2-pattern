@@ -15,13 +15,38 @@ public final class MaterialForms {
         var tags=readTags(spec);var forms=formsFromTags(tags);var materials=materialsFromTags(tags);
         if(spec.isItem())try{var helper=Class.forName("com.gregtechceu.gtceu.api.data.chemical.ChemicalHelper");
             var prefix=helper.getMethod("getPrefix",net.minecraft.world.level.ItemLike.class).invoke(null,spec.toItemStack().getItem());
-            if(prefix!=null){String name=(String)prefix.getClass().getMethod("name").invoke(prefix);String form=PREFIXES.get(name);if(form==null&&name.startsWith("wireGt"))form="wires";if(form!=null){forms.clear();forms.add(form);}}
+            if(prefix!=null){String name=(String)prefix.getClass().getMethod("name").invoke(prefix);String form=prefixForm(name);forms.clear();forms.add(form);}
             var entry=helper.getMethod("getMaterial",net.minecraft.world.item.ItemStack.class).invoke(null,spec.toItemStack());if(entry!=null){var material=entry.getClass().getMethod("material").invoke(entry);materials.add((String)material.getClass().getMethod("getName").invoke(material));}
         }catch(ReflectiveOperationException|LinkageError ignored){}
         var result=new Classification(Set.copyOf(tags),Set.copyOf(forms),Set.copyOf(materials));int weight=192;for(var group:List.of(tags,forms,materials))for(var value:group)weight+=48+value.length()*2;CACHE.put(key,result,weight);return result;
     }
     private static final Map<String,String> NESTED=Map.ofEntries(Map.entry("plates/double","double_plates"),Map.entry("plates/dense","dense_plates"),Map.entry("rods/long","long_rods"),Map.entry("dusts/small","small_dusts"),Map.entry("dusts/tiny","tiny_dusts"),Map.entry("gears/small","small_gears"),Map.entry("springs/small","small_springs"),Map.entry("wires/fine","fine_wires"));
     private MaterialForms(){}
+    /** Stable serialized identities; legacy aliases keep already encoded rules working. */
+    public static String prefixForm(String name){
+        String known=PREFIXES.get(name);
+        return known!=null?known:name.startsWith("wireGt")?"wires":"gt_prefix:"+name;
+    }
+    public static boolean validForm(String value){
+        if(FORMS.contains(value))return true;
+        if(value.startsWith("gt_prefix:"))return value.substring(10).matches("[A-Za-z][A-Za-z0-9_]{0,95}");
+        if(value.startsWith("tag_family:")){
+            var id=ResourceLocation.tryParse(value.substring(11));
+            return id!=null&&(id.getNamespace().equals("forge")||id.getNamespace().equals("c"))&&!id.getPath().contains("/");
+        }
+        return false;
+    }
+    public static net.minecraft.network.chat.Component formName(String value){
+        String key="eae2_pattern.editor."+(value.isEmpty()?"all_forms":"form_"+value);
+        if(net.minecraft.locale.Language.getInstance().has(key))return net.minecraft.network.chat.Component.translatable(key);
+        if(value.startsWith("gt_prefix:"))try{
+            var type=Class.forName("com.gregtechceu.gtceu.api.data.tag.TagPrefix");
+            var prefix=type.getMethod("get",String.class).invoke(null,value.substring(10));
+            if(prefix!=null){String translation=(String)type.getMethod("getUnlocalizedName").invoke(prefix);
+                if(net.minecraft.locale.Language.getInstance().has(translation))return net.minecraft.network.chat.Component.literal(net.minecraft.network.chat.Component.translatable(translation,"").getString().trim());}
+        }catch(ReflectiveOperationException|LinkageError ignored){}
+        return net.minecraft.network.chat.Component.literal(value.startsWith("gt_prefix:")?value.substring(10):value.startsWith("tag_family:")?value.substring(11):value);
+    }
     public static Set<String> tags(StackSpec spec){return classify(spec).tags();}
     private static Set<String> readTags(StackSpec spec){
         var result=new TreeSet<String>();
@@ -31,7 +56,7 @@ public final class MaterialForms {
     }
     public static Set<String> formsFromTags(Collection<String> tags){
         var result=new TreeSet<String>();for(String tag:tags){var id=ResourceLocation.tryParse(tag);if(id==null||!(id.getNamespace().equals("forge")||id.getNamespace().equals("c")))continue;
-            String family=id.getPath().split("/",2)[0];boolean nested=false;for(var e:NESTED.entrySet())if(id.getPath().equals(e.getKey())||id.getPath().startsWith(e.getKey()+"/")){result.add(e.getValue());nested=true;break;}if(!nested&&FORMS.contains(family)&&!family.isEmpty())result.add(family);
+            String family=id.getPath().split("/",2)[0];boolean nested=false;for(var e:NESTED.entrySet())if(id.getPath().equals(e.getKey())||id.getPath().startsWith(e.getKey()+"/")){result.add(e.getValue());nested=true;break;}if(!nested&&!family.isEmpty())result.add(FORMS.contains(family)?family:"tag_family:"+id.getNamespace()+":"+family);
         }
         for(var e:NESTED.entrySet())if(result.contains(e.getValue()))result.remove(e.getKey().split("/")[0]);return result;
     }

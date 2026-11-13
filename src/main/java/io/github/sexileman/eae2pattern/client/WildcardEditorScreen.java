@@ -40,7 +40,8 @@ public final class WildcardEditorScreen extends AeToolScreen implements Generati
     private double scroll, detailScroll;
     private WildcardRules rules;
     private DynamicRule portableRule;
-    private String inForm="",outForm="",material="";
+    private String inForm="",outForm="",material="",auxItem="";
+    private final Map<String,StackSpec> inputForms=new TreeMap<>(),outputForms=new TreeMap<>(),auxiliaryItems=new TreeMap<>();
     private boolean dynamic;
     private final boolean dynamicAvailable;
     private Component ruleError;
@@ -75,7 +76,7 @@ public final class WildcardEditorScreen extends AeToolScreen implements Generati
         dynamic=dynamicAvailable;
         if (state != null && !state.isEmpty()) {
             circuit=CircuitCondition.read(state);
-            if(state.contains("dynamic"))dynamic=state.getBoolean("dynamic");inForm=state.getString("in_form");outForm=state.getString("out_form");material=state.getString("material");
+            if(state.contains("dynamic"))dynamic=state.getBoolean("dynamic");inForm=state.getString("in_form");outForm=state.getString("out_form");material=state.getString("material");auxItem=state.getString("aux_item");
             var excluded=state.getList("exclude_ids",8);for(int i=0;i<excluded.size();i++){var id=ResourceLocation.tryParse(excluded.getString(i));if(id!=null){selected.remove(id);storedExclusions.add(id);}}
             query = new String[]{state.getString("in_include"), state.getString("in_exclude"), state.getString("out_include"), state.getString("out_exclude")};
             multiplier = ProcessingMultiplier.normalize(state.getInt("multiplier")); outputPolicy = state.getInt("output_policy");
@@ -138,6 +139,7 @@ public final class WildcardEditorScreen extends AeToolScreen implements Generati
         button(x+10,quickY+25,materialWidth,0,this::chooseMaterial,"material");
         button(ruleModeX,quickY+25,ruleModeWidth,0,()->chooseSetting("mode"),"mode");
         button(extractX,quickY+25,x+w-10-extractX,0,this::extractFocused,"extract");
+        button(x+10,quickY+50,w-20,0,this::chooseAuxiliary,"auxiliary");
         button(x + 10, y + 53, 62, 1, () -> { matches.forEach(e -> selected.add(e.recipeId())); chosenCount=-1; updateControls(); }, "select_all");
         button(x + 78, y + 53, 62, 1, () -> { matches.forEach(e -> selected.remove(e.recipeId())); chosenCount=-1; updateControls(); }, "select_none");
         int modeWidth = Math.max(36, Math.min(82, w - (split - x) - 70));
@@ -173,8 +175,11 @@ public final class WildcardEditorScreen extends AeToolScreen implements Generati
         int chosen = chosen();
         for (var c : controls) {
             c.active = !sending;
+            if(Set.of("input_form","output_form","auxiliary").contains(c.key))c.active=!sending&&!filtering&&!searchDebounce.pending();
+            if(c.key.equals("auxiliary"))c.visible=tab==0&&(!auxiliaryItems.isEmpty()||!auxItem.isEmpty());
             c.setMessage(switch (c.key) {
                 case "tab_3" -> Arrays.stream(query).anyMatch(q->!q.isBlank())?tr("advanced_active"):tr("tab_3");
+                case "auxiliary" -> tr("auxiliary_value",auxItem.isEmpty()?tr("auxiliary_all"):auxiliaryItems.containsKey(auxItem)?auxiliaryItems.get(auxItem).toItemStack().getHoverName():Component.literal(auxItem));
                 case "input_form" -> tr("input_form_value", formName(inForm));
                 case "output_form" -> tr("output_form_value", formName(outForm));
                 case "material" -> tr("material_value", material.isEmpty()?tr("all_materials"):Component.literal(material));
@@ -229,7 +234,7 @@ public final class WildcardEditorScreen extends AeToolScreen implements Generati
             long end = System.nanoTime() + 3_000_000; int n = 0;
             while (cursor < plan.entries().size() && n++ < 96 && System.nanoTime() < end) {
                 var e = plan.entries().get(cursor++);
-                if(catalogued.add(e.recipeId()))for(var slots:List.of(e.inputs(),e.outputs()))for(var i:slots)materialCatalog.add(i.spec());
+                if(catalogued.add(e.recipeId()))catalogue(e);
                 if (e.kind() == PatternKind.PROCESSING && circuitCatalog.matches(e,circuit)) {
                     if(dynamic){var raw=sourceRecipe(e);if(portableRule!=null&&raw!=null&&portableRule.matches(raw))working.add(e);}
                     else if(rules.matches(e, searchTools)&&formMatches(e))working.add(e);
@@ -269,6 +274,7 @@ public final class WildcardEditorScreen extends AeToolScreen implements Generati
         s.putBoolean("in_all", inAll); s.putBoolean("out_all", outAll); s.putBoolean("drop_tools", dropTools); s.putBoolean("search_tools", searchTools);
         s.putInt("in_scope", inScope); s.putInt("out_scope", outScope); s.putInt("output_policy", outputPolicy); s.putInt("multiplier", multiplier);
         s.putString("in_form",inForm);s.putString("out_form",outForm);s.putString("material",material);s.putBoolean("dynamic",dynamic);
+        if(!auxItem.isEmpty())s.putString("aux_item",auxItem);
         circuit.write(s);
         return WildcardEditorState.clean(s);
     }
@@ -465,10 +471,35 @@ public final class WildcardEditorScreen extends AeToolScreen implements Generati
         }
         return false;
     }
-    private static Component formName(String value){return tr(value.isEmpty()?"all_forms":"form_"+value);}
+    private static Component formName(String value){return MaterialForms.formName(value); }
     private void chooseForm(boolean input){
-        var choices=MaterialForms.FORMS.stream().map(f->new PickerOption(f,formName(f))).toList();
+        var choices=new ArrayList<PickerOption>();choices.add(new PickerOption("",formName("")));
+        (input?inputForms:outputForms).forEach((form,example)->choices.add(new PickerOption(form,formName(form),Component.literal(form),example)));
         minecraft.setScreen(new WildcardChoiceScreen(this,tr(input?"input_rules":"output_rules"),choices,v->{if(input)inForm=v;else outForm=v;changedRules();}));
+    }
+    private void catalogue(RecipePlan.Entry entry){
+        if(entry.kind()!=PatternKind.PROCESSING)return;
+        var raw=sourceRecipe(entry);
+        if(raw!=null){
+            for(var slot:raw.inputs())catalogueStack(slot.stack(),true,slot.auxiliary());
+            for(var slot:raw.outputs())catalogueStack(slot.stack(),false,false);
+        }else{
+            for(var ingredient:entry.inputs())catalogueStack(ingredient.spec(),true,ingredient.neverConsumed());
+            for(var ingredient:entry.outputs())catalogueStack(ingredient.spec(),false,false);
+        }
+    }
+    private void catalogueStack(StackSpec spec,boolean input,boolean auxiliary){
+        materialCatalog.add(spec);
+        if(input&&auxiliary){
+            if(spec.isItem()&&CircuitCondition.configuration(spec)<0)auxiliaryItems.putIfAbsent(spec.id().toString(),spec.withAmount(1));
+            return;
+        }
+        for(String form:MaterialForms.forms(spec))(input?inputForms:outputForms).putIfAbsent(form,spec.withAmount(1));
+    }
+    private void chooseAuxiliary(){
+        var choices=new ArrayList<PickerOption>();choices.add(new PickerOption("",tr("auxiliary_all")));
+        auxiliaryItems.forEach((id,spec)->choices.add(new PickerOption(id,spec.toItemStack().getHoverName(),Component.literal(id),spec)));
+        minecraft.setScreen(new WildcardChoiceScreen(this,tr("auxiliary"),choices,v->{auxItem=v;changedRules();}));
     }
     private void chooseMaterial(){
         var choices=new ArrayList<PickerOption>();
@@ -484,6 +515,7 @@ public final class WildcardEditorScreen extends AeToolScreen implements Generati
     }
     private PatternSpec specFor(RecipePlan.Entry e){var raw=dynamic?sourceRecipe(e):null;return dynamic?(raw==null?null:raw.encodeSpec(multiplier,outputPolicy,dropTools)):e.specForPolicy(multiplier,outputPolicy,dropTools);}
     private boolean formMatches(RecipePlan.Entry e){
+        if(!auxItem.isEmpty()&&e.inputs().stream().noneMatch(i->i.neverConsumed()&&i.spec().isItem()&&CircuitCondition.configuration(i.spec())<0&&i.spec().id().toString().equals(auxItem)))return false;
         return structural(e.inputs().stream().filter(i->!i.neverConsumed()).map(Ingredient::spec).toList(),inForm)&&structural(e.outputs().stream().map(Ingredient::spec).toList(),outForm);
     }
     private boolean structural(List<StackSpec> slots,String form){return (form.isEmpty()&&material.isEmpty())||slots.stream().anyMatch(s->MaterialForms.matches(s,form,material));}
